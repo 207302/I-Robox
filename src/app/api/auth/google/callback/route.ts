@@ -9,6 +9,7 @@ import {
   exchangeGoogleCode,
   fetchGoogleUserInfo,
   getGoogleOAuthConfig,
+  getSiteOrigin,
   googleRedirectUri,
   sanitizeOAuthNextParam,
 } from "@/lib/auth/googleOAuth";
@@ -17,7 +18,7 @@ import { validateEmail } from "@/lib/validateEmai";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function redirectWithClearedOauthCookies(req: NextRequest, path: string) {
-  const origin = req.nextUrl.origin;
+  const origin = getSiteOrigin(req);
   const url = new URL(path, origin);
   const res = NextResponse.redirect(url);
   res.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, "", { path: "/", maxAge: 0 });

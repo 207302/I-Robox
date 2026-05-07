@@ -1,5 +1,28 @@
 import type { NextRequest } from "next/server";
 
+function addOriginVariants(origins: Set<string>, rawUrl: string) {
+  try {
+    const base = new URL(rawUrl);
+    origins.add(base.origin);
+
+    const host = base.hostname.toLowerCase();
+    if (host.startsWith("www.")) {
+      const noWww = new URL(base.origin);
+      noWww.hostname = host.slice(4);
+      origins.add(noWww.origin);
+      return;
+    }
+
+    if (host.includes(".")) {
+      const withWww = new URL(base.origin);
+      withWww.hostname = `www.${host}`;
+      origins.add(withWww.origin);
+    }
+  } catch {
+    // ignore invalid URLs
+  }
+}
+
 function getAllowedOrigins() {
   const origins = new Set<string>();
   const fromEnv = [
@@ -8,11 +31,7 @@ function getAllowedOrigins() {
     process.env.SITE_URL,
   ].filter(Boolean) as string[];
   for (const v of fromEnv) {
-    try {
-      origins.add(new URL(v).origin);
-    } catch {
-      // ignore
-    }
+    addOriginVariants(origins, v);
   }
   return origins;
 }

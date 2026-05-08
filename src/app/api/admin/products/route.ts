@@ -104,55 +104,78 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid relations" }, { status: 400 });
   }
 
-  const tax = await resolveProductTaxonomyForSave({
-    category_id: category_id ?? null,
-    type_id: type_id_in ?? null,
-    subtype_id: subtype_id_in ?? null,
-    collection_id: collection_id_in ?? null,
-  });
-  if ("error" in tax) {
-    return NextResponse.json({ error: tax.error }, { status: 400 });
+  try {
+    const tax = await resolveProductTaxonomyForSave({
+      category_id: category_id ?? null,
+      type_id: type_id_in ?? null,
+      subtype_id: subtype_id_in ?? null,
+      collection_id: collection_id_in ?? null,
+    });
+    if ("error" in tax) {
+      return NextResponse.json({ error: tax.error }, { status: 400 });
+    }
+
+    const created = await prisma.products.create({
+      data: {
+        name,
+        slug,
+        base_price,
+        discounted_price,
+        shipping_per_unit: shippingParsed,
+        max_order_quantity: maxOrderQtyParsed,
+        sku,
+        hsn_code,
+        diecast_scale_id,
+        description,
+        short_description,
+        is_active,
+        age_group,
+        category_id: tax.category_id,
+        brand_id,
+        type_id: tax.type_id,
+        subtype_id: tax.subtype_id,
+        collection_id: tax.collection_id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.inventory.create({
+      data: {
+        product_id: created.id,
+        product_variant_id: null,
+        available_quantity,
+        reserved_quantity: 0,
+        sold_quantity: 0,
+        low_stock_threshold,
+      },
+    });
+
+    await syncLowStockAlertsByProductIds([created.id]).catch((err) => {
+      console.error("[admin products POST] low stock alert sync failed", err);
+    });
+
+    return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
+  } catch (err: any) {
+    const code = typeof err?.code === "string" ? err.code : "";
+    const target = Array.isArray(err?.meta?.target)
+      ? err.meta.target.join(",")
+      : String(err?.meta?.target ?? "");
+
+    if (code === "P2002" && target.toLowerCase().includes("slug")) {
+      return NextResponse.json({ error: "Slug already exists. Please use a unique product name/slug." }, { status: 409 });
+    }
+    if (code === "P2002") {
+      return NextResponse.json({ error: "A unique field already exists for this product." }, { status: 409 });
+    }
+    if (code === "P2003") {
+      return NextResponse.json({ error: "Invalid relation selected (category/brand/type/subtype/collection)." }, { status: 400 });
+    }
+    if (code === "P2025") {
+      return NextResponse.json({ error: "Related record was not found." }, { status: 400 });
+    }
+
+    console.error("[admin products POST] unhandled error", err);
+    return NextResponse.json({ error: "Could not create product. Check runtime logs for details." }, { status: 500 });
   }
-
-  const created = await prisma.products.create({
-    data: {
-      name,
-      slug,
-      base_price,
-      discounted_price,
-      shipping_per_unit: shippingParsed,
-      max_order_quantity: maxOrderQtyParsed,
-      sku,
-      hsn_code,
-      diecast_scale_id,
-      description,
-      short_description,
-      is_active,
-      age_group,
-      category_id: tax.category_id,
-      brand_id,
-      type_id: tax.type_id,
-      subtype_id: tax.subtype_id,
-      collection_id: tax.collection_id,
-    },
-    select: { id: true },
-  });
-
-  await prisma.inventory.create({
-    data: {
-      product_id: created.id,
-      product_variant_id: null,
-      available_quantity,
-      reserved_quantity: 0,
-      sold_quantity: 0,
-      low_stock_threshold,
-    },
-  });
-
-  await syncLowStockAlertsByProductIds([created.id]).catch((err) => {
-    console.error("[admin products POST] low stock alert sync failed", err);
-  });
-
-  return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
 }
 

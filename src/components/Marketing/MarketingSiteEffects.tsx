@@ -30,6 +30,7 @@ export default function MarketingSiteEffects() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    let openTimer: ReturnType<typeof window.setTimeout> | null = null;
     void fetch("/api/public/marketing", { cache: "no-store" })
       .then((r) => r.json())
       .then((data: { popup?: PopupPayload | null; firstVisitCouponCode?: string | null }) => {
@@ -50,12 +51,15 @@ export default function MarketingSiteEffects() {
         if (p.frequency !== "EVERY_VISIT" && store.getItem(key)) return;
         setPopup(p);
         const delay = Math.max(0, Number(p.delay_ms) || 0);
-        window.setTimeout(() => {
+        openTimer = window.setTimeout(() => {
           setOpen(true);
           if (p.frequency !== "EVERY_VISIT") store.setItem(key, "1");
         }, delay);
       })
       .catch(() => {});
+    return () => {
+      if (openTimer) window.clearTimeout(openTimer);
+    };
   }, []);
 
   useEffect(() => {

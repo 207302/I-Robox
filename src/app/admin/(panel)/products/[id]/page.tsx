@@ -7,9 +7,16 @@ import toast from "react-hot-toast";
 import SelectWithCreate from "../../_components/SelectWithCreate";
 import ImageGallery, { GalleryImage } from "../../_components/ImageGallery";
 
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 9 * 1024 * 1024;
 
 interface Option { id: string; name: string }
+interface ProductVariant {
+  id: string;
+  color: string | null;
+  name?: string | null;
+  sku?: string | null;
+  is_default: boolean;
+}
 
 const AGE_GROUPS = [
   "0-2 years", "2-4 years", "4-6 years", "6-8 years",
@@ -31,6 +38,7 @@ export default function EditProductPage() {
   const [productTypes, setProductTypes] = useState<Option[]>([]);
   const [productSubtypes, setProductSubtypes] = useState<Option[]>([]);
   const [collections, setCollections] = useState<Option[]>([]);
+  const [newVariantColor, setNewVariantColor] = useState("");
   const selectedCategory = categories.find((c) => c.id === form?.category_id);
   const showDiecastScale = selectedCategory?.name?.trim().toLowerCase() === DIECAST_ONLY_CATEGORY;
 
@@ -196,7 +204,7 @@ export default function EditProductPage() {
     await Promise.allSettled(
       fileArr.map(async (file, i) => {
         if (file.size > MAX_IMAGE_BYTES) {
-          toast.error(`${file.name}: max 4 MB per image on production (Vercel limit).`);
+          toast.error(`${file.name}: max 9 MB per image.`);
           setImages((prev) => prev.filter((img) => img.id !== tempIds[i]));
           return;
         }
@@ -264,6 +272,79 @@ export default function EditProductPage() {
       toast.error("Could not save image order");
     } finally {
       setImgBusy(false);
+    }
+  }
+
+  async function addVariant() {
+    const color = newVariantColor.trim();
+    if (!color) {
+      toast.error("Enter a color name");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/products/${id}/variants`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ color }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to add variant");
+      setForm((f: any) => ({
+        ...f,
+        product_variants: [...((f?.product_variants as ProductVariant[]) ?? []), data],
+      }));
+      setNewVariantColor("");
+      toast.success("Variant added");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to add variant");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeVariant(variantId: string) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/products/${id}/variants?variantId=${variantId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to delete variant");
+      setForm((f: any) => ({
+        ...f,
+        product_variants: ((f?.product_variants as ProductVariant[]) ?? []).filter((v) => v.id !== variantId),
+      }));
+      toast.success("Variant removed");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove variant");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function setDefaultVariant(variantId: string) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/products/${id}/variants`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ variantId, is_default: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to set default variant");
+      setForm((f: any) => ({
+        ...f,
+        product_variants: ((f?.product_variants as ProductVariant[]) ?? []).map((v) => ({
+          ...v,
+          is_default: v.id === variantId,
+        })),
+      }));
+      toast.success("Default variant updated");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to set default variant");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -560,6 +641,65 @@ export default function EditProductPage() {
               }}
             />
           ) : null}
+        </div>
+      </section>
+
+      {/* Images */}
+      <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
+        <h2 className="text-base font-semibold text-dark">Color variants</h2>
+        <p className="text-xs text-meta-4">
+          Add extra colors under the same product slug to avoid duplicate-product slug errors.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            value={newVariantColor}
+            onChange={(e) => setNewVariantColor(e.target.value)}
+            placeholder="Add color (e.g. Yellow)"
+            className="w-full sm:max-w-sm rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+          />
+          <button
+            type="button"
+            onClick={addVariant}
+            disabled={loading || deleting}
+            className="rounded-lg border border-gray-3 px-4 py-2 text-sm font-medium text-dark hover:bg-gray-1 disabled:opacity-60"
+          >
+            Add color
+          </button>
+        </div>
+        <div className="space-y-2">
+          {((form.product_variants as ProductVariant[] | undefined) ?? []).length === 0 ? (
+            <p className="text-sm text-meta-4">No variants yet.</p>
+          ) : (
+            ((form.product_variants as ProductVariant[]) ?? []).map((variant) => (
+              <div
+                key={variant.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-2 px-3 py-2"
+              >
+                <span className="text-sm text-dark">
+                  {variant.color || "Unnamed color"}
+                  {variant.is_default ? " (default)" : ""}
+                </span>
+                <div className="flex items-center gap-2">
+                  {!variant.is_default ? (
+                    <button
+                      type="button"
+                      onClick={() => setDefaultVariant(variant.id)}
+                      className="rounded-md border border-gray-3 px-2 py-1 text-xs text-dark hover:bg-gray-1"
+                    >
+                      Set default
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => removeVariant(variant.id)}
+                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
 

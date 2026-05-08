@@ -17,11 +17,10 @@ export default function CartServerSync() {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       try {
-        const me = await fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json());
-        if (!me?.user?.id) return;
         const payload = items
           .map((i) => ({ productId: String(i.id), quantity: i.quantity }))
           .filter((i) => i.productId.length > 10 && i.quantity > 0);
+        if (payload.length === 0) return;
         await fetch("/api/account/cart-sync", {
           method: "POST",
           headers: { "content-type": "application/json" },

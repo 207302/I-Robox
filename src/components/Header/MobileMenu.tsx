@@ -114,7 +114,7 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                       : "max-h-96";
 
                   return (
-                    <li key={i} className="">
+                    <li key={menuItem.title} className="">
                       {isDropdown ? (
                         <div>
                           <button
@@ -149,7 +149,7 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                             <div className="pl-2 bg-gray-50 pb-2">
                               {menuItem.submenu?.map((subItem, j) => (
                                 <Link
-                                  key={j}
+                                  key={subItem.path ?? subItem.title}
                                   href={subItem.path || "#"}
                                   className="block px-4 py-3 text-sm rounded-lg hover:bg-gray-2 text-dark border-gray-3 hover:text-blue "
                                   onClick={onClose}
@@ -159,7 +159,7 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                               ))}
                               {menuItem.groupedSubmenu?.map((group, gi) => (
                                 <div
-                                  key={gi}
+                                  key={group.heading}
                                   className={gi > 0 ? "mt-2 pt-2 border-t border-gray-3" : ""}
                                 >
                                   <p className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-dark">
@@ -167,7 +167,7 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                                   </p>
                                   {group.items.map((subItem, j) => (
                                     <Link
-                                      key={j}
+                                      key={subItem.path ?? subItem.title}
                                       href={subItem.path || "#"}
                                       className="block px-4 py-2.5 text-sm rounded-lg hover:bg-gray-2 text-dark hover:text-blue"
                                       onClick={onClose}

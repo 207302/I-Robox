@@ -36,7 +36,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
 
           return (
             <li
-              key={i}
+              key={menuItem.title}
               className="relative group"
               onMouseEnter={() => handleMouseEnter(i)}
               onMouseLeave={handleMouseLeave}
@@ -74,7 +74,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                   >
                     {menuItem.submenu?.map((subItem, j) => (
                       <Link
-                        key={j}
+                        key={subItem.path ?? subItem.title}
                         href={subItem.path || "#"}
                         className={`block px-4 py-2 text-sm font-medium rounded-lg hover:text-blue hover:bg-gray-2 ${pathBaseActive(pathname, subItem.path) ? "text-blue" : "text-dark"}`}
                       >
@@ -83,7 +83,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                     ))}
                     {menuItem.groupedSubmenu?.map((group, gi) => (
                       <div
-                        key={gi}
+                        key={group.heading}
                         className={gi > 0 ? "mt-3 pt-3 border-t border-gray-2" : ""}
                       >
                         <p className="px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-dark">
@@ -91,7 +91,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                         </p>
                         {group.items.map((subItem, j) => (
                           <Link
-                            key={j}
+                            key={subItem.path ?? subItem.title}
                             href={subItem.path || "#"}
                             className={`block px-4 py-2 text-sm font-medium rounded-lg hover:text-blue hover:bg-gray-2 ${pathBaseActive(pathname, subItem.path) ? "text-blue" : "text-dark"}`}
                           >

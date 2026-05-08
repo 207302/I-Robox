@@ -18,10 +18,6 @@ type ProductCarouselItem = {
 const ITEMS_PER_SECTION = 8;
 const MAX_SECTIONS = 3;
 
-function isRemoteImage(url: string) {
-  return url.startsWith("http://") || url.startsWith("https://");
-}
-
 function ProductCard({ item }: { item: ProductCarouselItem }) {
   return (
     <Link
@@ -35,7 +31,6 @@ function ProductCard({ item }: { item: ProductCarouselItem }) {
           fill
           sizes="(max-width: 768px) 100vw, 25vw"
           className="object-cover"
-          unoptimized={isRemoteImage(item.image)}
         />
       </div>
       <div className="p-3">

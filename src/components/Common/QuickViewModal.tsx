@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
+import type { CartItem } from "@/redux/features/cart-slice";
 import ReviewStar from "../Shop/ReviewStar";
 
 const QuickViewModal = () => {
@@ -51,10 +52,11 @@ const QuickViewModal = () => {
 
   // add to cart
   const handleAddToCart = () => {
-    const cartItem = {
+    const cartItem: CartItem = {
       id: product.id,
       name: product.title,
       price: product.discountedPrice ? product.discountedPrice : product.price,
+      quantity: 1,
       shippingPerUnit: Number((product as any).shippingPerUnit ?? 0),
       currency: "usd",
       image: defaultVariant?.image ? defaultVariant.image : "",
@@ -65,7 +67,6 @@ const QuickViewModal = () => {
       size: defaultVariant?.size ? defaultVariant.size : "",
     };
     if (product.quantity > 0) {
-      // @ts-ignore
       addItem(cartItem);
       toast.success("Product added to cart!");
       closeModal();
@@ -114,15 +115,16 @@ const QuickViewModal = () => {
 
   useEffect(() => {
     if (product?.slug) {
-      fetch("/api/review", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ productSlug: product.slug }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
+      const loadReviews = async () => {
+        try {
+          const res = await fetch("/api/review", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ productSlug: product.slug }),
+          });
+          const data = await res.json();
           setTotalRating(data?.review?.length);
           setAvgRating(
             data?.review?.reduce(
@@ -131,11 +133,11 @@ const QuickViewModal = () => {
             ) / data?.review?.length
           );
           setLoading(false);
-        })
-        .catch((error) => {
-          console.error("Error fetching reviews:", error);
+        } catch {
           setLoading(false);
-        });
+        }
+      };
+      void loadReviews();
     }
   }, [product?.slug]);
 

@@ -11,7 +11,7 @@ cloudinary.config({
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 /** Stay under Vercel serverless body limit */
-const MAX_SIZE_BYTES = 4 * 1024 * 1024;
+const MAX_SIZE_BYTES = 9 * 1024 * 1024;
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only JPEG, PNG, WebP and GIF are allowed" }, { status: 400 });
   }
   if (file.size > MAX_SIZE_BYTES) {
-    return NextResponse.json({ error: "File too large (max 4 MB)" }, { status: 400 });
+    return NextResponse.json({ error: "File too large (max 9 MB)" }, { status: 400 });
   }
 
   const bytes = await file.arrayBuffer();

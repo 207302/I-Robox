@@ -22,10 +22,6 @@ export type HighlightItem = {
   subtitle?: string | null;
 };
 
-function isRemoteImage(url: string) {
-  return url.startsWith("http://") || url.startsWith("https://");
-}
-
 const AUTO_ADVANCE_MS = 2800;
 const SWIPE_THRESHOLD = 50;
 /** Tailwind gap-6 */
@@ -38,7 +34,7 @@ function HighlightCard({ item }: { item: HighlightItem }) {
   return (
     <Link
       href={item.href}
-      className={`group relative block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white shadow-md shadow-black/10 transition-all duration-300 active:scale-[0.98] active:translate-y-0 text-left ${cardHoverClass}`}
+      className={`group relative block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white shadow-md shadow-black/10 transition-[transform,box-shadow,border-color,ring-color] duration-300 active:scale-[0.98] active:translate-y-0 text-left ${cardHoverClass}`}
     >
       <div className="relative aspect-[4/3] w-full md:aspect-[5/4]">
         <Image
@@ -47,9 +43,8 @@ function HighlightCard({ item }: { item: HighlightItem }) {
           fill
           sizes="(max-width: 768px) 100vw, 33vw"
           className="object-cover"
-          unoptimized={isRemoteImage(item.image)}
         />
-        <div className="absolute inset-x-3 bottom-3 rounded-lg bg-red/90 px-3 py-2 shadow-md shadow-red/30 transition-all duration-300 group-hover:bg-red group-hover:shadow-lg group-hover:shadow-red/40">
+        <div className="absolute inset-x-3 bottom-3 rounded-lg bg-red/90 px-3 py-2 shadow-md shadow-red/30 transition-[background-color,box-shadow] duration-300 group-hover:bg-red group-hover:shadow-lg group-hover:shadow-red/40">
           <p className="text-sm font-bold text-white tracking-wide">{item.label}</p>
           {item.subtitle ? (
             <p className="mt-0.5 text-[11px] font-medium text-white/90 line-clamp-2">

@@ -565,10 +565,8 @@ input[type="search"]::-webkit-search-results-decoration {
   border: 1px solid #e5e7eb;
   border-radius: 0 0 6px 6px;
 }
-.ql-toolbar.ql-snow {
-  border: 1px solid #e5e7eb !important;
-}
-.ql-toolbar.ql-snow {
+.ql-toolbar.ql-snow.ql-toolbar {
+  border: 1px solid #e5e7eb;
   border-radius: 6px 6px 0 0;
 }
 

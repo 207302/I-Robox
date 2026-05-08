@@ -82,6 +82,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         orderBy: { sort_order: "asc" },
         select: { id: true, url: true, alt_text: true, sort_order: true },
       },
+      product_variants: {
+        orderBy: [{ is_default: "desc" }, { created_at: "asc" }],
+        select: { id: true, color: true, name: true, sku: true, is_default: true },
+      },
       inventory: {
         take: 1,
         where: { product_variant_id: null },

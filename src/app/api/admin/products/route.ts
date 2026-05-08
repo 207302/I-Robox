@@ -29,6 +29,55 @@ function parseMaxOrderQuantityIn(body: Record<string, unknown>): number | { erro
   return n;
 }
 
+type CreateVariantInput = {
+  color: string;
+  name: string | null;
+  sku: string | null;
+  is_default: boolean;
+};
+
+function parseVariantsIn(body: Record<string, unknown>): CreateVariantInput[] | { error: string } {
+  if (body.variants === undefined || body.variants === null) return [];
+  if (!Array.isArray(body.variants)) return { error: "Invalid variants payload" };
+  if (body.variants.length > 50) return { error: "Too many variants" };
+
+  const out: CreateVariantInput[] = [];
+  const seenColors = new Set<string>();
+
+  for (const row of body.variants) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      return { error: "Invalid variant row" };
+    }
+    const rec = row as Record<string, unknown>;
+    const color = cleanText(rec.color, 80);
+    if (!color) return { error: "Variant color is required" };
+    if (hasSuspiciousInput(color)) return { error: "Invalid variant color" };
+    const colorKey = color.toLowerCase();
+    if (seenColors.has(colorKey)) return { error: `Duplicate variant color: ${color}` };
+    seenColors.add(colorKey);
+
+    const name = cleanOptionalText(rec.name, 255);
+    const sku = cleanOptionalText(rec.sku, 120);
+    const isDefault = Boolean(rec.is_default);
+    out.push({ color, name, sku, is_default: isDefault });
+  }
+
+  if (out.length > 0 && !out.some((v) => v.is_default)) {
+    out[0].is_default = true;
+  } else if (out.length > 0) {
+    let picked = false;
+    for (const v of out) {
+      if (!picked && v.is_default) {
+        picked = true;
+      } else {
+        v.is_default = false;
+      }
+    }
+  }
+
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   try {
     assertSameOrigin(req);
@@ -82,6 +131,10 @@ export async function POST(req: NextRequest) {
   if (typeof maxOrderQtyParsed === "object") {
     return NextResponse.json({ error: maxOrderQtyParsed.error }, { status: 400 });
   }
+  const variantsParsed = parseVariantsIn(body as Record<string, unknown>);
+  if (typeof variantsParsed === "object" && "error" in variantsParsed) {
+    return NextResponse.json({ error: variantsParsed.error }, { status: 400 });
+  }
 
   if (!name || !slug || !Number.isFinite(base_price)) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -115,39 +168,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: tax.error }, { status: 400 });
     }
 
-    const created = await prisma.products.create({
-      data: {
-        name,
-        slug,
-        base_price,
-        discounted_price,
-        shipping_per_unit: shippingParsed,
-        max_order_quantity: maxOrderQtyParsed,
-        sku,
-        hsn_code,
-        diecast_scale_id,
-        description,
-        short_description,
-        is_active,
-        age_group,
-        category_id: tax.category_id,
-        brand_id,
-        type_id: tax.type_id,
-        subtype_id: tax.subtype_id,
-        collection_id: tax.collection_id,
-      },
-      select: { id: true },
-    });
+    const created = await prisma.$transaction(async (tx) => {
+      const createdProduct = await tx.products.create({
+        data: {
+          name,
+          slug,
+          base_price,
+          discounted_price,
+          shipping_per_unit: shippingParsed,
+          max_order_quantity: maxOrderQtyParsed,
+          sku,
+          hsn_code,
+          diecast_scale_id,
+          description,
+          short_description,
+          is_active,
+          age_group,
+          category_id: tax.category_id,
+          brand_id,
+          type_id: tax.type_id,
+          subtype_id: tax.subtype_id,
+          collection_id: tax.collection_id,
+        },
+        select: { id: true },
+      });
 
-    await prisma.inventory.create({
-      data: {
-        product_id: created.id,
-        product_variant_id: null,
-        available_quantity,
-        reserved_quantity: 0,
-        sold_quantity: 0,
-        low_stock_threshold,
-      },
+      await tx.inventory.create({
+        data: {
+          product_id: createdProduct.id,
+          product_variant_id: null,
+          available_quantity,
+          reserved_quantity: 0,
+          sold_quantity: 0,
+          low_stock_threshold,
+        },
+      });
+
+      if (variantsParsed.length > 0) {
+        await tx.product_variants.createMany({
+          data: variantsParsed.map((v) => ({
+            product_id: createdProduct.id,
+            color: v.color,
+            name: v.name,
+            sku: v.sku,
+            is_default: v.is_default,
+          })),
+        });
+      }
+
+      return createdProduct;
     });
 
     await syncLowStockAlertsByProductIds([created.id]).catch((err) => {

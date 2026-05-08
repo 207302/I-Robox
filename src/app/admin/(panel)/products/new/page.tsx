@@ -8,10 +8,15 @@ import toast from "react-hot-toast";
 import SelectWithCreate from "../../_components/SelectWithCreate";
 import ImageGallery, { GalleryImage } from "../../_components/ImageGallery";
 
-/** Match API / Vercel body limit — reject before upload to avoid opaque 413 errors. */
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+/** Match API upload limit — reject early before upload. */
+const MAX_IMAGE_BYTES = 9 * 1024 * 1024;
 
 interface Option { id: string; name: string }
+interface VariantDraft {
+  id: string;
+  color: string;
+  is_default: boolean;
+}
 
 const AGE_GROUPS = [
   "0-2 years", "2-4 years", "4-6 years", "6-8 years",
@@ -52,6 +57,7 @@ export default function NewProductPage() {
   const [productTypes, setProductTypes] = useState<Option[]>([]);
   const [productSubtypes, setProductSubtypes] = useState<Option[]>([]);
   const [collections, setCollections] = useState<Option[]>([]);
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
   const selectedCategory = categories.find((c) => c.id === form.category_id);
   const showDiecastScale = selectedCategory?.name?.trim().toLowerCase() === DIECAST_ONLY_CATEGORY;
 
@@ -150,7 +156,7 @@ export default function NewProductPage() {
     await Promise.allSettled(
       fileArr.map(async (file, i) => {
         if (file.size > MAX_IMAGE_BYTES) {
-          toast.error(`${file.name}: max 4 MB per image on production (Vercel limit).`);
+          toast.error(`${file.name}: max 9 MB per image.`);
           setImages((prev) => prev.filter((img) => img.id !== tempIds[i]));
           return;
         }
@@ -205,6 +211,9 @@ export default function NewProductPage() {
           collection_id: form.collection_id || null,
           age_group: form.age_group || null,
           diecast_scale_id: form.diecast_scale_id || null,
+          variants: variants
+            .map((v) => ({ color: v.color.trim(), is_default: v.is_default }))
+            .filter((v) => v.color.length > 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -487,6 +496,78 @@ export default function NewProductPage() {
               />
             ) : null}
           </div>
+        </section>
+
+        {/* Images */}
+        <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-dark">Color variants (optional)</h2>
+              <p className="text-xs text-meta-4">
+                Keep one product (single slug) and add color options like Purple, Yellow, etc.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setVariants((prev) => [
+                  ...prev,
+                  { id: `v-${Date.now()}-${Math.random()}`, color: "", is_default: prev.length === 0 },
+                ])
+              }
+              className="rounded-lg border border-gray-3 px-3 py-1.5 text-xs font-medium text-dark hover:bg-gray-1"
+            >
+              Add color
+            </button>
+          </div>
+          {variants.length === 0 ? (
+            <p className="text-sm text-meta-4">No variants yet. Product will use base details only.</p>
+          ) : (
+            <div className="space-y-3">
+              {variants.map((variant, idx) => (
+                <div key={variant.id} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 rounded-lg border border-gray-2 p-3">
+                  <input
+                    value={variant.color}
+                    onChange={(e) =>
+                      setVariants((prev) =>
+                        prev.map((v) => (v.id === variant.id ? { ...v, color: e.target.value } : v))
+                      )
+                    }
+                    placeholder={`Color #${idx + 1} (e.g. Purple)`}
+                    className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                  />
+                  <label className="inline-flex items-center gap-2 text-xs text-meta-3">
+                    <input
+                      type="radio"
+                      name="default-variant-new"
+                      checked={variant.is_default}
+                      onChange={() =>
+                        setVariants((prev) =>
+                          prev.map((v) => ({ ...v, is_default: v.id === variant.id }))
+                        )
+                      }
+                    />
+                    Default
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setVariants((prev) => {
+                        const next = prev.filter((v) => v.id !== variant.id);
+                        if (variant.is_default && next.length > 0 && !next.some((v) => v.is_default)) {
+                          next[0] = { ...next[0], is_default: true };
+                        }
+                        return next;
+                      })
+                    }
+                    className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Images */}

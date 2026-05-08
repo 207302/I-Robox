@@ -22,10 +22,6 @@ export type HeroSlide = {
 const AUTO_ROTATE_INTERVAL = 7000;
 const SWIPE_THRESHOLD = 50;
 
-function isRemoteUrl(url: string) {
-  return url.startsWith("http://") || url.startsWith("https://");
-}
-
 type Props = {
   slides?: HeroSlide[];
   overlay?: {
@@ -169,7 +165,6 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                     priority={index === 0}
                     sizes="100vw"
                     className="object-cover"
-                    unoptimized={isRemoteUrl(banner.image_url)}
                   />
                 </Link>
               ) : (
@@ -180,7 +175,6 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                   priority={index === 0}
                   sizes="100vw"
                   className="object-cover"
-                  unoptimized={isRemoteUrl(banner.image_url)}
                 />
               )}
             </div>

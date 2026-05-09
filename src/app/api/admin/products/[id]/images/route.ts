@@ -57,19 +57,36 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const body = parsed.body;
   if (!body.url) return NextResponse.json({ error: "url required" }, { status: 400 });
 
+  let productVariantId: string | null = null;
+  const rawVariantId = body.product_variant_id;
+  if (rawVariantId != null && rawVariantId !== "") {
+    if (typeof rawVariantId !== "string" || !isUuid(rawVariantId)) {
+      return NextResponse.json({ error: "Invalid product_variant_id" }, { status: 400 });
+    }
+    const variant = await prisma.product_variants.findFirst({
+      where: { id: rawVariantId, product_id: id },
+      select: { id: true },
+    });
+    if (!variant) {
+      return NextResponse.json({ error: "Variant not found for this product" }, { status: 400 });
+    }
+    productVariantId = rawVariantId;
+  }
+
   const maxOrder = await prisma.product_images.aggregate({
     _max: { sort_order: true },
-    where: { product_id: id },
+    where: { product_id: id, product_variant_id: productVariantId },
   });
 
   const image = await prisma.product_images.create({
     data: {
       product_id: id,
+      product_variant_id: productVariantId,
       url: cleanText(body.url, 2000),
       alt_text: body.alt_text ? cleanText(body.alt_text, 255) : null,
       sort_order: (maxOrder._max.sort_order ?? -1) + 1,
     },
-    select: { id: true, url: true, alt_text: true, sort_order: true },
+    select: { id: true, url: true, alt_text: true, sort_order: true, product_variant_id: true },
   });
   return NextResponse.json(image, { status: 201 });
 }

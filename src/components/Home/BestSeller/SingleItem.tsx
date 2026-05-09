@@ -32,6 +32,9 @@ const SingleItem = ({ item }: { item: Product }) => {
   )
     ? true
     : false;
+  const variantPreview = item.productVariants
+    .filter((variant) => Boolean(variant.color || variant.name))
+    .slice(0, 4);
 
   const cartItem = {
     id: item.id,
@@ -102,6 +105,37 @@ const SingleItem = ({ item }: { item: Product }) => {
               </span>
             )}
           </span>
+          {variantPreview.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+              {variantPreview.map((variant, idx) => {
+                const label =
+                  variant.color && variant.name && variant.color !== variant.name
+                    ? `${variant.color} · ${variant.name}`
+                    : variant.color || variant.name || "Variant";
+                const thumb =
+                  variant.image ||
+                  defaultVariant?.image ||
+                  item.product_images?.[0]?.url ||
+                  "/images/404.svg";
+                return (
+                  <span
+                    key={`${variant.color}-${variant.name}-${idx}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-gray-3 bg-white px-2 py-0.5 text-[11px] font-medium text-meta-3"
+                    title={label}
+                  >
+                    <Image
+                      src={thumb}
+                      alt={label}
+                      width={14}
+                      height={14}
+                      className="h-3.5 w-3.5 rounded-full object-cover"
+                    />
+                    <span className="max-w-[90px] truncate">{label}</span>
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center justify-center">
           <Link href={`/products/${item?.slug}`}>

@@ -20,7 +20,7 @@ export type ShopListingItem = {
   updatedAt: Date;
   reviews: number;
   product_images: { url: string; sort_order: number }[];
-  productVariants: { color: string; size: string; isDefault: boolean; image: string }[];
+  productVariants: { name?: string; color: string; size: string; isDefault: boolean; image: string }[];
 };
 
 export type ShopListingData = {
@@ -235,7 +235,13 @@ function mapProductsToItems(
     sku: string | null;
     shipping_per_unit: { toString(): string } | number | null;
     product_images: { url: string; sort_order: number }[];
-    product_variants: { color: string | null; size: string | null; is_default: boolean }[];
+    product_variants: {
+      name: string | null;
+      color: string | null;
+      size: string | null;
+      is_default: boolean;
+      product_images: { url: string }[];
+    }[];
     inventory: { available_quantity: number }[];
   }[],
   flashMap: Map<string, number>
@@ -265,10 +271,11 @@ function mapProductsToItems(
       reviews: 0,
       product_images: images,
       productVariants: p.product_variants.map((v) => ({
+        name: v.name ?? "",
         color: v.color ?? "",
         size: v.size ?? "",
         isDefault: v.is_default,
-        image,
+        image: v.product_images[0]?.url ?? image,
       })),
     };
   });
@@ -786,7 +793,15 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         sku: true,
         shipping_per_unit: true,
         product_images: { select: { url: true, sort_order: true } },
-        product_variants: { select: { color: true, size: true, is_default: true } },
+        product_variants: {
+          select: {
+            name: true,
+            color: true,
+            size: true,
+            is_default: true,
+            product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
+          },
+        },
         inventory: { select: { available_quantity: true } },
         flash_sale_products: {
           select: { sale_price: true, is_active: true, active_from: true, active_until: true },
@@ -862,7 +877,15 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           sku: true,
           shipping_per_unit: true,
           product_images: { select: { url: true, sort_order: true } },
-          product_variants: { select: { color: true, size: true, is_default: true } },
+          product_variants: {
+            select: {
+              name: true,
+              color: true,
+              size: true,
+              is_default: true,
+              product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
+            },
+          },
           inventory: { select: { available_quantity: true } },
         },
       });
@@ -892,7 +915,15 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           sku: true,
           shipping_per_unit: true,
           product_images: { select: { url: true, sort_order: true } },
-          product_variants: { select: { color: true, size: true, is_default: true } },
+          product_variants: {
+            select: {
+              name: true,
+              color: true,
+              size: true,
+              is_default: true,
+              product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
+            },
+          },
           inventory: { select: { available_quantity: true } },
         },
       }),
@@ -943,7 +974,15 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         sku: true,
         shipping_per_unit: true,
         product_images: { select: { url: true, sort_order: true } },
-        product_variants: { select: { color: true, size: true, is_default: true } },
+        product_variants: {
+          select: {
+            name: true,
+            color: true,
+            size: true,
+            is_default: true,
+            product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
+          },
+        },
         inventory: { select: { available_quantity: true } },
       },
     });

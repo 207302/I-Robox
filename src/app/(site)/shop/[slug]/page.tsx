@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import DemoProductGallery from "./DemoProductGallery";
+import VariantSelector from "./VariantSelector";
 import { getProductBySlug } from "@/get-api-data/product";
 import { formatPrice } from "@/utils/formatePrice";
 import ReviewForm from "@/components/Shop/ReviewForm";
@@ -40,16 +41,27 @@ export default async function ProductPage({ params }: ProductPageProps) {
     take: 10,
   });
 
-  // Use product_images from DB; fall back to a placeholder only if truly none
-  const sortedImages = (product.product_images ?? [])
+  const sortedProductLevelImages = (product.product_images ?? [])
+    .filter((i) => i.product_variant_id == null)
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((i) => i.url)
     .filter(Boolean);
 
-  // Also try variant images as secondary fallback
-  const variantImages = product.productVariants.map((v) => v.image).filter(Boolean);
-  const galleryImages = sortedImages.length > 0 ? sortedImages : variantImages.length > 0 ? variantImages : ["/images/products/placeholder.png"];
+  const variantImagesInOrder = product.productVariants.flatMap((v) => v.images ?? []);
+  const galleryImages = [...sortedProductLevelImages, ...variantImagesInOrder];
+  const galleryImagesSafe =
+    galleryImages.length > 0 ? galleryImages : ["/images/products/placeholder.png"];
+  const variantsForSelector = product.productVariants.map((variant) => {
+    const first = variant.images?.[0];
+    const galleryIndex =
+      first != null && first !== "" ? galleryImages.indexOf(first) : 0;
+    return {
+      ...variant,
+      galleryIndex: galleryIndex >= 0 ? galleryIndex : 0,
+    };
+  });
+  const galleryId = `product-gallery-${product.id}`;
 
   return (
     <section className="overflow-x-hidden overflow-y-visible py-6 pb-14 sm:py-10 sm:pb-20">
@@ -61,7 +73,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="mt-5 grid min-w-0 items-start gap-6 lg:grid-cols-2 lg:gap-8">
           <DemoProductGallery
             title={product.title}
-            images={galleryImages}
+            images={galleryImagesSafe}
+            galleryId={galleryId}
           />
 
           <div className="min-w-0">
@@ -111,12 +124,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 </p>
               </>
             ) : null}
+            <VariantSelector
+              variants={variantsForSelector}
+              fallbackImage={galleryImagesSafe[0] || "/images/products/placeholder.png"}
+              galleryId={galleryId}
+            />
 
             <ProductActions
               id={product.id}
               title={product.title}
               slug={product.slug}
-              image={galleryImages[0] || "/images/products/placeholder.png"}
+              image={galleryImagesSafe[0] || "/images/products/placeholder.png"}
               price={product.price}
               discountedPrice={product.discountedPrice}
               quantity={product.quantity}

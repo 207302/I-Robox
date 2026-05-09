@@ -22,13 +22,16 @@ export type Product = {
   /** Cover image URL for thumbnails/cards (first product_image by sort_order). */
   image?: string;
   productVariants: {
+    name?: string;
     color: string;
     image: string;
+    images?: string[];
     size: string;
     isDefault: boolean;
   }[];
   product_images?: {
     url: string;
     sort_order: number;
+    product_variant_id?: string | null;
   }[];
 };

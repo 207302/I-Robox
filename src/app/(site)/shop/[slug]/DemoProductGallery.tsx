@@ -1,16 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState, type TouchEvent } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 
 const SWIPE_THRESHOLD = 40;
 
 type Props = {
   title: string;
   images: string[];
+  galleryId?: string;
 };
 
-export default function DemoProductGallery({ title, images }: Props) {
+export default function DemoProductGallery({ title, images, galleryId = "default" }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const thumbnailRailRef = useRef<HTMLDivElement>(null);
@@ -46,6 +47,33 @@ export default function DemoProductGallery({ title, images }: Props) {
       behavior: "smooth",
     });
   };
+
+  useEffect(() => {
+    const onSelect = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        galleryId?: string;
+        image?: string;
+        index?: number;
+      }>;
+      if (customEvent.detail?.galleryId !== galleryId) return;
+      const targetIndex = customEvent.detail?.index;
+      if (typeof targetIndex === "number" && Number.isFinite(targetIndex)) {
+        goTo(targetIndex);
+        return;
+      }
+      const image = customEvent.detail?.image;
+      if (!image) return;
+      const idx = images.indexOf(image);
+      if (idx >= 0) {
+        goTo(idx);
+      }
+    };
+
+    window.addEventListener("product-gallery-select-image", onSelect as EventListener);
+    return () => {
+      window.removeEventListener("product-gallery-select-image", onSelect as EventListener);
+    };
+  }, [galleryId, images]);
 
   return (
     <div className="w-full max-w-full space-y-3 overflow-x-hidden sm:space-y-4">

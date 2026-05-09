@@ -30,9 +30,15 @@ export const getNewArrivalsProduct = unstable_cache(
         updated_at: true,
         product_variants: {
           select: {
+            name: true,
             color: true,
             size: true,
             is_default: true,
+            product_images: {
+              orderBy: { sort_order: "asc" },
+              take: 1,
+              select: { url: true },
+            },
           }
         },
         inventory: { select: { available_quantity: true } },
@@ -62,7 +68,8 @@ export const getNewArrivalsProduct = unstable_cache(
       productVariants: item.product_variants.map((v) => ({
         id: 0,
         productId: item.id,
-        image: pickDefaultImage(item),
+        image: v.product_images[0]?.url ?? pickDefaultImage(item),
+        name: v.name ?? "",
         color: v.color ?? "",
         size: v.size ?? "",
         isDefault: v.is_default,
@@ -84,9 +91,15 @@ const bestSellerProductSelect = {
   updated_at: true,
   product_variants: {
     select: {
+      name: true,
       color: true,
       size: true,
       is_default: true,
+      product_images: {
+        orderBy: { sort_order: "asc" },
+        take: 1,
+        select: { url: true },
+      },
     },
   },
   inventory: { select: { available_quantity: true } },
@@ -119,7 +132,8 @@ const mapProductToHomeCard = (item: BestSellerProductRow) => ({
   productVariants: item.product_variants.map((v) => ({
     id: 0,
     productId: item.id,
-    image: pickDefaultImage(item),
+    image: v.product_images[0]?.url ?? pickDefaultImage(item),
+    name: v.name ?? "",
     color: v.color ?? "",
     size: v.size ?? "",
     isDefault: v.is_default,
@@ -206,13 +220,19 @@ export const getProductBySlug = async (slug: string) => {
         },
       },
       product_variants: {
+        orderBy: [{ is_default: "desc" }, { created_at: "asc" }],
         select: {
+          name: true,
           color: true,
           size: true,
           is_default: true,
-        }
+          product_images: {
+            orderBy: { sort_order: "asc" },
+            select: { url: true },
+          },
+        },
       },
-      product_images: { select: { url: true, sort_order: true } },
+      product_images: { select: { url: true, sort_order: true, product_variant_id: true } },
       inventory: { select: { available_quantity: true } },
       sku: true,
       shipping_per_unit: true,
@@ -249,14 +269,20 @@ export const getProductBySlug = async (slug: string) => {
       ? { title: product.categories.name, slug: product.categories.slug }
       : null,
     product_images: product.product_images,
-    productVariants: product.product_variants.map((v) => ({
-      id: 0,
-      productId: product.id,
-      image: pickDefaultImage(product),
-      color: v.color ?? "",
-      size: v.size ?? "",
-      isDefault: v.is_default,
-    })),
+    productVariants: product.product_variants.map((v) => {
+      const images = v.product_images.map((p) => p.url).filter(Boolean);
+      const fallback = pickDefaultImage(product);
+      return {
+        id: 0,
+        productId: product.id,
+        images,
+        image: images[0] ?? fallback,
+        name: v.name ?? "",
+        color: v.color ?? "",
+        size: v.size ?? "",
+        isDefault: v.is_default,
+      };
+    }),
     reviews: 0,
     additionalInformation: [],
     customAttributes: [],

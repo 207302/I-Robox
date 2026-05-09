@@ -16,6 +16,18 @@ interface ProductVariant {
   name?: string | null;
   sku?: string | null;
   is_default: boolean;
+  product_images?: { id: string; url: string; sort_order: number }[];
+}
+
+function galleryImagesFromVariantApi(
+  rows: ProductVariant["product_images"] | undefined
+): GalleryImage[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((pi) => ({
+    id: pi.id,
+    url: pi.url,
+    sort_order: pi.sort_order,
+  }));
 }
 
 const AGE_GROUPS = [
@@ -32,6 +44,8 @@ export default function EditProductPage() {
   const [form, setForm] = useState<any>(null);
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [imgBusy, setImgBusy] = useState(false);
+  const [variantImages, setVariantImages] = useState<Record<string, GalleryImage[]>>({});
+  const [variantImgBusyId, setVariantImgBusyId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Option[]>([]);
   const [brands, setBrands] = useState<Option[]>([]);
   const [diecastScales, setDiecastScales] = useState<Option[]>([]);
@@ -82,6 +96,12 @@ export default function EditProductPage() {
         if (product && typeof product === "object" && !("error" in (product as Record<string, unknown>))) {
           setForm(product);
           setImages((product as { product_images?: GalleryImage[] }).product_images ?? []);
+          const variants = (product as { product_variants?: ProductVariant[] }).product_variants ?? [];
+          const vmap: Record<string, GalleryImage[]> = {};
+          for (const v of variants) {
+            vmap[v.id] = galleryImagesFromVariantApi(v.product_images);
+          }
+          setVariantImages(vmap);
         }
         setCategories(Array.isArray(cats) ? cats : []);
         setBrands(Array.isArray(brnds) ? brnds : []);
@@ -275,6 +295,104 @@ export default function EditProductPage() {
     }
   }
 
+  async function handleAddVariantFiles(variantId: string, files: FileList) {
+    const fileArr = Array.from(files);
+    const tempIds = fileArr.map((_, i) => `temp-${Date.now()}-${i}-${Math.random()}`);
+
+    setVariantImages((prev) => ({
+      ...prev,
+      [variantId]: [
+        ...(prev[variantId] ?? []),
+        ...tempIds.map((tid) => ({ id: tid, url: "", uploading: true })),
+      ],
+    }));
+
+    await Promise.allSettled(
+      fileArr.map(async (file, i) => {
+        if (file.size > MAX_IMAGE_BYTES) {
+          toast.error(`${file.name}: max 9 MB per image.`);
+          setVariantImages((prev) => ({
+            ...prev,
+            [variantId]: (prev[variantId] ?? []).filter((img) => img.id !== tempIds[i]),
+          }));
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", file);
+        try {
+          const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: fd });
+          const uploadParsed = await parseAdminJsonResponse<{ url?: string }>(uploadRes);
+          if (!uploadParsed.ok) throw new Error(uploadParsed.message);
+          const uploadData = uploadParsed.data;
+          if (!uploadData.url) throw new Error("Upload failed: no URL returned");
+
+          const imgRes = await fetch(`/api/admin/products/${id}/images`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: uploadData.url, product_variant_id: variantId }),
+          });
+          const imgParsed = await parseAdminJsonResponse(imgRes);
+          if (!imgParsed.ok) throw new Error(imgParsed.message);
+          const imgData = imgParsed.data as GalleryImage;
+
+          setVariantImages((prev) => ({
+            ...prev,
+            [variantId]: (prev[variantId] ?? []).map((img) =>
+              img.id === tempIds[i] ? imgData : img
+            ),
+          }));
+          toast.success("Image uploaded");
+        } catch (err: any) {
+          toast.error(err?.message || "Failed");
+          setVariantImages((prev) => ({
+            ...prev,
+            [variantId]: (prev[variantId] ?? []).filter((img) => img.id !== tempIds[i]),
+          }));
+        }
+      })
+    );
+  }
+
+  async function handleDeleteVariantImage(variantId: string, img: GalleryImage) {
+    if (!img.id) return;
+    try {
+      const res = await fetch(
+        `/api/admin/products/${id}/images?imageId=${img.id}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Delete failed");
+      setVariantImages((prev) => ({
+        ...prev,
+        [variantId]: (prev[variantId] ?? []).filter((m) => m.id !== img.id),
+      }));
+      toast.success("Image removed");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove image");
+    }
+  }
+
+  async function handleReorderVariantImages(variantId: string, newOrder: GalleryImage[]) {
+    setVariantImages((prev) => ({ ...prev, [variantId]: newOrder }));
+    const ids = newOrder
+      .map((img) => img.id)
+      .filter((imgId): imgId is string => !!imgId && !imgId.startsWith("temp-"));
+    if (ids.length === 0) return;
+    setVariantImgBusyId(variantId);
+    try {
+      const res = await fetch(`/api/admin/products/${id}/images`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ order: ids }),
+      });
+      if (!res.ok) throw new Error("Failed to save order");
+    } catch {
+      toast.error("Could not save image order");
+    } finally {
+      setVariantImgBusyId(null);
+    }
+  }
+
   async function addVariant() {
     const color = newVariantColor.trim();
     if (!color) {
@@ -290,10 +408,12 @@ export default function EditProductPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to add variant");
+      const newVar = data as ProductVariant;
       setForm((f: any) => ({
         ...f,
-        product_variants: [...((f?.product_variants as ProductVariant[]) ?? []), data],
+        product_variants: [...((f?.product_variants as ProductVariant[]) ?? []), { ...newVar, product_images: [] }],
       }));
+      setVariantImages((prev) => ({ ...prev, [newVar.id]: [] }));
       setNewVariantColor("");
       toast.success("Variant added");
     } catch (err: any) {
@@ -315,6 +435,11 @@ export default function EditProductPage() {
         ...f,
         product_variants: ((f?.product_variants as ProductVariant[]) ?? []).filter((v) => v.id !== variantId),
       }));
+      setVariantImages((prev) => {
+        const next = { ...prev };
+        delete next[variantId];
+        return next;
+      });
       toast.success("Variant removed");
     } catch (err: any) {
       toast.error(err?.message || "Failed to remove variant");
@@ -670,35 +795,57 @@ export default function EditProductPage() {
           {((form.product_variants as ProductVariant[] | undefined) ?? []).length === 0 ? (
             <p className="text-sm text-meta-4">No variants yet.</p>
           ) : (
-            ((form.product_variants as ProductVariant[]) ?? []).map((variant) => (
-              <div
-                key={variant.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-2 px-3 py-2"
-              >
-                <span className="text-sm text-dark">
-                  {variant.color || "Unnamed color"}
-                  {variant.is_default ? " (default)" : ""}
-                </span>
-                <div className="flex items-center gap-2">
-                  {!variant.is_default ? (
-                    <button
-                      type="button"
-                      onClick={() => setDefaultVariant(variant.id)}
-                      className="rounded-md border border-gray-3 px-2 py-1 text-xs text-dark hover:bg-gray-1"
-                    >
-                      Set default
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => removeVariant(variant.id)}
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
+            ((form.product_variants as ProductVariant[]) ?? []).map((variant) => {
+              const variantLabel = variant.color || variant.name || "Unnamed color";
+              return (
+                <div
+                  key={variant.id}
+                  className="space-y-3 rounded-lg border border-gray-2 px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm text-dark">
+                      {variantLabel}
+                      {variant.is_default ? " (default)" : ""}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {!variant.is_default ? (
+                        <button
+                          type="button"
+                          onClick={() => setDefaultVariant(variant.id)}
+                          className="rounded-md border border-gray-3 px-2 py-1 text-xs text-dark hover:bg-gray-1"
+                        >
+                          Set default
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => removeVariant(variant.id)}
+                        className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2 border-t border-gray-2 pt-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-medium text-dark">
+                        Images for {variantLabel}
+                      </h3>
+                      {variantImgBusyId === variant.id ? (
+                        <span className="text-xs text-meta-3">Saving order…</span>
+                      ) : null}
+                    </div>
+                    <ImageGallery
+                      images={variantImages[variant.id] ?? []}
+                      onReorder={(order) => handleReorderVariantImages(variant.id, order)}
+                      onDelete={(img) => handleDeleteVariantImage(variant.id, img)}
+                      onAddFiles={(files) => handleAddVariantFiles(variant.id, files)}
+                      disabled={loading || deleting}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>

@@ -8,51 +8,39 @@ function shopSingleSelection(params: { brandSlug?: string; categorySlug?: string
   return `/shop?${u.toString()}`;
 }
 
-/** Build primary nav from DB-driven brands/categories (Cars + Other Toys). */
+/** Build primary nav: Categories = all categories, Brands = all brands. */
 export function buildHeaderMenuData(nav: HeaderNavData): MenuItem[] {
-  const diecastSlug = nav.diecastCategorySlug;
-
-  const carsItems: MenuItem[] = nav.carsBrands.map((b) => ({
-    title: b.name,
-    path: shopSingleSelection({ brandSlug: b.slug, categorySlug: diecastSlug ?? undefined }),
+  const categoryItems: MenuItem[] = nav.categories.map((c) => ({
+    title: c.name,
+    path: shopSingleSelection({ categorySlug: c.slug }),
   }));
 
-  const carsMenu: MenuItem =
-    carsItems.length > 0
-      ? { title: "Cars", submenu: carsItems }
+  const categoriesMenu: MenuItem =
+    categoryItems.length > 0
+      ? { title: "Categories", submenu: categoryItems }
       : {
-          title: "Cars",
-          submenu: [
-            {
-              title: diecastSlug ? "Browse diecast" : "Browse shop",
-              path: diecastSlug
-                ? shopSingleSelection({ categorySlug: diecastSlug })
-                : "/shop",
-            },
-          ],
+          title: "Categories",
+          submenu: [{ title: "Browse shop", path: "/shop" }],
         };
 
-  const grouped =
-    nav.otherToyGroups.length > 0
-      ? nav.otherToyGroups.map((g) => ({
-          heading: g.categoryName,
-          items: g.brands.map((b) => ({
-            title: b.name,
-            path: shopSingleSelection({ brandSlug: b.slug, categorySlug: g.categorySlug }),
-          })),
-        }))
-      : [
-          {
-            heading: "Shop",
-            items: [{ title: "All products", path: "/shop" }],
-          },
-        ];
+  const brandItems: MenuItem[] = nav.brands.map((b) => ({
+    title: b.name,
+    path: shopSingleSelection({ brandSlug: b.slug }),
+  }));
+
+  const brandsMenu: MenuItem =
+    brandItems.length > 0
+      ? { title: "Brands", submenu: brandItems }
+      : {
+          title: "Brands",
+          submenu: [{ title: "Browse shop", path: "/shop" }],
+        };
 
   return [
     { title: "Popular", path: "/popular?sort=popular" },
     { title: "Shop", path: "/shop" },
-    carsMenu,
-    { title: "Other Toys", groupedSubmenu: grouped },
+    categoriesMenu,
+    brandsMenu,
     { title: "Contact", path: "/contact" },
   ];
 }

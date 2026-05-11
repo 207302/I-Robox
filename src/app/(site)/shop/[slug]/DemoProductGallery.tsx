@@ -4,6 +4,10 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 
 const SWIPE_THRESHOLD = 40;
+/** Auto-advance main image when there are multiple photos */
+const AUTO_ADVANCE_MS = 4500;
+/** Main stage slide animation */
+const SLIDE_MS = 600;
 
 type Props = {
   title: string;
@@ -15,6 +19,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const thumbnailRailRef = useRef<HTMLDivElement>(null);
+  const autoplayPausedRef = useRef(false);
 
   const goTo = (index: number) => {
     const total = images.length;
@@ -75,8 +80,37 @@ export default function DemoProductGallery({ title, images, galleryId = "default
     };
   }, [galleryId, images]);
 
+  useEffect(() => {
+    if (images.length === 0) return;
+    setActiveIndex((i) => Math.min(i, images.length - 1));
+  }, [images.length, images.join("|")]);
+
+  useEffect(() => {
+    if (images.length <= 1) return undefined;
+    const id = window.setInterval(() => {
+      if (autoplayPausedRef.current) return;
+      setActiveIndex((prev) => (prev + 1) % images.length);
+    }, AUTO_ADVANCE_MS);
+    return () => window.clearInterval(id);
+  }, [images.length, images.join("|")]);
+
+  useEffect(() => {
+    const rail = thumbnailRailRef.current;
+    if (!rail || images.length <= 1) return;
+    const thumb = rail.querySelector<HTMLElement>(`[data-thumb-index="${activeIndex}"]`);
+    thumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeIndex, images.length]);
+
   return (
-    <div className="w-full max-w-full space-y-3 overflow-x-hidden sm:space-y-4">
+    <div
+      className="w-full max-w-full space-y-3 overflow-x-hidden sm:space-y-4"
+      onPointerEnter={() => {
+        autoplayPausedRef.current = true;
+      }}
+      onPointerLeave={() => {
+        autoplayPausedRef.current = false;
+      }}
+    >
       <div
         className="relative w-full aspect-[4/3] overflow-hidden rounded-2xl border border-gray-3 bg-white touch-pan-y sm:aspect-square"
         onTouchStart={handleTouchStart}
@@ -116,17 +150,44 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 />
               </svg>
             </button>
-          </>
-        ) : null}
 
-        <Image
-          src={images[activeIndex]}
-          alt={`${title} image ${activeIndex + 1}`}
-          fill
-          sizes="(max-width: 1024px) 100vw, 50vw"
-          className="object-contain p-2 sm:p-4"
-          priority
-        />
+            <div
+              className="absolute inset-0 flex h-full transition-transform motion-reduce:transition-none"
+              style={{
+                width: `${images.length * 100}%`,
+                transform: `translateX(-${(activeIndex * 100) / images.length}%)`,
+                transitionDuration: `${SLIDE_MS}ms`,
+                transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            >
+              {images.map((src, index) => (
+                <div
+                  key={`${src}-${index}`}
+                  className="relative h-full shrink-0"
+                  style={{ width: `${100 / images.length}%` }}
+                >
+                  <Image
+                    src={src}
+                    alt={`${title} image ${index + 1}`}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-contain p-2 sm:p-4"
+                    priority={index === 0}
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : images[0] ? (
+          <Image
+            src={images[0]}
+            alt={`${title} image 1`}
+            fill
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-contain p-2 sm:p-4"
+            priority
+          />
+        ) : null}
       </div>
 
       {images.length > 1 ? (
@@ -154,6 +215,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 <button
                   key={`${thumbnail}-${index}`}
                   type="button"
+                  data-thumb-index={index}
                   onClick={() => goTo(index)}
                   className={`relative aspect-square h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border bg-white sm:h-24 sm:w-24 ${
                     activeIndex === index ? "border-blue" : "border-gray-3"
@@ -195,6 +257,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
             <button
               key={`${thumbnail}-${index}`}
               type="button"
+              data-thumb-index={index}
               onClick={() => goTo(index)}
               className={`relative aspect-square h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border bg-white sm:h-24 sm:w-24 ${
                 activeIndex === index ? "border-blue" : "border-gray-3"

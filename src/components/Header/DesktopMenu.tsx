@@ -32,6 +32,8 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
         {menuData.map((menuItem, i) => {
           const hasFlat = Boolean(menuItem.submenu?.length);
           const hasGrouped = Boolean(menuItem.groupedSubmenu?.length);
+          const flatCount = menuItem.submenu?.length ?? 0;
+          const scrollLongFlat = hasFlat && flatCount > 12;
           const isDropdown = hasFlat || hasGrouped;
 
           return (
@@ -66,7 +68,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                   </button>
 
                   <div
-                    className={`absolute left-0 border border-gray-2 top-full bg-white shadow-lg rounded-lg p-2 z-50 transform transition-all duration-200 ${hasGrouped ? "min-w-[260px] max-w-sm max-h-[min(70vh,520px)] overflow-y-auto" : "min-w-[220px]"
+                    className={`absolute left-0 border border-gray-2 top-full bg-white shadow-lg rounded-lg p-2 z-50 transform transition-all duration-200 ${hasGrouped || scrollLongFlat ? "min-w-[260px] max-w-sm max-h-[min(70vh,520px)] overflow-y-auto" : "min-w-[220px]"
                       } ${activeDropdown === i
                         ? "opacity-100 translate-y-0 visible"
                         : "opacity-0 translate-y-2 invisible"

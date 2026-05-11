@@ -38,8 +38,7 @@ const DEFAULT_PAGES: Record<QuickLinkPageKey, QuickLinkPageContent> = {
   contact: {
     title: "Contact us",
     subtitle: "We are happy to help with product questions, order support, and collector enquiries.",
-    content:
-      "For support, please use the phone/email shown in the footer.\n\nBusiness address and social links are also managed in Admin → Marketing → Settings.",
+    content: "",
   },
 };
 

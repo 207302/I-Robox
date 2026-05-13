@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  startTransition,
   type TouchEvent,
 } from "react";
 
@@ -30,7 +31,7 @@ const DESKTOP_GAP_PX = 24;
 const cardHoverClass =
   "md:hover:-translate-y-1 md:hover:shadow-xl md:hover:ring-2 md:hover:ring-red/40";
 
-function HighlightCard({ item }: { item: HighlightItem }) {
+function HighlightCard({ item, imagePriority }: { item: HighlightItem; imagePriority?: boolean }) {
   return (
     <Link
       href={item.href}
@@ -43,6 +44,9 @@ function HighlightCard({ item }: { item: HighlightItem }) {
           fill
           sizes="(max-width: 768px) 100vw, 33vw"
           className="object-cover"
+          priority={imagePriority}
+          fetchPriority={imagePriority ? "high" : undefined}
+          loading={imagePriority ? undefined : "lazy"}
         />
         <div className="absolute inset-x-3 bottom-3 rounded-lg bg-red/90 px-3 py-2 shadow-md shadow-red/30 transition-[background-color,box-shadow] duration-300 group-hover:bg-red group-hover:shadow-lg group-hover:shadow-red/40">
           <p className="text-sm font-bold text-white tracking-wide">{item.label}</p>
@@ -64,15 +68,19 @@ function MobileHighlightsCarousel({ items }: { items: HighlightItem[] }) {
   const touchStartX = useRef<number | null>(null);
 
   const goNext = useCallback(() => {
-    setActiveIndex((p) => (n > 0 ? (p + 1) % n : 0));
+    startTransition(() => {
+      setActiveIndex((p) => (n > 0 ? (p + 1) % n : 0));
+    });
   }, [n]);
 
   const goPrev = useCallback(() => {
-    setActiveIndex((p) => (n > 0 ? (p - 1 + n) % n : 0));
+    startTransition(() => {
+      setActiveIndex((p) => (n > 0 ? (p - 1 + n) % n : 0));
+    });
   }, [n]);
 
   useEffect(() => {
-    setActiveIndex(0);
+    startTransition(() => setActiveIndex(0));
   }, [slidesKey]);
 
   useEffect(() => {
@@ -115,13 +123,13 @@ function MobileHighlightsCarousel({ items }: { items: HighlightItem[] }) {
             transform: `translateX(-${activeIndex * slideFraction}%)`,
           }}
         >
-          {items.map((item) => (
+          {items.map((item, index) => (
             <div
               key={item.id}
               className="relative h-full shrink-0"
               style={{ width: `${slideFraction}%` }}
             >
-              <HighlightCard item={item} />
+              <HighlightCard item={item} imagePriority={index === 0} />
             </div>
           ))}
         </div>
@@ -140,7 +148,7 @@ function MobileHighlightsCarousel({ items }: { items: HighlightItem[] }) {
               role="tab"
               aria-selected={index === activeIndex}
               aria-label={`Highlight ${index + 1} of ${n}`}
-              onClick={() => setActiveIndex(index)}
+              onClick={() => startTransition(() => setActiveIndex(index))}
               className={`h-2 rounded-full transition-all duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red ${
                 index === activeIndex ? "w-8 bg-red" : "w-2 bg-gray-3 hover:bg-gray-4"
               }`}
@@ -162,15 +170,19 @@ function DesktopThreeCarousel({ items }: { items: HighlightItem[] }) {
   const [stepPx, setStepPx] = useState(0);
 
   const goNext = useCallback(() => {
-    setPos((p) => (positions > 0 ? (p + 1) % positions : 0));
+    startTransition(() => {
+      setPos((p) => (positions > 0 ? (p + 1) % positions : 0));
+    });
   }, [positions]);
 
   const goPrev = useCallback(() => {
-    setPos((p) => (positions > 0 ? (p - 1 + positions) % positions : 0));
+    startTransition(() => {
+      setPos((p) => (positions > 0 ? (p - 1 + positions) % positions : 0));
+    });
   }, [positions]);
 
   useEffect(() => {
-    setPos(0);
+    startTransition(() => setPos(0));
   }, [slidesKey]);
 
   useEffect(() => {
@@ -245,7 +257,7 @@ function DesktopThreeCarousel({ items }: { items: HighlightItem[] }) {
                   : undefined
               }
             >
-              <HighlightCard item={item} />
+              <HighlightCard item={item} imagePriority={item.id === items[0].id} />
             </div>
           ))}
         </div>
@@ -264,7 +276,7 @@ function DesktopThreeCarousel({ items }: { items: HighlightItem[] }) {
               role="tab"
               aria-selected={index === pos}
               aria-label={`Highlights ${index + 1} of ${positions}`}
-              onClick={() => setPos(index)}
+              onClick={() => startTransition(() => setPos(index))}
               className={`h-2 rounded-full transition-all duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red ${
                 index === pos ? "w-8 bg-red" : "w-2 bg-gray-3 hover:bg-gray-4"
               }`}
@@ -296,8 +308,8 @@ export default function HomeHighlightsSection({ items }: { items: HighlightItem[
       <div className="hidden md:block">
         {n <= 3 ? (
           <div className="grid grid-cols-3 gap-6">
-            {items.map((item) => (
-              <HighlightCard key={item.id} item={item} />
+            {items.map((item, index) => (
+              <HighlightCard key={item.id} item={item} imagePriority={index === 0} />
             ))}
           </div>
         ) : (

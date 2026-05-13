@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  startTransition,
   type TouchEvent,
 } from "react";
 
@@ -57,15 +58,19 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   const [mobileControlsActive, setMobileControlsActive] = useState(false);
 
   const goToNext = useCallback(() => {
-    setActiveIndex((prev) =>
-      slides.length > 0 ? (prev + 1) % slides.length : 0
-    );
+    startTransition(() => {
+      setActiveIndex((prev) =>
+        slides.length > 0 ? (prev + 1) % slides.length : 0
+      );
+    });
   }, [slides.length]);
 
   const goToPrev = useCallback(() => {
-    setActiveIndex((prev) =>
-      slides.length > 0 ? (prev - 1 + slides.length) % slides.length : 0
-    );
+    startTransition(() => {
+      setActiveIndex((prev) =>
+        slides.length > 0 ? (prev - 1 + slides.length) % slides.length : 0
+      );
+    });
   }, [slides.length]);
 
   const showMobileControlsTemporarily = useCallback(() => {
@@ -80,7 +85,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   }, []);
 
   useEffect(() => {
-    setActiveIndex(0);
+    startTransition(() => setActiveIndex(0));
   }, [slidesKey]);
 
   useEffect(() => {
@@ -163,6 +168,8 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                     alt={banner.title ?? "Hero banner"}
                     fill
                     priority={index === 0}
+                    fetchPriority={index === 0 ? "high" : undefined}
+                    loading={index === 0 ? undefined : "lazy"}
                     sizes="100vw"
                     className="object-cover"
                   />
@@ -173,6 +180,8 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                   alt={banner.title ?? "Hero banner"}
                   fill
                   priority={index === 0}
+                  fetchPriority={index === 0 ? "high" : undefined}
+                  loading={index === 0 ? undefined : "lazy"}
                   sizes="100vw"
                   className="object-cover"
                 />
@@ -255,7 +264,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
             aria-label={`Banner ${index + 1} of ${slides.length}`}
             onClick={(e) => {
               e.preventDefault();
-              setActiveIndex(index);
+              startTransition(() => setActiveIndex(index));
             }}
             className={`pointer-events-auto h-2.5 rounded-full transition-all duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
               index === activeIndex

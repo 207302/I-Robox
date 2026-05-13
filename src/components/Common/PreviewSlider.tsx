@@ -106,6 +106,9 @@ const PreviewSliderModal = () => {
                 alt={data.title || "thumb-img"}
                 width={450}
                 height={450}
+                sizes="(max-width: 1024px) 90vw, 450px"
+                priority={key === 0}
+                loading={key === 0 ? undefined : "lazy"}
               />
             </div>
           </SwiperSlide>

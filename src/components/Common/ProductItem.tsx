@@ -12,15 +12,28 @@ import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
 import WishlistButton from "../Wishlist/AddWishlistButton";
 import Tooltip from "./Tooltip";
+import { PRODUCT_CARD_GRID_SIZES } from "@/lib/shop/productCardGridSizes";
 import { calculateDiscountPercentage } from "@/utils/calculateDiscountPercentage";
 import { formatPrice } from "@/utils/formatePrice";
 
 type Props = {
   bgClr?: string;
   item: Product;
+  /** Passed from shop (and similar grids) so `next/image` emits correct `srcset` widths. */
+  cardImageSizes?: string;
+  /**
+   * Shop listing only: first visible row vs below the fold.
+   * Omit on home/other pages — default Next/image lazy behavior.
+   */
+  shopListingImage?: "lcp" | "eager" | "lazy";
 };
 // add updated the type here
-const ProductItem = ({ item, bgClr = "white" }: Props) => {
+const ProductItem = ({
+  item,
+  bgClr = "white",
+  cardImageSizes = PRODUCT_CARD_GRID_SIZES,
+  shopListingImage,
+}: Props) => {
   const displayTitle = item.title;
   const defaultVariant = item?.productVariants.find((variant) => variant.isDefault);
   const firstVariantWithImage = item?.productVariants.find((variant) => Boolean(variant.image));
@@ -95,32 +108,48 @@ const ProductItem = ({ item, bgClr = "white" }: Props) => {
     );
   };
 
+  const mainImagePriority = shopListingImage === "lcp";
+  const listingLoadingProp =
+    shopListingImage === "lazy"
+      ? ("lazy" as const)
+      : shopListingImage
+        ? ("eager" as const)
+        : undefined;
+
   return (
     <div className="group rounded-xl border border-gray-7 bg-white p-3 sm:p-4">
       <div
-        className={`relative overflow-hidden border border-white flex items-center justify-center rounded-xl bg-${bgClr} min-h-[270px] mb-4`}
+        className={`relative mb-4 flex aspect-square w-full max-h-[min(280px,92vw)] items-center justify-center overflow-hidden rounded-xl border border-white bg-${bgClr}`}
       >
         <Link
           href={`/shop/${item?.slug}`}
+          className="relative block h-full w-full"
         >
           <Image
             src={cardImage || "/images/404.svg"}
             alt={item.title || "product-image"}
-            width={250}
-            height={250}
+            width={640}
+            height={640}
+            sizes={cardImageSizes}
+            className="h-full w-full object-contain"
+            priority={mainImagePriority}
+            {...(shopListingImage === "lcp" ? { fetchPriority: "high" as const } : {})}
+            {...(listingLoadingProp ? { loading: listingLoadingProp } : {})}
           />
         </Link>
-        <div className="absolute top-2 right-2">
+        <div className="pointer-events-none absolute right-2 top-2 z-10 flex h-[26px] w-[4.5rem] shrink-0 items-center justify-end">
           {item.quantity < 1 ? (
-            <span className="px-2 py-1 text-xs font-medium text-white bg-amber-600 rounded-full">
+            <span className="pointer-events-auto rounded-full bg-amber-600 px-2 py-1 text-xs font-medium text-white">
               Out of Stock
             </span>
           ) : item?.discountedPrice && item?.discountedPrice > 0 ? (
-            <span className="px-2 py-1 text-xs font-medium text-white rounded-full bg-blue">
+            <span className="pointer-events-auto rounded-full bg-blue px-2 py-1 text-xs font-medium text-white tabular-nums">
               {calculateDiscountPercentage(item.discountedPrice, item.price)}%
               OFF
             </span>
-          ) : null}
+          ) : (
+            <span className="h-[26px] w-px shrink-0 opacity-0" aria-hidden />
+          )}
         </div>
 
         <div className="absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full flex items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0">
@@ -216,7 +245,8 @@ const ProductItem = ({ item, bgClr = "white" }: Props) => {
                   alt={label}
                   width={14}
                   height={14}
-                  className="h-3.5 w-3.5 rounded-full object-cover"
+                  loading="lazy"
+                  className="h-3.5 w-3.5 shrink-0 rounded-full object-cover"
                 />
                 <span className="max-w-[88px] truncate">{label}</span>
               </span>

@@ -30,35 +30,58 @@ export default function MarketingSiteEffects() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     let openTimer: ReturnType<typeof window.setTimeout> | null = null;
-    void fetch("/api/public/marketing", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: { popup?: PopupPayload | null; firstVisitCouponCode?: string | null }) => {
-        if (typeof window === "undefined") return;
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
 
-        const wasReturning = localStorage.getItem(RETURNING_KEY);
-        if (!wasReturning) {
-          if (data?.firstVisitCouponCode) {
-            sessionStorage.setItem(PREFILL_COUPON_KEY, data.firstVisitCouponCode);
+    const run = () => {
+      if (cancelled) return;
+      void fetch("/api/public/marketing", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data: { popup?: PopupPayload | null; firstVisitCouponCode?: string | null }) => {
+          if (typeof window === "undefined" || cancelled) return;
+
+          const wasReturning = localStorage.getItem(RETURNING_KEY);
+          if (!wasReturning) {
+            if (data?.firstVisitCouponCode) {
+              sessionStorage.setItem(PREFILL_COUPON_KEY, data.firstVisitCouponCode);
+            }
+            localStorage.setItem(RETURNING_KEY, "1");
           }
-          localStorage.setItem(RETURNING_KEY, "1");
-        }
 
-        const p = data?.popup;
-        if (!p) return;
-        const key = storageKeyForPopup(p.id, p.frequency);
-        const store = p.frequency === "ONCE_PER_DEVICE" ? localStorage : sessionStorage;
-        if (p.frequency !== "EVERY_VISIT" && store.getItem(key)) return;
-        setPopup(p);
-        const delay = Math.max(0, Number(p.delay_ms) || 0);
-        openTimer = window.setTimeout(() => {
-          setOpen(true);
-          if (p.frequency !== "EVERY_VISIT") store.setItem(key, "1");
-        }, delay);
-      })
-      .catch(() => {});
+          const p = data?.popup;
+          if (!p) return;
+          const key = storageKeyForPopup(p.id, p.frequency);
+          const store = p.frequency === "ONCE_PER_DEVICE" ? localStorage : sessionStorage;
+          if (p.frequency !== "EVERY_VISIT" && store.getItem(key)) return;
+          setPopup(p);
+          const delay = Math.max(0, Number(p.delay_ms) || 0);
+          openTimer = window.setTimeout(() => {
+            setOpen(true);
+            if (p.frequency !== "EVERY_VISIT") store.setItem(key, "1");
+          }, delay);
+        })
+        .catch(() => {});
+    };
+
+    let idleId: number | undefined;
+    let fallbackId: ReturnType<typeof window.setTimeout> | undefined;
+    if (typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(run, { timeout: 3500 });
+    } else {
+      fallbackId = window.setTimeout(run, 800);
+    }
+
     return () => {
+      cancelled = true;
       if (openTimer) window.clearTimeout(openTimer);
+      if (idleId != null && typeof win.cancelIdleCallback === "function") {
+        win.cancelIdleCallback(idleId);
+      }
+      if (fallbackId) window.clearTimeout(fallbackId);
     };
   }, []);
 
@@ -90,16 +113,17 @@ export default function MarketingSiteEffects() {
         </button>
         {popup.image_url ? (
           <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl bg-gray-1">
-            <Image
-              src={popup.image_url}
-              alt=""
-              fill
-              className="object-cover"
-              sizes="(max-width: 512px) 100vw, 512px"
-              unoptimized={
-                popup.image_url.startsWith("http://") || popup.image_url.startsWith("https://")
-              }
-            />
+                  <Image
+                    src={popup.image_url}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 512px) 100vw, 512px"
+                    loading="lazy"
+                    unoptimized={
+                      popup.image_url.startsWith("http://") || popup.image_url.startsWith("https://")
+                    }
+                  />
           </div>
         ) : null}
         <h2 id="marketing-popup-title" className="pr-8 text-lg font-semibold text-dark">

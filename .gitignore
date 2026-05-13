@@ -12,6 +12,9 @@
 /.next/
 /out/
 
+# self-hosted TinyMCE (copied from node_modules on postinstall)
+/public/tinymce/
+
 # production
 /build
 

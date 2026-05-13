@@ -4,7 +4,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@/assets/icons";
 import { formatPrice } from "@/utils/formatePrice";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 
 type ProductCarouselItem = {
   id: string;
@@ -18,7 +18,7 @@ type ProductCarouselItem = {
 const ITEMS_PER_SECTION = 8;
 const MAX_SECTIONS = 3;
 
-function ProductCard({ item }: { item: ProductCarouselItem }) {
+function ProductCard({ item, imagePriority }: { item: ProductCarouselItem; imagePriority?: boolean }) {
   return (
     <Link
       href={`/shop/${item.slug}`}
@@ -31,6 +31,9 @@ function ProductCard({ item }: { item: ProductCarouselItem }) {
           fill
           sizes="(max-width: 768px) 100vw, 25vw"
           className="object-cover"
+          priority={imagePriority}
+          fetchPriority={imagePriority ? "high" : undefined}
+          loading={imagePriority ? undefined : "lazy"}
         />
       </div>
       <div className="p-3">
@@ -55,6 +58,7 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
     return <p className="text-sm text-meta-3 py-4">No new arrivals yet — add products in Admin.</p>;
   }
   const capped = items.slice(0, ITEMS_PER_SECTION * MAX_SECTIONS);
+  const firstId = capped[0]?.id;
   const sections = Array.from(
     { length: Math.ceil(capped.length / ITEMS_PER_SECTION) },
     (_, idx) => capped.slice(idx * ITEMS_PER_SECTION, (idx + 1) * ITEMS_PER_SECTION)
@@ -62,10 +66,14 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
   const [activeSection, setActiveSection] = useState(0);
 
   const goNext = () => {
-    setActiveSection((p) => (sections.length > 0 ? (p + 1) % sections.length : 0));
+    startTransition(() => {
+      setActiveSection((p) => (sections.length > 0 ? (p + 1) % sections.length : 0));
+    });
   };
   const goPrev = () => {
-    setActiveSection((p) => (sections.length > 0 ? (p - 1 + sections.length) % sections.length : 0));
+    startTransition(() => {
+      setActiveSection((p) => (sections.length > 0 ? (p - 1 + sections.length) % sections.length : 0));
+    });
   };
 
   return (
@@ -87,7 +95,7 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
               >
                 <div className="grid grid-cols-2 gap-4">
                   {section.slice(0, 4).map((item) => (
-                    <ProductCard key={item.id} item={item} />
+                    <ProductCard key={item.id} item={item} imagePriority={item.id === firstId} />
                   ))}
                 </div>
               </div>
@@ -131,7 +139,7 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
                 <div key={idx} className="shrink-0" style={{ width: `${100 / sections.length}%` }}>
                   <div className="grid grid-cols-4 gap-4">
                     {section.map((item) => (
-                      <ProductCard key={item.id} item={item} />
+                      <ProductCard key={item.id} item={item} imagePriority={item.id === firstId} />
                     ))}
                   </div>
                 </div>
@@ -149,7 +157,11 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
                 role="tab"
                 aria-selected={index === activeSection}
                 aria-label={`Section ${index + 1} of ${sections.length}`}
-                onClick={() => setActiveSection(index)}
+                onClick={() =>
+                  startTransition(() => {
+                    setActiveSection(index);
+                  })
+                }
                 className={`h-2 rounded-full transition-all duration-300 ${
                   index === activeSection ? "w-8 bg-red" : "w-2 bg-gray-3 hover:bg-gray-4"
                 }`}

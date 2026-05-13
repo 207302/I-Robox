@@ -65,7 +65,7 @@ export default function WishlistPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {items.map((item) => (
+            {items.map((item, index) => (
               <div
                 key={item.id}
                 className="rounded-2xl border border-gray-3 bg-white p-5"
@@ -77,7 +77,11 @@ export default function WishlistPage() {
                         src={item.image}
                         alt={item.title}
                         fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover"
+                        priority={index === 0}
+                        fetchPriority={index === 0 ? "high" : undefined}
+                        loading={index === 0 ? undefined : "lazy"}
                       />
                     ) : null}
                   </div>

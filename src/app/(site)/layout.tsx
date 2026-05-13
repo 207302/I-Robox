@@ -2,10 +2,10 @@ import Footer from "../../components/Footer";
 import ScrollToTop from "@/components/Common/ScrollToTop";
 import { Toaster } from "react-hot-toast";
 import Providers from "./Providers";
-import NextTopLoader from "nextjs-toploader";
+import SiteTopLoader from "@/components/Common/SiteTopLoader";
 import MainHeader from "@/components/Header/MainHeader";
 import Breadcrumb from "@/components/Common/Breadcrumb";
-import WhatsAppFloatingButton from "@/components/Common/WhatsAppFloatingButton";
+import WhatsAppFloatingDeferred from "@/components/Common/WhatsAppFloatingDeferred";
 import { prisma } from "@/lib/prismaDB";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHeaderNavData } from "@/lib/nav/headerNav";
@@ -48,12 +48,7 @@ export default async function SiteLayout({
     <div>
       <>
         <Providers>
-          <NextTopLoader
-            color="#2563eb"
-            crawlSpeed={300}
-            showSpinner={false}
-            shadow="none"
-          />
+          <SiteTopLoader />
           <MainHeader
             headerData={null}
             utilityAnnouncement={utilityAnnouncement}
@@ -66,7 +61,7 @@ export default async function SiteLayout({
         </Providers>
 
         <ScrollToTop />
-        <WhatsAppFloatingButton phone={storeContact.contactPhone} />
+        <WhatsAppFloatingDeferred phone={storeContact.contactPhone} />
         <Footer storeContact={storeContact} />
       </>
     </div>

@@ -15,7 +15,14 @@ const SingleItem = ({ item }: { item: CategoryItem }) => {
     >
       <div className="w-[130px] h-[130px] bg-[#F2F3F8]  rounded-full flex items-center justify-center mb-4">
         {categoryImage && (
-          <Image src={categoryImage} alt="Category" width={80} height={80} />
+          <Image
+            src={categoryImage}
+            alt="Category"
+            width={80}
+            height={80}
+            sizes="80px"
+            loading="lazy"
+          />
         )}
       </div>
 

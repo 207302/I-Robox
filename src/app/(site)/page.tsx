@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prismaDB";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { getBestSellingProducts, getNewArrivalsProduct } from "@/get-api-data/product";
+import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import Home, {
   type HomeBrandRailItem,
   type HomeCategoryTile,
@@ -216,17 +217,27 @@ export default async function HomePage() {
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
   }));
 
+  const heroLcpUrl = heroSlides[0]?.image_url ?? "";
+
   return (
-    <Home
-      heroSlides={heroSlides}
-      heroOverlay={heroOverlay}
-      highlightsSectionEyebrow={highlightsSectionEyebrow}
-      highlightsSectionHeading={highlightsSectionHeading}
-      highlights={highlights}
-      brandRail={brandRail}
-      categories={categories}
-      newArrivals={newArrivals}
-      bestSellers={bestSellers}
-    />
+    <>
+      <LcpImagePrelink
+        imageUrl={heroLcpUrl}
+        sizes="100vw"
+        width={1920}
+        height={720}
+      />
+      <Home
+        heroSlides={heroSlides}
+        heroOverlay={heroOverlay}
+        highlightsSectionEyebrow={highlightsSectionEyebrow}
+        highlightsSectionHeading={highlightsSectionHeading}
+        highlights={highlights}
+        brandRail={brandRail}
+        categories={categories}
+        newArrivals={newArrivals}
+        bestSellers={bestSellers}
+      />
+    </>
   );
 }

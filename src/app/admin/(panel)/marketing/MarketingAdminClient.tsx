@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
 
 type SiteSettingsRow = {
   id?: string;
@@ -1544,8 +1545,9 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-3xl">
             <h2 className="text-lg font-semibold">Quick Links pages content</h2>
             <p className="text-sm text-meta-3">
-              Edit the title, subtitle, and full content shown on Privacy Policy, Terms &amp; Conditions,
-              Return &amp; Cancellation, FAQ, and Contact pages.
+              Edit the title, subtitle, and page body (rich text). Content is stored as HTML and shown
+              formatted on Privacy Policy, Terms &amp; Conditions, Return &amp; Cancellation, FAQ, and
+              Contact pages.
             </p>
 
             <label className="block max-w-sm">
@@ -1587,16 +1589,14 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               />
             </label>
-            <label className="block">
+            <div className="block">
               <span className="text-sm font-medium">Content</span>
-              <textarea
+              <QuickLinkHtmlEditor
+                editorKey={quickLinkPageKey}
                 value={quickLinkContent}
-                onChange={(e) => setQuickLinkContent(e.target.value)}
-                rows={12}
-                className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm font-mono"
-                placeholder="Write full page content here. New lines are preserved."
+                onChange={setQuickLinkContent}
               />
-            </label>
+            </div>
             <button
               type="button"
               disabled={quickLinkSaving}

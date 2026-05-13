@@ -118,6 +118,8 @@ const Home = ({
                 width={28}
                 height={28}
                 className="h-7 w-7 shrink-0 md:h-9 md:w-9"
+                loading="lazy"
+                sizes="28px"
               />
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-tight text-dark md:text-[15px]">{item.title}</p>
@@ -182,7 +184,7 @@ const Home = ({
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {(bestSellers ?? []).map((p) => (
+            {(bestSellers ?? []).map((p, index) => (
               <Link
                 key={p.id}
                 href={`/shop/${p.slug}`}
@@ -196,6 +198,9 @@ const Home = ({
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     className="object-cover"
                     unoptimized={isRemoteImage(p.image)}
+                    priority={index === 0}
+                    fetchPriority={index === 0 ? "high" : undefined}
+                    loading={index === 0 ? undefined : "lazy"}
                   />
                 </div>
                 <div className="p-3">
@@ -239,7 +244,7 @@ const Home = ({
           <div className="relative">
             <div className="flex gap-4 px-1 pb-2 overflow-x-auto sm:px-0 sm:gap-5 no-scrollbar">
               {brandRail && brandRail.length > 0 ? (
-                brandRail.map((item) => (
+                brandRail.map((item, index) => (
                   <Link
                     key={item.id}
                     href={item.href}
@@ -253,6 +258,9 @@ const Home = ({
                         sizes="(max-width: 640px) 200px, 240px"
                         className="object-cover rounded-2xl"
                         unoptimized={isRemoteImage(item.image)}
+                        priority={index === 0}
+                        fetchPriority={index === 0 ? "high" : undefined}
+                        loading={index === 0 ? undefined : "lazy"}
                       />
                     </div>
                     <div className="mt-2 w-full rounded-xl bg-white border border-gray-3 px-3 py-2 shadow-sm flex items-center justify-center">
@@ -291,7 +299,7 @@ const Home = ({
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {categories && categories.length > 0 ? (
-              categories.map((cat) => (
+              categories.map((cat, index) => (
                 <Link
                   key={cat.id}
                   href={`/shop?category=${encodeURIComponent(cat.slug)}`}
@@ -306,6 +314,9 @@ const Home = ({
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                         className="object-cover"
                         unoptimized={isRemoteImage(cat.image)}
+                        priority={index === 0}
+                        fetchPriority={index === 0 ? "high" : undefined}
+                        loading={index === 0 ? undefined : "lazy"}
                       />
                     </div>
                   ) : null}

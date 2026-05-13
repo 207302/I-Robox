@@ -21,8 +21,15 @@ const SingleItem = ({ item }: any) => {
   return (
     <div className="flex items-center justify-between gap-5">
       <div className="flex items-center w-full gap-6">
-        <div className="flex items-center justify-center rounded-[10px] bg-gray-3 w-22.5 h-22.5 shrink-0">
-          <Image src={item.image} alt="product" width={64} height={64} />
+        <div className="flex items-center justify-center rounded-[10px] bg-gray-3 w-22.5 h-22.5 shrink-0 overflow-hidden relative">
+          <Image
+            src={item.image}
+            alt="product"
+            fill
+            sizes="64px"
+            className="object-cover"
+            loading="lazy"
+          />
         </div>
 
         <div>

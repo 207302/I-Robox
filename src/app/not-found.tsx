@@ -14,6 +14,9 @@ export default function NotFound() {
               className="w-1/2 mx-auto mb-8 sm:w-auto"
               width={288}
               height={190}
+              priority
+              fetchPriority="high"
+              sizes="(max-width: 640px) 50vw, 288px"
             />
 
             <h2 className="mb-3 text-xl font-medium text-dark sm:text-2xl">

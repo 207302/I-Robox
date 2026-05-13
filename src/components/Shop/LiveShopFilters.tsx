@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { startTransition, useEffect } from "react";
 
 type Props = {
   formId: string;
@@ -139,7 +139,9 @@ export default function LiveShopFilters({ formId }: Props) {
           usp.append(k, value);
         }
         const q = usp.toString();
-        router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+        startTransition(() => {
+          router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+        });
       }, delayMs);
     };
 

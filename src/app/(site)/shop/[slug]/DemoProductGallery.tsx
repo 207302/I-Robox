@@ -173,6 +173,8 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                     sizes="(max-width: 1024px) 100vw, 50vw"
                     className="object-contain p-2 sm:p-4"
                     priority={index === 0}
+                    fetchPriority={index === 0 ? "high" : undefined}
+                    loading={index === 0 ? undefined : "lazy"}
                   />
                 </div>
               ))}
@@ -186,6 +188,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
             sizes="(max-width: 1024px) 100vw, 50vw"
             className="object-contain p-2 sm:p-4"
             priority
+            fetchPriority="high"
           />
         ) : null}
       </div>
@@ -228,6 +231,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                     fill
                     sizes="(max-width: 1024px) 33vw, 16vw"
                     className="object-contain p-2"
+                    loading="lazy"
                   />
                 </button>
               ))}
@@ -270,6 +274,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 fill
                 sizes="(max-width: 1024px) 33vw, 16vw"
                 className="object-contain p-2"
+                loading="lazy"
               />
             </button>
           ))}

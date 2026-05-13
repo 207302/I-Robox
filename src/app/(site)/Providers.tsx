@@ -8,7 +8,12 @@ import PreviewSliderModal from "@/components/Common/PreviewSlider";
 import CartProvider from "@/components/Providers/CartProvider";
 import CartHydration from "@/components/Providers/CartHydration";
 import CartServerSync from "@/components/Providers/CartServerSync";
-import MarketingSiteEffects from "@/components/Marketing/MarketingSiteEffects";
+import dynamic from "next/dynamic";
+
+const MarketingSiteEffects = dynamic(
+  () => import("@/components/Marketing/MarketingSiteEffects").then((m) => m.default),
+  { ssr: false }
+);
 
 const Providers = ({ children }: { children: React.ReactNode }) => {
   return (

@@ -1,7 +1,10 @@
 import ProductItem from "@/components/Common/ProductItem";
 import LiveShopFilters from "@/components/Shop/LiveShopFilters";
+import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import { getCategories } from "@/get-api-data/category";
 import Link from "next/link";
+import { getProductCardImageUrl } from "@/lib/shop/productCardImage";
+import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { getShopListing } from "@/lib/shop/shopListing";
 
 export const metadata = {
@@ -155,6 +158,8 @@ export default async function ShopPage({ searchParams }: Props) {
       };
 
   const products = productData?.items ?? [];
+  const lcpPreloadUrl =
+    products.length > 0 ? getProductCardImageUrl(products[0]) : "";
   const totalPages = Math.max(1, productData?.totalPages ?? 1);
   const currentPage = productData?.page ?? page;
   const ageGroups: string[] = Array.isArray(productData?.ageGroups) ? productData.ageGroups : [];
@@ -372,7 +377,14 @@ export default async function ShopPage({ searchParams }: Props) {
   );
 
   return (
-    <section className="overflow-hidden py-10 pb-20">
+    <>
+      <LcpImagePrelink
+        imageUrl={lcpPreloadUrl}
+        sizes={SHOP_GRID_CARD_SIZES}
+        width={640}
+        height={640}
+      />
+      <section className="overflow-hidden py-10 pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="flex flex-col gap-8 lg:flex-row">
           <aside className="w-full shrink-0 lg:w-64">
@@ -390,7 +402,7 @@ export default async function ShopPage({ searchParams }: Props) {
             <h1 className="mb-6 text-2xl font-semibold text-dark">Shop</h1>
             {products.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9">
-                {products.map((item) => (
+                {products.map((item, index) => (
                   <ProductItem
                     item={{
                       id: item.id,
@@ -410,6 +422,10 @@ export default async function ShopPage({ searchParams }: Props) {
                       image: item.image,
                     }}
                     key={item.id}
+                    cardImageSizes={SHOP_GRID_CARD_SIZES}
+                    shopListingImage={
+                      index === 0 ? "lcp" : index < 3 ? "eager" : "lazy"
+                    }
                   />
                 ))}
               </div>
@@ -533,5 +549,6 @@ export default async function ShopPage({ searchParams }: Props) {
         </div>
       </div>
     </section>
+    </>
   );
 }

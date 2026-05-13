@@ -175,6 +175,8 @@ const QuickViewModal = () => {
                             width={61}
                             height={61}
                             className="aspect-square"
+                            loading="lazy"
+                            sizes="61px"
                           />
                         </button>
                       ))}
@@ -199,6 +201,9 @@ const QuickViewModal = () => {
                           alt="products-details"
                           width={400}
                           height={400}
+                          sizes="(max-width: 1024px) 100vw, 526px"
+                          priority
+                          fetchPriority="high"
                         />
                       </div>
                     </div>

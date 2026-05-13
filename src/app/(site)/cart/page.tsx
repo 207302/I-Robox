@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { startTransition } from "react";
 import { useCart } from "@/hooks/useCart";
 import { formatPrice } from "@/utils/formatePrice";
 import { useDispatch } from "react-redux";
@@ -19,17 +20,19 @@ export default function CartPage() {
     if (alreadyInWishlist) {
       toast("Item already in cart!");
     } else {
-      dispatch(
-        addItemToWishlist({
-          id: String(item.id),
-          title: item.name,
-          slug: item.slug || "",
-          image: item.image || "",
-          price: item.price,
-          quantity: item.availableQuantity ?? item.quantity,
-          color: item.color ?? "",
-        })
-      );
+      startTransition(() => {
+        dispatch(
+          addItemToWishlist({
+            id: String(item.id),
+            title: item.name,
+            slug: item.slug || "",
+            image: item.image || "",
+            price: item.price,
+            quantity: item.availableQuantity ?? item.quantity,
+            color: item.color ?? "",
+          })
+        );
+      });
     }
     removeItem(item.id);
   }
@@ -66,7 +69,7 @@ export default function CartPage() {
           <div className="grid gap-8 lg:grid-cols-[minmax(0,_1fr)_360px]">
             <div className="rounded-2xl border border-gray-3 bg-white">
               <div className="divide-y divide-gray-3">
-                {items.map((item) => (
+                {items.map((item, index) => (
                   <div key={String(item.id)} className="p-4 sm:p-6 flex gap-4">
                     <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-1 border border-gray-3">
                       {item.image ? (
@@ -74,7 +77,11 @@ export default function CartPage() {
                           src={item.image}
                           alt={item.name}
                           fill
+                          sizes="80px"
                           className="object-cover"
+                          priority={index === 0}
+                          fetchPriority={index === 0 ? "high" : undefined}
+                          loading={index === 0 ? undefined : "lazy"}
                         />
                       ) : null}
                     </div>

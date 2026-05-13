@@ -87,7 +87,8 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                   alt="Site logo"
                   width={128}
                   height={128}
-                  priority
+                  sizes="128px"
+                  loading="lazy"
                 />
               </Link>
             </div>

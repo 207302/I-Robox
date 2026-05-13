@@ -83,6 +83,7 @@ export default function VariantSelector({
               width={18}
               height={18}
               className="h-[18px] w-[18px] rounded-full object-cover"
+              loading="lazy"
             />
             <span className="max-w-[130px] truncate">{variant.label}</span>
           </button>

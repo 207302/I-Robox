@@ -249,24 +249,26 @@ const MainHeader = ({
                   </>
                 )}
               </p>
-              {userName ? (
-                <span className="text-xs sm:text-sm font-medium text-white">
-                  Welcome, {userName}!
-                </span>
-              ) : (
-                <Link
-                  href="/login"
-                  className="text-xs sm:text-sm font-semibold text-[#ff3d3d] hover:text-[#ff6b6b] hover:underline"
-                >
-                  Sign in
-                </Link>
-              )}
+              <div className="flex min-w-[80px] shrink-0 items-center justify-end text-right">
+                {userName ? (
+                  <span className="text-xs sm:text-sm font-medium text-white">
+                    Welcome, {userName}!
+                  </span>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="text-xs sm:text-sm font-semibold text-[#ff3d3d] hover:text-[#ff6b6b] hover:underline"
+                  >
+                    Sign in
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Running promo banner */}
-        <div className="bg-blue border-b border-blue-dark overflow-hidden">
+        {/* Running promo banner — min height avoids CLS when DB-driven copy length changes */}
+        <div className="flex min-h-[2.75rem] flex-col justify-center overflow-hidden border-b border-blue-dark bg-blue">
           <div className="relative">
             {(() => {
               const items =
@@ -337,6 +339,7 @@ const MainHeader = ({
                     height={160}
                     className="h-14 w-auto xl:h-16"
                     priority
+                    fetchPriority="high"
                   />
                 </Link>
                 <DesktopMenu

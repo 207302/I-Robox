@@ -100,6 +100,10 @@ export default async function HomePage() {
             hero_overlay_subheading: true,
             hero_overlay_cta_label: true,
             hero_overlay_cta_href: true,
+            hero_overlay_eyebrow_color: true,
+            hero_overlay_heading_color: true,
+            hero_overlay_subheading_color: true,
+            hero_overlay_cta_label_color: true,
           },
         })
         .catch(() => null),
@@ -110,15 +114,15 @@ export default async function HomePage() {
   const highlightsSectionHeading =
     siteMarketingSettings?.highlights_section_heading?.trim() || "Featured collections and picks.";
   const heroOverlay = {
-    eyebrow: siteMarketingSettings?.hero_overlay_eyebrow?.trim() || "Tron Play World",
-    heading:
-      siteMarketingSettings?.hero_overlay_heading?.trim() ||
-      "India's Ultimate Toy & RC Destination",
-    subheading:
-      siteMarketingSettings?.hero_overlay_subheading?.trim() ||
-      "RC cars, anime figures, diecast models, board games, and more.",
-    ctaLabel: siteMarketingSettings?.hero_overlay_cta_label?.trim() || "Shop Now",
-    ctaHref: siteMarketingSettings?.hero_overlay_cta_href?.trim() || "/shop",
+    eyebrow: siteMarketingSettings?.hero_overlay_eyebrow?.trim() ?? "",
+    heading: siteMarketingSettings?.hero_overlay_heading?.trim() ?? "",
+    subheading: siteMarketingSettings?.hero_overlay_subheading?.trim() ?? "",
+    ctaLabel: siteMarketingSettings?.hero_overlay_cta_label?.trim() ?? "",
+    ctaHref: siteMarketingSettings?.hero_overlay_cta_href?.trim() ?? "",
+    eyebrowColor: siteMarketingSettings?.hero_overlay_eyebrow_color?.trim() ?? "",
+    headingColor: siteMarketingSettings?.hero_overlay_heading_color?.trim() ?? "",
+    subheadingColor: siteMarketingSettings?.hero_overlay_subheading_color?.trim() ?? "",
+    ctaLabelColor: siteMarketingSettings?.hero_overlay_cta_label_color?.trim() ?? "",
   };
 
   const heroSlides: HeroSlide[] = slidesRaw

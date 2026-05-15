@@ -3,7 +3,13 @@ import { prisma } from "@/lib/prismaDB";
 import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { cleanOptionalText, cleanText, normalizeCode, readJsonBody } from "@/lib/validation/input";
+import {
+  cleanOptionalHexColor,
+  cleanOptionalText,
+  cleanText,
+  normalizeCode,
+  readJsonBody,
+} from "@/lib/validation/input";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 
 export async function GET() {
@@ -33,7 +39,7 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   const body = parsed.body as Record<string, unknown>;
 
-  const data: Record<string, string | null> = {};
+  const data: Record<string, string | null | number> = {};
 
   if (body.first_visit_coupon_code !== undefined) {
     if (body.first_visit_coupon_code === null || body.first_visit_coupon_code === "") {
@@ -41,6 +47,17 @@ export async function PATCH(req: NextRequest) {
     } else {
       const c = normalizeCode(String(body.first_visit_coupon_code));
       data.first_visit_coupon_code = c || null;
+    }
+  }
+  if (body.free_shipping_threshold_inr !== undefined) {
+    if (body.free_shipping_threshold_inr === null || body.free_shipping_threshold_inr === "") {
+      data.free_shipping_threshold_inr = null;
+    } else {
+      const n = Number(body.free_shipping_threshold_inr);
+      if (!Number.isFinite(n) || n < 0 || n > 10_000_000) {
+        return NextResponse.json({ error: "Invalid free_shipping_threshold_inr" }, { status: 400 });
+      }
+      data.free_shipping_threshold_inr = Math.round(n * 100) / 100;
     }
   }
   if (body.hero_overlay_eyebrow !== undefined) {
@@ -60,6 +77,18 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.hero_overlay_cta_href !== undefined) {
     data.hero_overlay_cta_href = cleanOptionalText(body.hero_overlay_cta_href, 500);
+  }
+  if (body.hero_overlay_eyebrow_color !== undefined) {
+    data.hero_overlay_eyebrow_color = cleanOptionalHexColor(body.hero_overlay_eyebrow_color);
+  }
+  if (body.hero_overlay_heading_color !== undefined) {
+    data.hero_overlay_heading_color = cleanOptionalHexColor(body.hero_overlay_heading_color);
+  }
+  if (body.hero_overlay_subheading_color !== undefined) {
+    data.hero_overlay_subheading_color = cleanOptionalHexColor(body.hero_overlay_subheading_color);
+  }
+  if (body.hero_overlay_cta_label_color !== undefined) {
+    data.hero_overlay_cta_label_color = cleanOptionalHexColor(body.hero_overlay_cta_label_color);
   }
 
   if (body.highlights_section_eyebrow !== undefined) {
@@ -146,11 +175,16 @@ export async function PATCH(req: NextRequest) {
   const baseCreate = {
     id: SITE_MARKETING_SETTINGS_ID,
     first_visit_coupon_code: null as string | null,
+    free_shipping_threshold_inr: null as number | null,
     hero_overlay_eyebrow: null as string | null,
     hero_overlay_heading: null as string | null,
     hero_overlay_subheading: null as string | null,
     hero_overlay_cta_label: null as string | null,
     hero_overlay_cta_href: null as string | null,
+    hero_overlay_eyebrow_color: null as string | null,
+    hero_overlay_heading_color: null as string | null,
+    hero_overlay_subheading_color: null as string | null,
+    hero_overlay_cta_label_color: null as string | null,
     highlights_section_eyebrow: null as string | null,
     highlights_section_heading: null as string | null,
     privacy_page_title: null as string | null,

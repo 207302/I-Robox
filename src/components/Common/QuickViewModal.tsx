@@ -20,6 +20,12 @@ import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
 import type { CartItem } from "@/redux/features/cart-slice";
 import ReviewStar from "../Shop/ReviewStar";
+import {
+  getDefaultGalleryIndex,
+  getProductCardImageUrl,
+  getProductGalleryImages,
+  PRODUCT_IMAGE_PLACEHOLDER,
+} from "@/lib/shop/productCardImage";
 
 const QuickViewModal = () => {
   const { isModalOpen, closeModal } = useModalContext();
@@ -35,9 +41,15 @@ const QuickViewModal = () => {
   const product = useAppSelector((state) => state.quickViewReducer.value);
   const [activePreview, setActivePreview] = useState(0);
 
+  const galleryImages = product?.title ? getProductGalleryImages(product) : [];
+  const mainImage = galleryImages[activePreview] ?? PRODUCT_IMAGE_PLACEHOLDER;
+  const showThumbnails = galleryImages.length > 1;
+
   const defaultVariant = product?.productVariants?.find(
     (variant) => variant.isDefault
   );
+  const cardImage =
+    getProductCardImageUrl(product) || PRODUCT_IMAGE_PLACEHOLDER;
 
   // preview modal
   const handlePreviewSlider = () => {
@@ -47,7 +59,7 @@ const QuickViewModal = () => {
         updatedAt: product.updatedAt,
       })
     );
-    openPreviewModal();
+    openPreviewModal(activePreview);
   };
 
   // add to cart
@@ -59,7 +71,7 @@ const QuickViewModal = () => {
       quantity: 1,
       shippingPerUnit: Number((product as any).shippingPerUnit ?? 0),
       currency: "usd",
-      image: defaultVariant?.image ? defaultVariant.image : "",
+      image: cardImage,
       price_id: null,
       slug: product?.slug,
       availableQuantity: product.quantity,
@@ -81,7 +93,7 @@ const QuickViewModal = () => {
         id: product.id,
         title: product.title,
         slug: product.slug,
-        image: defaultVariant?.image ? defaultVariant.image : "",
+        image: cardImage,
         price: product.discountedPrice
           ? product.discountedPrice
           : product.price,
@@ -112,6 +124,13 @@ const QuickViewModal = () => {
       setQuantity(1);
     };
   }, [isModalOpen, closeModal]);
+
+  useEffect(() => {
+    if (product?.title) {
+      const gallery = getProductGalleryImages(product);
+      setActivePreview(getDefaultGalleryIndex(product, gallery));
+    }
+  }, [product?.id, product?.title]);
 
   useEffect(() => {
     if (product?.slug) {
@@ -161,30 +180,34 @@ const QuickViewModal = () => {
               <div className="flex flex-wrap items-center gap-12.5">
                 <div className="max-w-[526px] w-full">
                   <div className="flex gap-5">
-                    <div className="flex flex-col gap-5">
-                      {product?.productVariants?.map((thumb, key: number) => (
-                        <button
-                          onClick={() => setActivePreview(key)}
-                          key={key}
-                          className={`flex items-center justify-center w-20 h-20 overflow-hidden rounded-lg bg-gray-1 ease-out duration-200 hover:border-2 hover:border-blue ${activePreview === key && "border-2 border-blue"
-                            }`}
-                        >
-                          <Image
-                            src={thumb.image}
-                            alt="thumbnail"
-                            width={61}
-                            height={61}
-                            className="aspect-square"
-                            loading="lazy"
-                            sizes="61px"
-                          />
-                        </button>
-                      ))}
-                    </div>
+                    {showThumbnails ? (
+                      <div className="flex flex-col gap-5">
+                        {galleryImages.map((thumb, key) => (
+                          <button
+                            type="button"
+                            onClick={() => setActivePreview(key)}
+                            key={`${thumb}-${key}`}
+                            className={`flex items-center justify-center w-20 h-20 overflow-hidden rounded-lg bg-gray-1 ease-out duration-200 hover:border-2 hover:border-blue ${activePreview === key && "border-2 border-blue"
+                              }`}
+                          >
+                            <Image
+                              src={thumb}
+                              alt="thumbnail"
+                              width={61}
+                              height={61}
+                              className="aspect-square object-contain"
+                              loading="lazy"
+                              sizes="61px"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
 
                     <div className="relative z-1 overflow-hidden flex items-center justify-center w-full sm:min-h-[508px] bg-gray-1 rounded-lg border border-gray-3">
                       <div>
                         <button
+                          type="button"
                           onClick={handlePreviewSlider}
                           className="absolute z-50 flex items-center justify-center w-10 h-10 duration-200 ease-out bg-white rounded-lg gallery__Image shadow-1 text-dark hover:text-blue top-4 lg:top-8 right-4 lg:right-8"
                         >
@@ -193,14 +216,11 @@ const QuickViewModal = () => {
                         </button>
 
                         <Image
-                          src={
-                            product?.productVariants?.[activePreview]?.image
-                              ? product.productVariants[activePreview].image
-                              : ""
-                          }
-                          alt="products-details"
+                          src={mainImage}
+                          alt={product.title || "product preview"}
                           width={400}
                           height={400}
+                          className="object-contain"
                           sizes="(max-width: 1024px) 100vw, 526px"
                           priority
                           fetchPriority="high"

@@ -47,6 +47,10 @@ type HomeProps = {
     subheading?: string;
     ctaLabel?: string;
     ctaHref?: string;
+    eyebrowColor?: string;
+    headingColor?: string;
+    subheadingColor?: string;
+    ctaLabelColor?: string;
   };
   /** Small label above the highlights carousel (defaults if omitted). */
   highlightsSectionEyebrow?: string;

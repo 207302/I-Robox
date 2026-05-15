@@ -761,6 +761,8 @@ model flash_sale_products {
 model site_marketing_settings {
   id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   first_visit_coupon_code String?  @db.VarChar(80)
+  /// Cart subtotal (before discounts) at or above this value gets ₹0 shipping. Null uses app default; 0 disables free shipping.
+  free_shipping_threshold_inr Decimal? @db.Decimal(10, 2)
   /// Homepage hero overlay eyebrow (small uppercase line).
   hero_overlay_eyebrow    String?  @db.VarChar(120)
   /// Homepage hero overlay main heading text.
@@ -771,6 +773,14 @@ model site_marketing_settings {
   hero_overlay_cta_label  String?  @db.VarChar(120)
   /// Homepage hero overlay CTA URL.
   hero_overlay_cta_href   String?  @db.VarChar(500)
+  /// Optional CSS hex color for hero overlay eyebrow text (e.g. #ffffff).
+  hero_overlay_eyebrow_color    String? @db.VarChar(20)
+  /// Optional CSS hex color for hero overlay main heading.
+  hero_overlay_heading_color    String? @db.VarChar(20)
+  /// Optional CSS hex color for hero overlay subheading.
+  hero_overlay_subheading_color   String? @db.VarChar(20)
+  /// Optional CSS hex color for hero overlay CTA button label.
+  hero_overlay_cta_label_color  String? @db.VarChar(20)
   /// Homepage highlights block — small label above the carousel (CSS may uppercase).
   highlights_section_eyebrow  String? @db.VarChar(120)
   /// Homepage highlights block — main heading under the label.

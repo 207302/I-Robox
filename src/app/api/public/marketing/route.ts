@@ -9,16 +9,20 @@ import {
   fetchCouponForCart,
 } from "@/lib/coupons/cartCoupon";
 import { normalizeCode } from "@/lib/validation/input";
+import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 
 export async function GET() {
   const now = new Date();
   const session = await getSession();
   const isLoggedIn = Boolean(session?.sub);
 
-  const settings = await prisma.site_marketing_settings.findUnique({
-    where: { id: SITE_MARKETING_SETTINGS_ID },
-    select: { first_visit_coupon_code: true },
-  });
+  const [settings, freeShippingThresholdInr] = await Promise.all([
+    prisma.site_marketing_settings.findUnique({
+      where: { id: SITE_MARKETING_SETTINGS_ID },
+      select: { first_visit_coupon_code: true },
+    }),
+    getFreeShippingThresholdInr(),
+  ]);
 
   let firstVisitCouponCode: string | null = null;
   const rawFirst = settings?.first_visit_coupon_code?.trim();
@@ -72,5 +76,6 @@ export async function GET() {
         }
       : null,
     firstVisitCouponCode,
+    freeShippingThresholdInr,
   });
 }

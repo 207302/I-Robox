@@ -24,6 +24,26 @@ export function cleanOptionalText(value: unknown, maxLength: number) {
   return cleaned.length ? cleaned : null;
 }
 
+/** Optional `#rgb` or `#rrggbb` for CMS color fields; empty/null clears the override. */
+export function cleanOptionalHexColor(value: unknown) {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  if (!t) return null;
+  const normalized =
+    t.startsWith("#") ? t : `#${t}`;
+  if (/^#[0-9A-Fa-f]{3}$/.test(normalized)) {
+    const r = normalized[1];
+    const g = normalized[2];
+    const b = normalized[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  if (/^#[0-9A-Fa-f]{6}$/.test(normalized)) {
+    return normalized.toLowerCase();
+  }
+  return null;
+}
+
 export function normalizeEmail(value: unknown) {
   return cleanText(value, 320).toLowerCase();
 }

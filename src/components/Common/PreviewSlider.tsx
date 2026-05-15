@@ -7,11 +7,17 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 
 import { usePreviewSlider } from "@/app/context/PreviewSliderContext";
 import { useAppSelector } from "@/redux/store";
+import {
+  getProductGalleryImages,
+  PRODUCT_IMAGE_PLACEHOLDER,
+} from "@/lib/shop/productCardImage";
 
 const PreviewSliderModal = () => {
-  const { closePreviewModal, isModalPreviewOpen } = usePreviewSlider();
+  const { closePreviewModal, isModalPreviewOpen, previewStartIndex } =
+    usePreviewSlider();
 
   const data = useAppSelector((state) => state.productDetailsReducer.value);
+  const galleryImages = data?.title ? getProductGalleryImages(data) : [];
 
   const sliderRef = useRef(null);
 
@@ -97,18 +103,25 @@ const PreviewSliderModal = () => {
         </button>
       </div>
 
-      <Swiper ref={sliderRef} slidesPerView={1} spaceBetween={20}>
-        {data.productVariants?.map((img: any, key:number) => (
-          <SwiperSlide key={key}>
+      <Swiper
+        key={`${data?.id ?? data?.title}-${previewStartIndex}`}
+        ref={sliderRef}
+        slidesPerView={1}
+        spaceBetween={20}
+        initialSlide={Math.min(previewStartIndex, Math.max(0, galleryImages.length - 1))}
+      >
+        {galleryImages.map((src, key) => (
+          <SwiperSlide key={`${src}-${key}`}>
             <div className="flex justify-center items-center">
               <Image
-                src={img.image ? img.image : "/"}
-                alt={data.title || "thumb-img"}
+                src={src || PRODUCT_IMAGE_PLACEHOLDER}
+                alt={data.title || "product preview"}
                 width={450}
                 height={450}
+                className="object-contain"
                 sizes="(max-width: 1024px) 90vw, 450px"
-                priority={key === 0}
-                loading={key === 0 ? undefined : "lazy"}
+                priority={key === previewStartIndex}
+                loading={key === previewStartIndex ? undefined : "lazy"}
               />
             </div>
           </SwiperSlide>

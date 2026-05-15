@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
 import { formatPrice } from "@/utils/formatePrice";
+import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 
 declare global {
   interface Window {
@@ -30,17 +31,33 @@ export default function CheckoutPage() {
   const [isGift, setIsGift] = useState(false);
   const [giftMessage, setGiftMessage] = useState("");
   const [signedInLabel, setSignedInLabel] = useState<string | null>(null);
-
-  const deliveryCharge = useMemo(() => {
-    return items.reduce((sum, item) => {
-      const perUnit = Math.max(0, Number((item as any).shippingPerUnit ?? 0));
-      return sum + perUnit * Number(item.quantity || 0);
-    }, 0);
-  }, [items]);
+  const [freeShippingThresholdInr, setFreeShippingThresholdInr] = useState<number | null>(2000);
 
   const previewSubtotal = Number(totalPrice || 0);
+
+  const deliveryCharge = useMemo(() => {
+    return orderShippingInrFromLines({
+      subtotalBeforeDiscount: previewSubtotal,
+      lines: items.map((item) => ({
+        quantity: Number(item.quantity || 0),
+        shippingPerUnit: Math.max(0, Number(item.shippingPerUnit ?? 0)),
+      })),
+      freeShippingThresholdInr,
+    });
+  }, [items, previewSubtotal, freeShippingThresholdInr]);
   const previewDiscount = couponBreakdown?.discount ?? 0;
   const previewTotal = Math.max(0, previewSubtotal - previewDiscount) + deliveryCharge;
+
+  useEffect(() => {
+    fetch("/api/public/marketing")
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d?.freeShippingThresholdInr === "number" || d?.freeShippingThresholdInr === null) {
+          setFreeShippingThresholdInr(d.freeShippingThresholdInr);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me")

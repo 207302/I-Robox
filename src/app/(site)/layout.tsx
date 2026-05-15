@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prismaDB";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHeaderNavData } from "@/lib/nav/headerNav";
 import { getStoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
+import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 
 /** Announcement bar / header copy comes from DB; avoid static shell stale on production. */
 export const dynamic = "force-dynamic";
@@ -42,7 +43,10 @@ export default async function SiteLayout({
   }));
 
   const headerNav = await getHeaderNavData();
-  const storeContact = await getStoreContactDisplay();
+  const [storeContact, freeShippingThresholdInr] = await Promise.all([
+    getStoreContactDisplay(),
+    getFreeShippingThresholdInr(),
+  ]);
 
   return (
     <div>
@@ -54,6 +58,7 @@ export default async function SiteLayout({
             utilityAnnouncement={utilityAnnouncement}
             marqueeAnnouncements={marqueeAnnouncements}
             headerNav={headerNav}
+            freeShippingThresholdInr={freeShippingThresholdInr}
           />
           <Breadcrumb />
           <Toaster position="top-center" reverseOrder={false} />

@@ -19,6 +19,7 @@ import {
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
+import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 import { generatePasswordSetupSecret, PASSWORD_SETUP_TTL_MS } from "@/lib/auth/passwordSetupToken";
 import bcrypt from "bcrypt";
 
@@ -276,9 +277,11 @@ export async function buildCheckoutContext(input: {
     discount = computeCouponDiscount(subtotal, coupon);
   }
 
+  const freeShippingThresholdInr = await getFreeShippingThresholdInr();
   const shipping = orderShippingInrFromLines({
     subtotalBeforeDiscount: subtotal,
     lines: lineItems.map((li) => ({ quantity: li.quantity, shippingPerUnit: li.shippingPerUnit })),
+    freeShippingThresholdInr,
   });
   const total = Math.max(0, subtotal - discount) + shipping;
 

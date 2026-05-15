@@ -9,11 +9,16 @@ import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
 type SiteSettingsRow = {
   id?: string;
   first_visit_coupon_code?: string | null;
+  free_shipping_threshold_inr?: number | string | null;
   hero_overlay_eyebrow?: string | null;
   hero_overlay_heading?: string | null;
   hero_overlay_subheading?: string | null;
   hero_overlay_cta_label?: string | null;
   hero_overlay_cta_href?: string | null;
+  hero_overlay_eyebrow_color?: string | null;
+  hero_overlay_heading_color?: string | null;
+  hero_overlay_subheading_color?: string | null;
+  hero_overlay_cta_label_color?: string | null;
   highlights_section_eyebrow?: string | null;
   highlights_section_heading?: string | null;
   privacy_page_title?: string | null;
@@ -76,6 +81,60 @@ async function j<T>(res: Response): Promise<T> {
   return data as T;
 }
 
+function normalizeHexForPicker(value: string) {
+  const t = value.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(t)) return t;
+  if (/^#[0-9A-Fa-f]{3}$/.test(t)) {
+    const r = t[1];
+    const g = t[2];
+    const b = t[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return "#ffffff";
+}
+
+function HeroOverlayColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const pickerValue = value.trim() ? normalizeHexForPicker(value) : "#ffffff";
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-meta-3">{label}</span>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <input
+          type="color"
+          value={pickerValue}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-12 cursor-pointer rounded border border-gray-3 bg-white p-0.5"
+          aria-label={`${label} color picker`}
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#ffffff"
+          className="min-w-[7rem] flex-1 rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm font-mono"
+        />
+        {value.trim() ? (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="text-xs font-medium text-meta-3 hover:text-dark"
+          >
+            Reset
+          </button>
+        ) : null}
+      </div>
+    </label>
+  );
+}
+
 export default function MarketingAdminClient({ initial }: { initial: Initial }) {
   const router = useRouter();
   const [tab, setTab] = useState<
@@ -96,6 +155,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [popups, setPopups] = useState(initial.popups);
   const [flashSales, setFlashSales] = useState(initial.flashSales);
   const [firstVisit, setFirstVisit] = useState(initial.settings?.first_visit_coupon_code ?? "");
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(() => {
+    const raw = initial.settings?.free_shipping_threshold_inr;
+    if (raw === undefined || raw === null) return "";
+    return String(raw);
+  });
+  const [freeShippingSaving, setFreeShippingSaving] = useState(false);
   const st0 = initial.settings;
   const [helpSupportTitle, setHelpSupportTitle] = useState(st0?.help_support_title ?? "");
   const [contactAddress, setContactAddress] = useState(st0?.contact_address ?? "");
@@ -110,6 +175,18 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [heroOverlaySubheading, setHeroOverlaySubheading] = useState(st0?.hero_overlay_subheading ?? "");
   const [heroOverlayCtaLabel, setHeroOverlayCtaLabel] = useState(st0?.hero_overlay_cta_label ?? "");
   const [heroOverlayCtaHref, setHeroOverlayCtaHref] = useState(st0?.hero_overlay_cta_href ?? "");
+  const [heroOverlayEyebrowColor, setHeroOverlayEyebrowColor] = useState(
+    st0?.hero_overlay_eyebrow_color ?? ""
+  );
+  const [heroOverlayHeadingColor, setHeroOverlayHeadingColor] = useState(
+    st0?.hero_overlay_heading_color ?? ""
+  );
+  const [heroOverlaySubheadingColor, setHeroOverlaySubheadingColor] = useState(
+    st0?.hero_overlay_subheading_color ?? ""
+  );
+  const [heroOverlayCtaLabelColor, setHeroOverlayCtaLabelColor] = useState(
+    st0?.hero_overlay_cta_label_color ?? ""
+  );
   const [quickLinkPages, setQuickLinkPages] = useState<
     Record<QuickLinkPageAdminKey, { title: string; subtitle: string; content: string }>
   >({
@@ -304,7 +381,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             ["announcements", "Announcements"],
             ["popups", "Popups"],
             ["flash", "Flash sales"],
-            ["settings", "First visit"],
+            ["settings", "Settings"],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -328,25 +405,37 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <div className="rounded-xl border border-gray-3 bg-gray-1/40 p-4 space-y-3 max-w-2xl">
             <h3 className="text-sm font-semibold text-dark">Hero overlay text (homepage)</h3>
             <p className="text-xs text-meta-3">
-              This text stays over the moving hero images. Leave a field empty and save to use default text.
+              This text stays over the moving hero images. Leave text empty to hide it; leave color empty for default white.
             </p>
             <label className="block">
               <span className="text-sm font-medium">Eyebrow</span>
               <input
                 value={heroOverlayEyebrow}
                 onChange={(e) => setHeroOverlayEyebrow(e.target.value)}
-                placeholder="Tron Play World"
                 className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
               />
+              <div className="mt-2">
+                <HeroOverlayColorField
+                  label="Eyebrow color"
+                  value={heroOverlayEyebrowColor}
+                  onChange={setHeroOverlayEyebrowColor}
+                />
+              </div>
             </label>
             <label className="block">
               <span className="text-sm font-medium">Main heading</span>
               <input
                 value={heroOverlayHeading}
                 onChange={(e) => setHeroOverlayHeading(e.target.value)}
-                placeholder="India's Ultimate Toy & RC Destination"
                 className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
               />
+              <div className="mt-2">
+                <HeroOverlayColorField
+                  label="Heading color"
+                  value={heroOverlayHeadingColor}
+                  onChange={setHeroOverlayHeadingColor}
+                />
+              </div>
             </label>
             <label className="block">
               <span className="text-sm font-medium">Subheading</span>
@@ -354,9 +443,15 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 value={heroOverlaySubheading}
                 onChange={(e) => setHeroOverlaySubheading(e.target.value)}
                 rows={3}
-                placeholder="RC cars, anime figures, diecast models, board games, and more."
                 className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
               />
+              <div className="mt-2">
+                <HeroOverlayColorField
+                  label="Subheading color"
+                  value={heroOverlaySubheadingColor}
+                  onChange={setHeroOverlaySubheadingColor}
+                />
+              </div>
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
@@ -364,16 +459,21 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 <input
                   value={heroOverlayCtaLabel}
                   onChange={(e) => setHeroOverlayCtaLabel(e.target.value)}
-                  placeholder="Shop Now"
                   className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
                 />
+                <div className="mt-2">
+                  <HeroOverlayColorField
+                    label="CTA label color"
+                    value={heroOverlayCtaLabelColor}
+                    onChange={setHeroOverlayCtaLabelColor}
+                  />
+                </div>
               </label>
               <label className="block">
                 <span className="text-sm font-medium">CTA link</span>
                 <input
                   value={heroOverlayCtaHref}
                   onChange={(e) => setHeroOverlayCtaHref(e.target.value)}
-                  placeholder="/shop"
                   className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
                 />
               </label>
@@ -395,6 +495,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                         hero_overlay_subheading: heroOverlaySubheading.trim() || null,
                         hero_overlay_cta_label: heroOverlayCtaLabel.trim() || null,
                         hero_overlay_cta_href: heroOverlayCtaHref.trim() || null,
+                        hero_overlay_eyebrow_color: heroOverlayEyebrowColor.trim() || null,
+                        hero_overlay_heading_color: heroOverlayHeadingColor.trim() || null,
+                        hero_overlay_subheading_color: heroOverlaySubheadingColor.trim() || null,
+                        hero_overlay_cta_label_color: heroOverlayCtaLabelColor.trim() || null,
                       }),
                     })
                   );
@@ -403,6 +507,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                   setHeroOverlaySubheading(row.hero_overlay_subheading ?? "");
                   setHeroOverlayCtaLabel(row.hero_overlay_cta_label ?? "");
                   setHeroOverlayCtaHref(row.hero_overlay_cta_href ?? "");
+                  setHeroOverlayEyebrowColor(row.hero_overlay_eyebrow_color ?? "");
+                  setHeroOverlayHeadingColor(row.hero_overlay_heading_color ?? "");
+                  setHeroOverlaySubheadingColor(row.hero_overlay_subheading_color ?? "");
+                  setHeroOverlayCtaLabelColor(row.hero_overlay_cta_label_color ?? "");
                   toast.success("Hero overlay text saved");
                   router.refresh();
                 } catch (err: unknown) {
@@ -1502,6 +1610,61 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
 
       {tab === "settings" ? (
         <div className="space-y-8">
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
+            <h2 className="text-lg font-semibold">Free shipping threshold</h2>
+            <p className="text-sm text-meta-3">
+              When a cart&apos;s subtotal (before coupons) reaches this amount, shipping is ₹0 for the
+              whole order — per-product shipping rates are ignored. Leave empty to use the default
+              (₹2,000). Enter <span className="font-mono">0</span> to turn off free shipping.
+            </p>
+            <label className="block">
+              <span className="text-sm font-medium">Minimum subtotal (₹)</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={freeShippingThreshold}
+                onChange={(e) => setFreeShippingThreshold(e.target.value)}
+                placeholder="2000"
+                className="mt-1 w-full max-w-xs rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={freeShippingSaving}
+              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setFreeShippingSaving(true);
+                  const row = await j<SiteSettingsRow>(
+                    await fetch("/api/admin/marketing/settings", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        free_shipping_threshold_inr:
+                          freeShippingThreshold.trim() === ""
+                            ? null
+                            : Number(freeShippingThreshold),
+                      }),
+                    })
+                  );
+                  const saved = row.free_shipping_threshold_inr;
+                  setFreeShippingThreshold(
+                    saved === undefined || saved === null ? "" : String(saved)
+                  );
+                  toast.success("Free shipping threshold saved");
+                  router.refresh();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Failed");
+                } finally {
+                  setFreeShippingSaving(false);
+                }
+              }}
+            >
+              {freeShippingSaving ? "Saving…" : "Save threshold"}
+            </button>
+          </section>
+
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
             <h2 className="text-lg font-semibold">First-visit coupon</h2>
             <p className="text-sm text-meta-3">

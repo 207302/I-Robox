@@ -42,6 +42,8 @@ type IProps = {
   utilityAnnouncement?: UtilityAnnouncement | null;
   marqueeAnnouncements?: MarqueeAnnouncement[];
   headerNav: HeaderNavData;
+  /** Minimum cart subtotal for free shipping; null = feature disabled. */
+  freeShippingThresholdInr?: number | null;
 };
 
 type MeResponse = {
@@ -59,6 +61,7 @@ const MainHeader = ({
   utilityAnnouncement,
   marqueeAnnouncements,
   headerNav,
+  freeShippingThresholdInr = null,
 }: IProps) => {
   const menuData = useMemo(() => buildHeaderMenuData(headerNav), [headerNav]);
   const pathname = usePathname();
@@ -242,12 +245,14 @@ const MainHeader = ({
                   ) : (
                     utilityAnnouncement.body
                   )
-                ) : (
+                ) : freeShippingThresholdInr != null ? (
                   <>
                     Minimum order value for free shipping:{" "}
-                    <span className="font-semibold">₹2000</span>
+                    <span className="font-semibold">
+                      ₹{freeShippingThresholdInr.toLocaleString("en-IN")}
+                    </span>
                   </>
-                )}
+                ) : null}
               </p>
               <div className="flex min-w-[80px] shrink-0 items-center justify-end text-right">
                 {userName ? (
@@ -276,7 +281,14 @@ const MainHeader = ({
                   ? marqueeAnnouncements
                   : [
                       { body: "Use code WELCOME10 for 10% off", linkUrl: null as string | null },
-                      { body: "Free shipping over ₹2000", linkUrl: null },
+                      ...(freeShippingThresholdInr != null
+                        ? [
+                            {
+                              body: `Free shipping over ₹${freeShippingThresholdInr.toLocaleString("en-IN")}`,
+                              linkUrl: null as string | null,
+                            },
+                          ]
+                        : []),
                       { body: "New arrivals added weekly", linkUrl: null },
                     ];
               return (

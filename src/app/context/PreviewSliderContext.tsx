@@ -3,7 +3,8 @@ import React, { createContext, useContext, useState } from "react";
 
 interface PreviewSliderType {
   isModalPreviewOpen: boolean;
-  openPreviewModal: () => void;
+  previewStartIndex: number;
+  openPreviewModal: (startIndex?: number) => void;
   closePreviewModal: () => void;
 }
 
@@ -23,8 +24,10 @@ export const PreviewSliderProvider = ({
   children: React.ReactNode;
 }) => {
   const [isModalPreviewOpen, setIsModalOpen] = useState(false);
+  const [previewStartIndex, setPreviewStartIndex] = useState(0);
 
-  const openPreviewModal = () => {
+  const openPreviewModal = (startIndex = 0) => {
+    setPreviewStartIndex(Math.max(0, startIndex));
     setIsModalOpen(true);
   };
 
@@ -34,7 +37,7 @@ export const PreviewSliderProvider = ({
 
   return (
     <PreviewSlider.Provider
-      value={{ isModalPreviewOpen, openPreviewModal, closePreviewModal }}
+      value={{ isModalPreviewOpen, previewStartIndex, openPreviewModal, closePreviewModal }}
     >
       {children}
     </PreviewSlider.Provider>

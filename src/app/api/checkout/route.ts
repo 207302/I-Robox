@@ -30,6 +30,7 @@ import {
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
+import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 
 type CheckoutItem = {
   productId: string;
@@ -251,9 +252,11 @@ export async function POST(req: NextRequest) {
     discount = computeCouponDiscount(subtotal, coupon);
   }
   const totalBeforeShip = Math.max(0, subtotal - discount);
+  const freeShippingThresholdInr = await getFreeShippingThresholdInr();
   const shippingAmount = orderShippingInrFromLines({
     subtotalBeforeDiscount: subtotal,
     lines: lineItems.map((li) => ({ quantity: li.quantity, shippingPerUnit: li.shippingPerUnit })),
+    freeShippingThresholdInr,
   });
   const total = totalBeforeShip + shippingAmount;
 

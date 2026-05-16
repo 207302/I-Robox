@@ -22,5 +22,10 @@ function run(command, args) {
 }
 
 run("npx", ["prisma", "generate"]);
+
+const originalUrl = process.env.DATABASE_URL;
+process.env.DATABASE_URL = process.env.DIRECT_URL || originalUrl;
 run("npx", ["prisma", "migrate", "deploy"]);
+process.env.DATABASE_URL = originalUrl;
+
 run("npx", ["next", "build"]);

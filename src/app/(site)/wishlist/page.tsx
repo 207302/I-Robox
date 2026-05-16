@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { startTransition } from "react";
 import { useAppSelector } from "@/redux/store";
 import { useDispatch } from "react-redux";
 import { removeItemFromWishlist, removeAllItemsFromWishlist } from "@/redux/features/wishlist-slice";
@@ -45,7 +46,11 @@ export default function WishlistPage() {
           <h1 className="text-2xl font-semibold text-dark">Wishlist</h1>
           {items.length ? (
             <button
-              onClick={() => dispatch(removeAllItemsFromWishlist())}
+              onClick={() =>
+                startTransition(() => {
+                  dispatch(removeAllItemsFromWishlist());
+                })
+              }
               className="text-sm font-medium text-meta-3 hover:text-dark"
             >
               Clear wishlist

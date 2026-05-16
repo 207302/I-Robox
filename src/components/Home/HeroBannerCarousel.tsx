@@ -26,6 +26,8 @@ const SWIPE_THRESHOLD = 50;
 
 type Props = {
   slides?: HeroSlide[];
+  /** When true, slide 0 image is server-rendered in HeroBannerSection (LCP). */
+  skipFirstSlideImage?: boolean;
   overlay?: {
     eyebrow?: string;
     heading?: string;
@@ -39,7 +41,7 @@ type Props = {
   };
 };
 
-const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
+const HeroBannerCarousel = ({ slides: slidesProp, overlay, skipFirstSlideImage = false }: Props) => {
   const slides = slidesProp && slidesProp.length > 0 ? slidesProp : [];
   const overlayCopy = {
     eyebrow: overlay?.eyebrow?.trim() ?? "",
@@ -147,7 +149,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
 
   return (
     <div
-      className="relative w-full aspect-[3/2] lg:aspect-[2.7/1] touch-pan-y"
+      className={`relative w-full touch-pan-y ${skipFirstSlideImage ? "h-full" : "aspect-[3/2] lg:aspect-[2.7/1]"}`}
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}
@@ -167,17 +169,18 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
               className="relative h-full shrink-0"
               style={{ width: `${slideFraction}%` }}
             >
-              {banner.link_url ? (
+              {skipFirstSlideImage && index === 0 ? (
+                <div className="h-full w-full" aria-hidden />
+              ) : banner.link_url ? (
                 <Link href={banner.link_url} className="relative block h-full w-full">
                   <Image
                     src={banner.image_url}
                     alt={banner.title ?? "Hero banner"}
                     fill
-                    priority={index === 0}
-                    fetchPriority={index === 0 ? "high" : undefined}
-                    loading={index === 0 ? undefined : "lazy"}
+                    priority={!skipFirstSlideImage && index === 0}
                     sizes="100vw"
                     className="object-cover"
+                    loading={index === 0 && !skipFirstSlideImage ? "eager" : "lazy"}
                   />
                 </Link>
               ) : (
@@ -185,11 +188,10 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                   src={banner.image_url}
                   alt={banner.title ?? "Hero banner"}
                   fill
-                  priority={index === 0}
-                  fetchPriority={index === 0 ? "high" : undefined}
-                  loading={index === 0 ? undefined : "lazy"}
+                  priority={!skipFirstSlideImage && index === 0}
                   sizes="100vw"
                   className="object-cover"
+                  loading={index === 0 && !skipFirstSlideImage ? "eager" : "lazy"}
                 />
               )}
             </div>

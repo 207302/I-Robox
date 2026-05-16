@@ -10,9 +10,10 @@ import Home, {
   type HomeProductCard,
 } from "@/components/Home";
 import type { HeroSlide } from "@/components/Home/HeroBannerCarousel";
+import { withPrismaRetry } from "@/lib/prismaRetry";
 
-/** CMS-driven content must not be prerendered at build time on Vercel (stale until redeploy). */
-export const dynamic = "force-dynamic";
+/** ISR: fresh CMS within ~60s without blocking every request on full SSR. */
+export const revalidate = 60;
 
 const FALLBACK_HIGHLIGHT_IMAGE =
   "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";
@@ -67,8 +68,9 @@ export default async function HomePage() {
     newArrivalsRaw,
     bestSellersRaw,
     siteMarketingSettings,
-  ] = await Promise.all([
-      prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }),
+  ] = await withPrismaRetry(() =>
+    Promise.all([
+      prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }).catch(() => []),
       highlightsPromise,
       prisma.homepage_brand_rail
         .findMany({
@@ -107,7 +109,8 @@ export default async function HomePage() {
           },
         })
         .catch(() => null),
-    ]);
+    ])
+  );
 
   const highlightsSectionEyebrow =
     siteMarketingSettings?.highlights_section_eyebrow?.trim() || "Highlights";
@@ -229,7 +232,7 @@ export default async function HomePage() {
         imageUrl={heroLcpUrl}
         sizes="100vw"
         width={1920}
-        height={720}
+        height={711}
       />
       <Home
         heroSlides={heroSlides}

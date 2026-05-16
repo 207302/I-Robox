@@ -154,7 +154,7 @@ export default function LiveShopFilters({ formId }: Props) {
       const isTextLike =
         t.tagName === "TEXTAREA" ||
         (t.tagName === "INPUT" && (t.type === "text" || t.type === "search" || t.type === "number"));
-      pushFromForm(isTextLike ? 200 : 0);
+      pushFromForm(isTextLike ? 250 : 0);
     };
 
     const onChange = (e: Event) => {

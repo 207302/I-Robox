@@ -1,4 +1,5 @@
 "use client";
+import { memo, useCallback, useMemo } from "react";
 import { useModalContext } from "@/app/context/QuickViewModalContext";
 import { EyeIcon } from "@/assets/icons";
 import { updateQuickView } from "@/redux/features/quickView-slice";
@@ -28,27 +29,32 @@ type Props = {
   shopListingImage?: "lcp" | "eager" | "lazy";
 };
 // add updated the type here
-const ProductItem = ({
+function ProductItemInner({
   item,
   bgClr = "white",
   cardImageSizes = PRODUCT_CARD_GRID_SIZES,
   shopListingImage,
-}: Props) => {
+}: Props) {
   const displayTitle = item.title;
   const defaultVariant = item?.productVariants.find((variant) => variant.isDefault);
   const firstVariantWithImage = item?.productVariants.find((variant) => Boolean(variant.image));
-  // Prefer default variant image, then any variant image, then first product image
-  const cardImage =
-    item.image ||
-    defaultVariant?.image ||
-    firstVariantWithImage?.image ||
-    item.product_images?.[0]?.url ||
-    "";
-  const variantPreview = item.productVariants
-    .filter((variant) => Boolean(variant.color || variant.name))
-    .slice(0, 4);
+  const cardImage = useMemo(
+    () =>
+      item.image ||
+      defaultVariant?.image ||
+      firstVariantWithImage?.image ||
+      item.product_images?.[0]?.url ||
+      "",
+    [item, defaultVariant?.image, firstVariantWithImage?.image]
+  );
+  const variantPreview = useMemo(
+    () =>
+      item.productVariants
+        .filter((variant) => Boolean(variant.color || variant.name))
+        .slice(0, 4),
+    [item.productVariants]
+  );
   const { openModal } = useModalContext();
-  // const [product, setProduct] = useState({});
   const dispatch = useDispatch<AppDispatch>();
 
   const { addItem, cartDetails, incrementItem, decrementItem } = useCart();
@@ -58,43 +64,46 @@ const ProductItem = ({
   );
   const currentQty = (cartDetails?.[item.id]?.quantity ?? 0) as number;
 
-  const cartItem = {
-    id: item.id,
-    name: displayTitle,
-    price: item.discountedPrice ? item.discountedPrice : item.price,
-    shippingPerUnit: Number(item.shippingPerUnit ?? 0),
-    currency: "usd",
-    image: cardImage,
-    slug: item?.slug,
-    availableQuantity: item.quantity,
-    color: defaultVariant?.color ? defaultVariant.color : "",
-    size: defaultVariant?.size ? defaultVariant.size : "",
-  };
+  const cartItem = useMemo(
+    () => ({
+      id: item.id,
+      name: displayTitle,
+      price: item.discountedPrice ? item.discountedPrice : item.price,
+      shippingPerUnit: Number(item.shippingPerUnit ?? 0),
+      currency: "usd",
+      image: cardImage,
+      slug: item?.slug,
+      availableQuantity: item.quantity,
+      color: defaultVariant?.color ? defaultVariant.color : "",
+      size: defaultVariant?.size ? defaultVariant.size : "",
+    }),
+    [item, displayTitle, cardImage, defaultVariant?.color, defaultVariant?.size]
+  );
 
-  // update the QuickView state
-  const handleQuickViewUpdate = () => {
+  const handleQuickViewUpdate = useCallback(() => {
     const serializableItem = {
       ...item,
       updatedAt:
-        item.updatedAt instanceof Date
-          ? item.updatedAt.toISOString()
-          : item.updatedAt, // ✅ Convert Date to ISO string
+        item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt,
     };
     dispatch(updateQuickView(serializableItem));
-  };
+  }, [dispatch, item]);
 
-  // add to cart
-  const handleAddToCart = (item: Product) => {
+  const handleAddToCart = useCallback(() => {
     if (item.quantity > 0) {
-      // @ts-ignore
       addItem(cartItem);
       toast.success("Product added to cart!");
     } else {
       toast.error("This product is out of stock!");
     }
-  };
+  }, [addItem, cartItem, item.quantity]);
 
-  const handleItemToWishList = () => {
+  const handleQuickViewOpen = useCallback(() => {
+    openModal();
+    handleQuickViewUpdate();
+  }, [openModal, handleQuickViewUpdate]);
+
+  const handleItemToWishList = useCallback(() => {
     dispatch(
       addItemToWishlist({
         id: item.id,
@@ -106,7 +115,15 @@ const ProductItem = ({
         color: defaultVariant?.color ? defaultVariant.color : "",
       })
     );
-  };
+  }, [dispatch, item, cardImage, defaultVariant?.color]);
+
+  const handleDecrement = useCallback(() => {
+    decrementItem(item.id);
+  }, [decrementItem, item.id]);
+
+  const handleIncrement = useCallback(() => {
+    incrementItem(item.id);
+  }, [incrementItem, item.id]);
 
   const mainImagePriority = shopListingImage === "lcp";
   const listingLoadingProp =
@@ -155,11 +172,9 @@ const ProductItem = ({
         <div className="absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full flex items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0">
           <Tooltip content="Quick View" placement="top">
             <button
-              className="border border-gray-3 h-[38px] w-[38px] rounded-lg flex items-center justify-center text-dark bg-white hover:text-blue"
-              onClick={() => {
-                openModal();
-                handleQuickViewUpdate();
-              }}
+              type="button"
+              className="border border-gray-3 h-[38px] w-[38px] rounded-lg flex items-center justify-center text-dark bg-white hover:text-blue active:scale-95"
+              onClick={handleQuickViewOpen}
             >
               <EyeIcon />
             </button>
@@ -168,8 +183,9 @@ const ProductItem = ({
           {isAlradyAdded ? (
             <div className="inline-flex items-center rounded-lg border border-gray-3 bg-white">
               <button
-                onClick={() => decrementItem(item.id)}
-                className="px-3 py-2 text-dark hover:bg-gray-1"
+                type="button"
+                onClick={handleDecrement}
+                className="px-3 py-2 text-dark hover:bg-gray-1 active:bg-gray-2"
                 aria-label="Decrease quantity"
               >
                 -
@@ -178,8 +194,9 @@ const ProductItem = ({
                 {currentQty}
               </span>
               <button
-                onClick={() => incrementItem(item.id)}
-                className="px-3 py-2 text-dark hover:bg-gray-1"
+                type="button"
+                onClick={handleIncrement}
+                className="px-3 py-2 text-dark hover:bg-gray-1 active:bg-gray-2"
                 aria-label="Increase quantity"
               >
                 +
@@ -187,9 +204,10 @@ const ProductItem = ({
             </div>
           ) : (
             <button
-              onClick={() => handleAddToCart(item)}
+              type="button"
+              onClick={handleAddToCart}
               disabled={item.quantity < 1}
-              className="inline-flex px-5 py-2 font-medium h-[38px] text-white duration-200 ease-out rounded-lg text-custom-sm bg-blue hover:bg-blue-dark"
+              className="inline-flex px-5 py-2 font-medium h-[38px] text-white duration-200 ease-out rounded-lg text-custom-sm bg-blue hover:bg-blue-dark active:scale-[0.98]"
             >
               {item.quantity > 0 ? "Add to Cart" : "Out of Stock"}
             </button>
@@ -267,6 +285,7 @@ const ProductItem = ({
       </span>
     </div>
   );
-};
+}
 
+const ProductItem = memo(ProductItemInner);
 export default ProductItem;

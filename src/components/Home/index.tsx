@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/utils/formatePrice";
-import HeroBannerCarousel, { type HeroSlide } from "./HeroBannerCarousel";
+import HeroBannerSection from "./HeroBannerSection";
+import type { HeroSlide } from "./HeroBannerCarousel";
 import HomeHighlightsSection from "./HomeHighlightsSection";
 import HomeProductCarouselSection from "./HomeProductCarouselSection";
 
@@ -86,10 +87,6 @@ const TRUST_BAR_ITEMS = [
   },
 ] as const;
 
-function isRemoteImage(url: string) {
-  return url.startsWith("http://") || url.startsWith("https://");
-}
-
 const Home = ({
   heroSlides,
   heroOverlay,
@@ -109,7 +106,7 @@ const Home = ({
   return (
     <main className="bg-white">
       <section className="relative overflow-hidden pt-32">
-        <HeroBannerCarousel slides={heroSlides} overlay={heroOverlay} />
+        <HeroBannerSection slides={heroSlides} overlay={heroOverlay} />
       </section>
 
       <section className="border-b border-gray-3 bg-white">
@@ -122,7 +119,6 @@ const Home = ({
                 width={28}
                 height={28}
                 className="h-7 w-7 shrink-0 md:h-9 md:w-9"
-                loading="lazy"
                 sizes="28px"
               />
               <div className="min-w-0">
@@ -201,10 +197,7 @@ const Home = ({
                     fill
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     className="object-cover"
-                    unoptimized={isRemoteImage(p.image)}
-                    priority={index === 0}
-                    fetchPriority={index === 0 ? "high" : undefined}
-                    loading={index === 0 ? undefined : "lazy"}
+                    loading="lazy"
                   />
                 </div>
                 <div className="p-3">
@@ -261,10 +254,7 @@ const Home = ({
                         fill
                         sizes="(max-width: 640px) 200px, 240px"
                         className="object-cover rounded-2xl"
-                        unoptimized={isRemoteImage(item.image)}
-                        priority={index === 0}
-                        fetchPriority={index === 0 ? "high" : undefined}
-                        loading={index === 0 ? undefined : "lazy"}
+                        loading="lazy"
                       />
                     </div>
                     <div className="mt-2 w-full rounded-xl bg-white border border-gray-3 px-3 py-2 shadow-sm flex items-center justify-center">
@@ -317,10 +307,7 @@ const Home = ({
                         fill
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                         className="object-cover"
-                        unoptimized={isRemoteImage(cat.image)}
-                        priority={index === 0}
-                        fetchPriority={index === 0 ? "high" : undefined}
-                        loading={index === 0 ? undefined : "lazy"}
+                        loading="lazy"
                       />
                     </div>
                   ) : null}

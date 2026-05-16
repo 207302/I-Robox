@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import DemoProductGallery from "./DemoProductGallery";
 import VariantSelector from "./VariantSelector";
 import { getProductBySlug } from "@/get-api-data/product";
@@ -64,6 +65,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const galleryId = `product-gallery-${product.id}`;
 
   return (
+    <>
+      <LcpImagePrelink
+        imageUrl={galleryImagesSafe[0]}
+        sizes="(max-width: 1024px) 100vw, 50vw"
+        width={1200}
+        height={1200}
+      />
     <section className="overflow-x-hidden overflow-y-visible py-6 pb-14 sm:py-10 sm:pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <Link href="/shop" className="text-sm font-medium text-blue hover:underline">
@@ -186,6 +194,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         </div>
       </div>
     </section>
+    </>
   );
 }
 

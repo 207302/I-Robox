@@ -31,7 +31,7 @@ const DESKTOP_GAP_PX = 24;
 const cardHoverClass =
   "md:hover:-translate-y-1 md:hover:shadow-xl md:hover:ring-2 md:hover:ring-red/40";
 
-function HighlightCard({ item, imagePriority }: { item: HighlightItem; imagePriority?: boolean }) {
+function HighlightCard({ item }: { item: HighlightItem }) {
   return (
     <Link
       href={item.href}
@@ -44,9 +44,7 @@ function HighlightCard({ item, imagePriority }: { item: HighlightItem; imagePrio
           fill
           sizes="(max-width: 768px) 100vw, 33vw"
           className="object-cover"
-          priority={imagePriority}
-          fetchPriority={imagePriority ? "high" : undefined}
-          loading={imagePriority ? undefined : "lazy"}
+          loading="lazy"
         />
         <div className="absolute inset-x-3 bottom-3 rounded-lg bg-red/90 px-3 py-2 shadow-md shadow-red/30 transition-[background-color,box-shadow] duration-300 group-hover:bg-red group-hover:shadow-lg group-hover:shadow-red/40">
           <p className="text-sm font-bold text-white tracking-wide">{item.label}</p>
@@ -129,7 +127,7 @@ function MobileHighlightsCarousel({ items }: { items: HighlightItem[] }) {
               className="relative h-full shrink-0"
               style={{ width: `${slideFraction}%` }}
             >
-              <HighlightCard item={item} imagePriority={index === 0} />
+              <HighlightCard item={item}  />
             </div>
           ))}
         </div>
@@ -257,7 +255,7 @@ function DesktopThreeCarousel({ items }: { items: HighlightItem[] }) {
                   : undefined
               }
             >
-              <HighlightCard item={item} imagePriority={item.id === items[0].id} />
+              <HighlightCard item={item}  />
             </div>
           ))}
         </div>
@@ -309,7 +307,7 @@ export default function HomeHighlightsSection({ items }: { items: HighlightItem[
         {n <= 3 ? (
           <div className="grid grid-cols-3 gap-6">
             {items.map((item, index) => (
-              <HighlightCard key={item.id} item={item} imagePriority={index === 0} />
+              <HighlightCard key={item.id} item={item}  />
             ))}
           </div>
         ) : (

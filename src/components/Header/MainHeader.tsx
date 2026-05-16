@@ -1,8 +1,10 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { throttle } from "@/lib/perf/throttle";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useCart } from "@/hooks/useCart";
 import { buildHeaderMenuData } from "./menuData";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
@@ -84,21 +86,22 @@ const MainHeader = ({
     handleCartClick();
   };
 
-  // Sticky menu
-  const handleStickyMenu = () => {
-    if (window.scrollY >= 80) {
-      setStickyMenu(true);
-    } else {
-      setStickyMenu(false);
-    }
-  };
+  const handleStickyMenu = useCallback(
+    throttle(() => {
+      const next = window.scrollY >= 80;
+      startTransition(() => {
+        setStickyMenu((prev) => (prev === next ? prev : next));
+      });
+    }, 100),
+    []
+  );
 
   useEffect(() => {
-    window.addEventListener("scroll", handleStickyMenu);
+    window.addEventListener("scroll", handleStickyMenu, { passive: true });
     return () => {
       window.removeEventListener("scroll", handleStickyMenu);
     };
-  }, []);
+  }, [handleStickyMenu]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -143,7 +146,7 @@ const MainHeader = ({
     };
 
     handleResize();
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResize, { passive: true });
     return () => {
       window.removeEventListener("resize", handleResize);
     };
@@ -195,22 +198,23 @@ const MainHeader = ({
     setSearchQuery((prev) => (prev === q ? prev : q));
   }, [pathname, searchParams]);
 
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
+
   // Live search while on the shop page
   useEffect(() => {
     if (!pathname.startsWith("/shop")) return;
-    const q = searchQuery.trim();
-    const timer = window.setTimeout(() => {
-      const usp = new URLSearchParams(searchParams.toString());
-      const current = usp.get("q")?.trim() ?? "";
-      if (q === current) return;
-      if (q) usp.set("q", q);
-      else usp.delete("q");
-      usp.delete("page");
-      const next = usp.toString();
+    const q = debouncedSearchQuery.trim();
+    const usp = new URLSearchParams(searchParams.toString());
+    const current = usp.get("q")?.trim() ?? "";
+    if (q === current) return;
+    if (q) usp.set("q", q);
+    else usp.delete("q");
+    usp.delete("page");
+    const next = usp.toString();
+    startTransition(() => {
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-    }, 280);
-    return () => window.clearTimeout(timer);
-  }, [searchQuery, pathname, router, searchParams]);
+    });
+  }, [debouncedSearchQuery, pathname, router, searchParams]);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -365,8 +369,8 @@ const MainHeader = ({
                     width={160}
                     height={160}
                     className="h-14 w-auto xl:h-16"
-                    priority
-                    fetchPriority="high"
+                    loading="eager"
+                    sizes="160px"
                   />
                 </Link>
                 <DesktopMenu
@@ -388,7 +392,8 @@ const MainHeader = ({
                   width={160}
                   height={160}
                   className="h-9 w-auto max-h-9 sm:h-10 sm:max-h-10"
-                  priority
+                  loading="eager"
+                  sizes="(max-width: 1280px) 120px, 160px"
                 />
               </Link>
             </div>

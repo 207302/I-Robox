@@ -656,6 +656,11 @@ export default function EditProductPage() {
             }}
             options={categories}
             onCreated={(opt) => setCategories((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))}
+            onUpdated={(opt) =>
+              setCategories((prev) =>
+                prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+              )
+            }
             onDeleted={(id) => {
               setCategories((prev) => prev.filter((x) => x.id !== id));
               setProductTypes([]);
@@ -673,6 +678,11 @@ export default function EditProductPage() {
             options={productTypes}
             onCreated={(opt) =>
               setProductTypes((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
+            }
+            onUpdated={(opt) =>
+              setProductTypes((prev) =>
+                prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+              )
             }
             onDeleted={(id) => {
               setProductTypes((prev) => prev.filter((x) => x.id !== id));
@@ -696,6 +706,11 @@ export default function EditProductPage() {
             onCreated={(opt) =>
               setProductSubtypes((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
             }
+            onUpdated={(opt) =>
+              setProductSubtypes((prev) =>
+                prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+              )
+            }
             onDeleted={(id) => {
               setProductSubtypes((prev) => prev.filter((x) => x.id !== id));
               setForm((f: any) => ({ ...f, subtype_id: "" }));
@@ -715,6 +730,11 @@ export default function EditProductPage() {
             onChange={(val) => setForm((f: any) => ({ ...f, collection_id: val }))}
             options={collections}
             onCreated={(opt) => setCollections((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))}
+            onUpdated={(opt) =>
+              setCollections((prev) =>
+                prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+              )
+            }
             onDeleted={(id) => {
               setCollections((prev) => prev.filter((x) => x.id !== id));
               setForm((f: any) => ({ ...f, collection_id: "" }));
@@ -729,6 +749,11 @@ export default function EditProductPage() {
             onChange={(val) => setForm((f: any) => ({ ...f, brand_id: val }))}
             options={brands}
             onCreated={(opt) => setBrands((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))}
+            onUpdated={(opt) =>
+              setBrands((prev) =>
+                prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+              )
+            }
             onDeleted={(id) => {
               setBrands((prev) => prev.filter((x) => x.id !== id));
               setForm((f: any) => ({ ...f, brand_id: "" }));
@@ -757,6 +782,11 @@ export default function EditProductPage() {
               options={diecastScales}
               onCreated={(opt) =>
                 setDiecastScales((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
+              }
+              onUpdated={(opt) =>
+                setDiecastScales((prev) =>
+                  prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                )
               }
               createEndpoint="/api/admin/diecast-scales"
               deleteEndpointBase="/api/admin/diecast-scales"

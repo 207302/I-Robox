@@ -18,7 +18,7 @@ type ProductCarouselItem = {
 const ITEMS_PER_SECTION = 8;
 const MAX_SECTIONS = 3;
 
-function ProductCard({ item, imagePriority }: { item: ProductCarouselItem; imagePriority?: boolean }) {
+function ProductCard({ item }: { item: ProductCarouselItem }) {
   return (
     <Link
       href={`/shop/${item.slug}`}
@@ -31,9 +31,7 @@ function ProductCard({ item, imagePriority }: { item: ProductCarouselItem; image
           fill
           sizes="(max-width: 768px) 100vw, 25vw"
           className="object-cover"
-          priority={imagePriority}
-          fetchPriority={imagePriority ? "high" : undefined}
-          loading={imagePriority ? undefined : "lazy"}
+          loading="lazy"
         />
       </div>
       <div className="p-3">
@@ -95,7 +93,7 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
               >
                 <div className="grid grid-cols-2 gap-4">
                   {section.slice(0, 4).map((item) => (
-                    <ProductCard key={item.id} item={item} imagePriority={item.id === firstId} />
+                    <ProductCard key={item.id} item={item} />
                   ))}
                 </div>
               </div>
@@ -139,7 +137,7 @@ export default function HomeProductCarouselSection({ items }: { items: ProductCa
                 <div key={idx} className="shrink-0" style={{ width: `${100 / sections.length}%` }}>
                   <div className="grid grid-cols-4 gap-4">
                     {section.map((item) => (
-                      <ProductCard key={item.id} item={item} imagePriority={item.id === firstId} />
+                      <ProductCard key={item.id} item={item} />
                     ))}
                   </div>
                 </div>

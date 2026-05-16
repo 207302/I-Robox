@@ -47,7 +47,7 @@ export default function CartPage() {
           <h1 className="text-2xl font-semibold text-dark">Your Cart</h1>
           {cartCount ? (
             <button
-              onClick={() => clearCart()}
+              onClick={() => startTransition(() => clearCart())}
               className="text-sm font-medium text-meta-3 hover:text-dark"
             >
               Clear cart

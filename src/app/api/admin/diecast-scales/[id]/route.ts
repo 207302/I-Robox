@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prismaDB";
 import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
-import { isUuid } from "@/lib/validation/input";
+import { cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
+import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 
 function isAllowed(roles: string[]) {
   return (
@@ -14,6 +15,49 @@ function isAllowed(roles: string[]) {
 }
 
 type Ctx = { params: Promise<{ id: string }> };
+
+export async function PUT(req: NextRequest, ctx: Ctx) {
+  try {
+    assertSameOrigin(req);
+  } catch {
+    return NextResponse.json({ error: "Bad origin" }, { status: 403 });
+  }
+  const session = await getAdminSession();
+  if (!session || !isAllowed(session.roles)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const { id } = await ctx.params;
+  if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const parsed = await readJsonBody(req);
+  if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  const rawName = cleanText(parsed.body.name, 80);
+  if (!rawName) return NextResponse.json({ error: "Name required" }, { status: 400 });
+  if (hasSuspiciousInput(rawName)) return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+
+  const ratio = normalizeDiecastScale(rawName);
+  if (!ratio) {
+    return NextResponse.json(
+      { error: "Invalid scale — use a denominator (e.g. 87) or ratio (1:87)" },
+      { status: 400 }
+    );
+  }
+
+  const clash = await prisma.diecast_scales.findFirst({
+    where: { ratio, NOT: { id } },
+    select: { id: true },
+  });
+  if (clash) {
+    return NextResponse.json({ error: "That scale already exists" }, { status: 400 });
+  }
+
+  const row = await prisma.diecast_scales.update({
+    where: { id },
+    data: { ratio, name: ratio },
+    select: { id: true, name: true },
+  });
+  return NextResponse.json(row);
+}
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {

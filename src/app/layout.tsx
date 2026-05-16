@@ -4,10 +4,12 @@ import { getSeoSettings } from "@/get-api-data/seo-setting";
 import GtmLazy from "@/components/Analytics/GtmLazy";
 import { DM_Sans } from "next/font/google";
 const dm_sans = DM_Sans({
-  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  weight: ["400", "600", "700"],
   variable: "--font-body",
   subsets: ["latin"],
   display: "swap",
+  preload: true,
+  adjustFontFallback: true,
 });
 const defaultFavicon = "/ChatGPT Image Mar 3, 2026, 09_17_53 PM.png";
 
@@ -38,6 +40,10 @@ export default async function RootLayout({
   const seoSettings = await getSeoSettings();
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+      </head>
       <body suppressHydrationWarning={true} className={dm_sans.variable}>
         {children}
         {seoSettings?.gtmId ? <GtmLazy gtmId={seoSettings.gtmId} /> : null}

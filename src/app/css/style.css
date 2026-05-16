@@ -300,6 +300,13 @@
   body {
     @apply relative text-base font-normal font-body text-dark-3 z-1;
   }
+
+  button:active,
+  [role="button"]:active,
+  a[role="button"]:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+  }
 }
 
 /* third-party libraries CSS */

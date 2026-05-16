@@ -1,4 +1,5 @@
 import { getImageProps } from "next/image";
+import { resolvePublicImageUrl } from "@/lib/lcp/resolveImageUrl";
 
 type Props = {
   imageUrl: string;
@@ -11,7 +12,7 @@ type Props = {
 
 /**
  * Renders `<link rel="preload" as="image">` using the same optimizer output as `next/image`
- * so the browser requests the LCP candidate early.
+ * so the browser requests the LCP candidate early (hoisted to document head).
  */
 export default function LcpImagePrelink({
   imageUrl,
@@ -20,13 +21,12 @@ export default function LcpImagePrelink({
   height = 640,
   quality = 75,
 }: Props) {
-  if (!imageUrl || imageUrl === "/images/404.svg" || !imageUrl.startsWith("http")) {
-    return null;
-  }
+  const resolved = resolvePublicImageUrl(imageUrl);
+  if (!resolved) return null;
 
   try {
     const { props } = getImageProps({
-      src: imageUrl,
+      src: resolved,
       alt: "",
       width,
       height,

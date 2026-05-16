@@ -386,6 +386,11 @@ export default function NewProductPage() {
               }}
               options={categories}
               onCreated={(opt) => setCategories((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))}
+              onUpdated={(opt) =>
+                setCategories((prev) =>
+                  prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                )
+              }
               onDeleted={(id) => {
                 setCategories((prev) => prev.filter((x) => x.id !== id));
                 setProductTypes([]);
@@ -402,6 +407,11 @@ export default function NewProductPage() {
               options={productTypes}
               onCreated={(opt) =>
                 setProductTypes((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
+              }
+              onUpdated={(opt) =>
+                setProductTypes((prev) =>
+                  prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                )
               }
               onDeleted={(id) => {
                 setProductTypes((prev) => prev.filter((x) => x.id !== id));
@@ -425,6 +435,11 @@ export default function NewProductPage() {
               onCreated={(opt) =>
                 setProductSubtypes((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
               }
+              onUpdated={(opt) =>
+                setProductSubtypes((prev) =>
+                  prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                )
+              }
               onDeleted={(id) => {
                 setProductSubtypes((prev) => prev.filter((x) => x.id !== id));
                 setForm((f) => ({ ...f, subtype_id: "" }));
@@ -444,6 +459,11 @@ export default function NewProductPage() {
               onChange={(id) => setForm((f) => ({ ...f, collection_id: id }))}
               options={collections}
               onCreated={(opt) => setCollections((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))}
+              onUpdated={(opt) =>
+                setCollections((prev) =>
+                  prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                )
+              }
               onDeleted={(id) => {
                 setCollections((prev) => prev.filter((x) => x.id !== id));
                 setForm((f) => ({ ...f, collection_id: "" }));
@@ -458,6 +478,11 @@ export default function NewProductPage() {
               onChange={(id) => setForm((f) => ({ ...f, brand_id: id }))}
               options={brands}
               onCreated={(opt) => setBrands((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))}
+              onUpdated={(opt) =>
+                setBrands((prev) =>
+                  prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                )
+              }
               onDeleted={(id) => {
                 setBrands((prev) => prev.filter((x) => x.id !== id));
                 setForm((f) => ({ ...f, brand_id: "" }));
@@ -486,6 +511,11 @@ export default function NewProductPage() {
                 options={diecastScales}
                 onCreated={(opt) =>
                   setDiecastScales((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
+                }
+                onUpdated={(opt) =>
+                  setDiecastScales((prev) =>
+                    prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
+                  )
                 }
                 onDeleted={(id) => {
                   setDiecastScales((prev) => prev.filter((x) => x.id !== id));

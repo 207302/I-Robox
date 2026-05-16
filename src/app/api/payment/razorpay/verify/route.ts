@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { prisma } from "@/lib/prismaDB";
 import { getSession } from "@/lib/auth/session";
-import { writeAuditLog } from "@/lib/audit";
 import { createOrderAccessToken } from "@/lib/security/orderAccess";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { cleanText, readJsonBody } from "@/lib/validation/input";
 import { buildCheckoutContext } from "@/lib/checkout/buildCheckoutContext";
+import { unsealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, verifyRazorpayPaymentSignature } from "@/lib/payments/razorpay";
-import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
-import {
-  sendEmail,
-  orderConfirmedCustomerEmailHtml,
-  orderConfirmedCustomerEmailText,
-} from "@/lib/email";
-import { bookShipmentForOrder } from "@/lib/shipping";
+import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 
 export async function POST(req: NextRequest) {
   try {
@@ -71,7 +67,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ctx = await buildCheckoutContext({ body, session });
+    const checkoutSeal = cleanText(body.checkoutSeal, 32_000);
+    let ctx =
+      checkoutSeal.length > 0
+        ? unsealCheckoutContext(checkoutSeal, razorpayOrderId)
+        : null;
+    if (!ctx) {
+      ctx = await buildCheckoutContext({ body, session });
+    }
+
     const expectedAmountPaise = Math.round(ctx.total * 100);
     if (Number(payment.amount) !== expectedAmountPaise) {
       return NextResponse.json({ error: "Payment amount mismatch" }, { status: 400 });
@@ -157,17 +161,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await tx.shipments.upsert({
-        where: { order_id: order.id },
-        update: { status: "CREATED" },
-        create: {
-          order_id: order.id,
-          status: "CREATED",
-          tracking_number: null,
-          carrier: null,
-        },
-      });
-
       if (ctx.coupon?.id) {
         await tx.coupon_usages.create({
           data: {
@@ -179,53 +172,25 @@ export async function POST(req: NextRequest) {
       }
 
       return order;
-    });
-
-    await syncLowStockAlertsByProductIds(ctx.lineItems.map((li) => li.productId)).catch((err) => {
-      console.error("[payment/razorpay/verify] low stock alert sync failed", err);
-    });
-
-    try {
-      await bookShipmentForOrder(created.id);
-    } catch (delErr) {
-      console.error("[payment/razorpay/verify] shipment booking failed", delErr);
-    }
-
-    await writeAuditLog({
-      customerId: ctx.checkoutUserId,
-      entityType: "ORDER",
-      entityId: created.id,
-      action: "PAYMENT_CONFIRMED",
-      newValues: { status: "CONFIRMED", paymentProvider: "razorpay" },
-      ipAddress: req.ip ?? null,
-      userAgent: req.headers.get("user-agent"),
-    });
-
-    if (ctx.checkoutEmail) {
-      try {
-        const passwordSetup = ctx.newAccountPasswordSetup
-          ? { email: ctx.checkoutEmail, setupUrl: ctx.newAccountPasswordSetup.setupUrl }
-          : undefined;
-        await sendEmail({
-          to: ctx.checkoutEmail,
-          subject: ctx.newAccountPasswordSetup
-            ? "Order placed — set your password (see email)"
-            : "Order placed successfully",
-          html: orderConfirmedCustomerEmailHtml({
-            orderId: created.id,
-            passwordSetup,
-          }),
-          text: orderConfirmedCustomerEmailText({
-            orderId: created.id,
-            passwordSetup,
-          }),
-        });
-      } catch (err) {
-        console.error("[payment/razorpay/verify] order email failed", err);
-      }
-    }
+    }, PRISMA_TRANSACTION_OPTIONS);
 
     const accessToken = createOrderAccessToken(created.id);
+    const productIds = ctx.lineItems.map((li) => li.productId);
+
+    after(async () => {
+      await runPostOrderFulfillment({
+        orderId: created.id,
+        productIds,
+        checkoutEmail: ctx.checkoutEmail,
+        newAccountPasswordSetup: ctx.newAccountPasswordSetup,
+        audit: {
+          customerId: ctx.checkoutUserId,
+          ipAddress: req.ip ?? null,
+          userAgent: req.headers.get("user-agent"),
+        },
+      });
+    });
+
     return NextResponse.json(
       {
         ok: true,

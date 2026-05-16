@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { prisma } from "@/lib/prismaDB";
 import { getSession } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
@@ -9,6 +10,8 @@ import { rateLimit } from "@/lib/security/rateLimit";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { bookShipmentForOrder } from "@/lib/shipping";
+import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 
 export async function POST(req: NextRequest) {
   try {
@@ -101,23 +104,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const shipRow = await tx.shipments.upsert({
-      where: { order_id: orderId },
-      update: { status: "CREATED" },
-      create: {
-        order_id: orderId,
-        status: "CREATED",
-        tracking_number: null,
-        carrier: null,
-      },
-      select: { status: true, carrier: true, tracking_number: true },
-    });
-    const nextShipment = {
-      status: String(shipRow.status),
-      carrier: shipRow.carrier,
-      tracking_number: shipRow.tracking_number,
-    };
-
     if (order.coupon_id) {
       await tx.coupon_usages.create({
         data: {
@@ -133,9 +119,8 @@ export async function POST(req: NextRequest) {
         already: false,
         previousStatus,
         previousShipment,
-        nextShipment,
       };
-    });
+    }, PRISMA_TRANSACTION_OPTIONS);
   } catch (e: any) {
     if (e?.message === "FORBIDDEN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -146,47 +131,65 @@ export async function POST(req: NextRequest) {
     throw e;
   }
 
-  await writeAuditLog({
-    customerId: session?.sub ?? null,
-    entityType: "ORDER",
-    entityId: orderId,
-    action: "PAYMENT_CONFIRMED",
-    newValues: { status: "CONFIRMED" },
-    ipAddress: req.ip ?? null,
-    userAgent: req.headers.get("user-agent"),
-  });
+  const recipientHint = session?.email ?? null;
+  const shouldNotify = !result.already;
 
-  let recipient = session?.email ?? null;
-  if (!recipient) {
-    const row = await prisma.orders.findUnique({
-      where: { id: orderId },
-      select: { customers: { select: { email: true } } },
+  after(async () => {
+    if (!shouldNotify) return;
+
+    try {
+      await ensureOrderShipmentCreated(orderId);
+    } catch (err) {
+      console.error("[payment/confirm] shipment row failed", err);
+    }
+
+    const shipRow = await prisma.shipments.findUnique({
+      where: { order_id: orderId },
+      select: { status: true, carrier: true, tracking_number: true },
     });
-    recipient = row?.customers?.email ?? null;
-  }
+    const nextShipment = shipRow
+      ? {
+          status: String(shipRow.status),
+          carrier: shipRow.carrier,
+          tracking_number: shipRow.tracking_number,
+        }
+      : {
+          status: "CREATED",
+          carrier: null,
+          tracking_number: null,
+        };
 
-  if (recipient && !result.already && !isSyntheticPhoneSignupEmail(recipient)) {
+    try {
+      await writeAuditLog({
+        customerId: session?.sub ?? null,
+        entityType: "ORDER",
+        entityId: orderId,
+        action: "PAYMENT_CONFIRMED",
+        newValues: { status: "CONFIRMED" },
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers.get("user-agent"),
+      });
+    } catch (err) {
+      console.error("[payment/confirm] audit log failed", err);
+    }
+
+    let recipient = recipientHint;
+    if (!recipient) {
+      const row = await prisma.orders.findUnique({
+        where: { id: orderId },
+        select: { customers: { select: { email: true } } },
+      });
+      recipient = row?.customers?.email ?? null;
+    }
+
+    if (!recipient || isSyntheticPhoneSignupEmail(recipient)) return;
+
     try {
       try {
         await bookShipmentForOrder(orderId);
       } catch (delErr) {
         console.error("[payment/confirm] shipment booking failed", delErr);
       }
-      const shipRow = await prisma.shipments.findUnique({
-        where: { order_id: orderId },
-        select: { status: true, carrier: true, tracking_number: true },
-      });
-      const nextShipment = shipRow
-        ? {
-            status: String(shipRow.status),
-            carrier: shipRow.carrier,
-            tracking_number: shipRow.tracking_number,
-          }
-        : result.nextShipment ?? {
-            status: "CREATED",
-            carrier: null,
-            tracking_number: null,
-          };
       await notifyCustomerOrderOrShipmentUpdate({
         to: recipient,
         orderId,
@@ -198,7 +201,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error("[payment/confirm] customer notify email failed", err);
     }
-  }
+  });
 
   return NextResponse.json({ ok: true, ...result }, { status: 200 });
 }

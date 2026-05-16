@@ -18,7 +18,7 @@ const DEFAULTS: StoreContactDisplay = {
   helpSupportTitle: "Help & Support",
   contactAddress:
     "24, Basement, 21st Main Rd, Banashankari Stage II, Banashankari, Bengaluru, Karnataka 560070",
-  contactPhone: "+91 98447 16214",
+  contactPhone: "",
   contactEmail: "support@example.com",
   socialFacebookUrl: "",
   socialTwitterUrl: "",
@@ -41,9 +41,9 @@ export function phoneToTelHref(phone: string) {
 /** `wa.me` href from display phone string (keeps digits only). */
 export function phoneToWhatsAppHref(phone: string, message?: string) {
   const digits = phone.replace(/\D+/g, "");
-  const target = digits || "919844716214";
+  if (!digits) return "";
   const text = encodeURIComponent(message ?? "Hi! I have a question about an order / product.");
-  return `https://wa.me/${target}?text=${text}`;
+  return `https://wa.me/${digits}?text=${text}`;
 }
 
 export const getStoreContactDisplay = cache(async function getStoreContactDisplay(): Promise<StoreContactDisplay> {

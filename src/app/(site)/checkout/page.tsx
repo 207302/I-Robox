@@ -138,6 +138,8 @@ export default function CheckoutPage() {
       });
       const createData = await createRes.json().catch(() => ({}));
       if (!createRes.ok) throw new Error(createData?.error || "Could not initiate payment");
+      const checkoutSeal =
+        typeof createData?.checkoutSeal === "string" ? createData.checkoutSeal : "";
 
       const rz = new window.Razorpay({
         key: createData.keyId,
@@ -153,6 +155,7 @@ export default function CheckoutPage() {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 ...payload,
+                checkoutSeal,
                 razorpayOrderId: response?.razorpay_order_id,
                 razorpayPaymentId: response?.razorpay_payment_id,
                 razorpaySignature: response?.razorpay_signature,
@@ -170,8 +173,7 @@ export default function CheckoutPage() {
               typeof verifyData?.accessToken === "string" && verifyData.accessToken
                 ? `?access=${encodeURIComponent(verifyData.accessToken)}`
                 : "";
-            router.push(`/orders/${verifyData.orderId}${tokenQuery}`);
-            router.refresh();
+            router.replace(`/orders/${verifyData.orderId}${tokenQuery}`);
           } catch (err: any) {
             toast.error(err?.message || "Payment was received but verification failed");
           } finally {

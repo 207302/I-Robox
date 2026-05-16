@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prismaDB";
 import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
-import { rateLimitStrict } from "@/lib/security/rateLimit";
+import { rateLimit } from "@/lib/security/rateLimit";
+import { prismaErrorMessage } from "@/lib/prismaErrors";
 import {
   cleanOptionalHexColor,
   cleanOptionalText,
@@ -24,7 +26,7 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   try {
     assertSameOrigin(req);
-    await rateLimitStrict(`admin_marketing_settings:${req.ip ?? "unknown"}`, 1);
+    await rateLimit(`admin_marketing_settings:${req.ip ?? "unknown"}`, 1);
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "BAD_ORIGIN") {
       return NextResponse.json({ error: "Bad origin" }, { status: 403 });
@@ -39,7 +41,7 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   const body = parsed.body as Record<string, unknown>;
 
-  const data: Record<string, string | null | number> = {};
+  const data: Prisma.site_marketing_settingsUpdateInput = {};
 
   if (body.first_visit_coupon_code !== undefined) {
     if (body.first_visit_coupon_code === null || body.first_visit_coupon_code === "") {
@@ -57,7 +59,9 @@ export async function PATCH(req: NextRequest) {
       if (!Number.isFinite(n) || n < 0 || n > 10_000_000) {
         return NextResponse.json({ error: "Invalid free_shipping_threshold_inr" }, { status: 400 });
       }
-      data.free_shipping_threshold_inr = Math.round(n * 100) / 100;
+      data.free_shipping_threshold_inr = new Prisma.Decimal(
+        (Math.round(n * 100) / 100).toFixed(2)
+      );
     }
   }
   if (body.hero_overlay_eyebrow !== undefined) {
@@ -172,51 +176,59 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "No recognized fields to update" }, { status: 400 });
   }
 
-  const baseCreate = {
+  const baseCreate: Prisma.site_marketing_settingsCreateInput = {
     id: SITE_MARKETING_SETTINGS_ID,
-    first_visit_coupon_code: null as string | null,
-    free_shipping_threshold_inr: null as number | null,
-    hero_overlay_eyebrow: null as string | null,
-    hero_overlay_heading: null as string | null,
-    hero_overlay_subheading: null as string | null,
-    hero_overlay_cta_label: null as string | null,
-    hero_overlay_cta_href: null as string | null,
-    hero_overlay_eyebrow_color: null as string | null,
-    hero_overlay_heading_color: null as string | null,
-    hero_overlay_subheading_color: null as string | null,
-    hero_overlay_cta_label_color: null as string | null,
-    highlights_section_eyebrow: null as string | null,
-    highlights_section_heading: null as string | null,
-    privacy_page_title: null as string | null,
-    privacy_page_subtitle: null as string | null,
-    privacy_page_content: null as string | null,
-    terms_page_title: null as string | null,
-    terms_page_subtitle: null as string | null,
-    terms_page_content: null as string | null,
-    returns_page_title: null as string | null,
-    returns_page_subtitle: null as string | null,
-    returns_page_content: null as string | null,
-    faq_page_title: null as string | null,
-    faq_page_subtitle: null as string | null,
-    faq_page_content: null as string | null,
-    contact_page_title: null as string | null,
-    contact_page_subtitle: null as string | null,
-    contact_page_content: null as string | null,
-    help_support_title: null as string | null,
-    contact_address: null as string | null,
-    contact_phone: null as string | null,
-    contact_email: null as string | null,
-    social_facebook_url: null as string | null,
-    social_twitter_url: null as string | null,
-    social_instagram_url: null as string | null,
-    social_linkedin_url: null as string | null,
+    first_visit_coupon_code: null,
+    free_shipping_threshold_inr: null,
+    hero_overlay_eyebrow: null,
+    hero_overlay_heading: null,
+    hero_overlay_subheading: null,
+    hero_overlay_cta_label: null,
+    hero_overlay_cta_href: null,
+    hero_overlay_eyebrow_color: null,
+    hero_overlay_heading_color: null,
+    hero_overlay_subheading_color: null,
+    hero_overlay_cta_label_color: null,
+    highlights_section_eyebrow: null,
+    highlights_section_heading: null,
+    privacy_page_title: null,
+    privacy_page_subtitle: null,
+    privacy_page_content: null,
+    terms_page_title: null,
+    terms_page_subtitle: null,
+    terms_page_content: null,
+    returns_page_title: null,
+    returns_page_subtitle: null,
+    returns_page_content: null,
+    faq_page_title: null,
+    faq_page_subtitle: null,
+    faq_page_content: null,
+    contact_page_title: null,
+    contact_page_subtitle: null,
+    contact_page_content: null,
+    help_support_title: null,
+    contact_address: null,
+    contact_phone: null,
+    contact_email: null,
+    social_facebook_url: null,
+    social_twitter_url: null,
+    social_instagram_url: null,
+    social_linkedin_url: null,
   };
 
-  const updated = await prisma.site_marketing_settings.upsert({
-    where: { id: SITE_MARKETING_SETTINGS_ID },
-    create: { ...baseCreate, ...data },
-    update: data,
-  });
-
-  return NextResponse.json(updated, { status: 200 });
+  try {
+    const updated = await prisma.site_marketing_settings.upsert({
+      where: { id: SITE_MARKETING_SETTINGS_ID },
+      create: { ...baseCreate, ...data },
+      update: data,
+    });
+    return NextResponse.json(updated, { status: 200 });
+  } catch (error: unknown) {
+    console.error("[admin/marketing/settings] PATCH failed:", error);
+    const message = prismaErrorMessage(error);
+    return NextResponse.json(
+      { error: message ?? "Failed to save settings" },
+      { status: message ? 503 : 500 }
+    );
+  }
 }

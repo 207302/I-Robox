@@ -21,6 +21,6 @@ export default function WhatsAppFloatingDeferred({ phone }: { phone: string }) {
     return () => window.clearTimeout(t);
   }, []);
 
-  if (!show) return null;
+  if (!show || !phone.trim()) return null;
   return <WhatsAppFloatingButton phone={phone} />;
 }

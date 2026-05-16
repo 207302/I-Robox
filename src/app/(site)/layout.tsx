@@ -3,6 +3,7 @@ import ScrollToTop from "@/components/Common/ScrollToTop";
 import { Toaster } from "react-hot-toast";
 import Providers from "./Providers";
 import SiteTopLoader from "@/components/Common/SiteTopLoader";
+import { Suspense } from "react";
 import MainHeader from "@/components/Header/MainHeader";
 import Breadcrumb from "@/components/Common/Breadcrumb";
 import WhatsAppFloatingDeferred from "@/components/Common/WhatsAppFloatingDeferred";
@@ -53,13 +54,15 @@ export default async function SiteLayout({
       <>
         <Providers>
           <SiteTopLoader />
-          <MainHeader
-            headerData={null}
-            utilityAnnouncement={utilityAnnouncement}
-            marqueeAnnouncements={marqueeAnnouncements}
-            headerNav={headerNav}
-            freeShippingThresholdInr={freeShippingThresholdInr}
-          />
+          <Suspense fallback={null}>
+            <MainHeader
+              headerData={null}
+              utilityAnnouncement={utilityAnnouncement}
+              marqueeAnnouncements={marqueeAnnouncements}
+              headerNav={headerNav}
+              freeShippingThresholdInr={freeShippingThresholdInr}
+            />
+          </Suspense>
           <Breadcrumb />
           <Toaster position="top-center" reverseOrder={false} />
           {children}

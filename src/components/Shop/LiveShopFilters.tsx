@@ -154,7 +154,7 @@ export default function LiveShopFilters({ formId }: Props) {
       const isTextLike =
         t.tagName === "TEXTAREA" ||
         (t.tagName === "INPUT" && (t.type === "text" || t.type === "search" || t.type === "number"));
-      pushFromForm(isTextLike ? 250 : 80);
+      pushFromForm(isTextLike ? 200 : 0);
     };
 
     const onChange = (e: Event) => {
@@ -162,7 +162,7 @@ export default function LiveShopFilters({ formId }: Props) {
       if (t?.name === "category") {
         handleCategoryDrivenReset();
       }
-      pushFromForm(80);
+      pushFromForm(0);
     };
     const onSubmit = (e: Event) => {
       e.preventDefault();

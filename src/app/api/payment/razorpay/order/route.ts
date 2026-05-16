@@ -4,6 +4,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { readJsonBody } from "@/lib/validation/input";
 import { buildCheckoutContext } from "@/lib/checkout/buildCheckoutContext";
+import { sealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, razorpayPublicConfig } from "@/lib/payments/razorpay";
 
 export async function POST(req: NextRequest) {
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         keyId: publicCfg.keyId,
         razorpayOrderId: razorpayOrder.id,
+        checkoutSeal: sealCheckoutContext(razorpayOrder.id, ctx),
         amount: amountPaise,
         currency: "INR",
         pricing: {

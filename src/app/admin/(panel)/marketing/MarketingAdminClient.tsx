@@ -77,7 +77,10 @@ type Initial = {
 
 async function j<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error || "Request failed");
+  if (!res.ok) {
+    const msg = (data as { error?: string }).error;
+    throw new Error(msg || (res.status === 429 ? "Too many requests — wait a moment" : "Request failed"));
+  }
   return data as T;
 }
 
@@ -1831,7 +1834,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               <input
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
-                placeholder="+91 98447 16214"
+                placeholder="+91 …"
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               />
             </label>

@@ -31,6 +31,7 @@ import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 
 type CheckoutItem = {
   productId: string;
@@ -343,7 +344,7 @@ export async function POST(req: NextRequest) {
     }
 
     return createdOrder;
-  });
+  }, PRISMA_TRANSACTION_OPTIONS);
 
   // Best-effort low-stock alerting after reservation update.
   await syncLowStockAlertsByProductIds(lineItems.map((li) => li.productId)).catch((err) => {

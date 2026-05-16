@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "@/hooks/useCart";
 import { buildHeaderMenuData } from "./menuData";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
@@ -66,6 +66,7 @@ const MainHeader = ({
   const menuData = useMemo(() => buildHeaderMenuData(headerNav), [headerNav]);
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const searchInputDesktopRef = useRef<HTMLInputElement>(null);
   const searchInputMobileRef = useRef<HTMLInputElement>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -186,6 +187,30 @@ const MainHeader = ({
       window.removeEventListener("irobox-auth-changed", handleAuthChange);
     };
   }, [pathname]);
+
+  // Keep header search in sync with /shop?q=…
+  useEffect(() => {
+    if (!pathname.startsWith("/shop")) return;
+    const q = searchParams.get("q")?.trim() ?? "";
+    setSearchQuery((prev) => (prev === q ? prev : q));
+  }, [pathname, searchParams]);
+
+  // Live search while on the shop page
+  useEffect(() => {
+    if (!pathname.startsWith("/shop")) return;
+    const q = searchQuery.trim();
+    const timer = window.setTimeout(() => {
+      const usp = new URLSearchParams(searchParams.toString());
+      const current = usp.get("q")?.trim() ?? "";
+      if (q === current) return;
+      if (q) usp.set("q", q);
+      else usp.delete("q");
+      usp.delete("page");
+      const next = usp.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, pathname, router, searchParams]);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -331,16 +356,6 @@ const MainHeader = ({
                 >
                   {navigationOpen ? <CloseIcon /> : <MenuIcon />}
                 </button>
-                <button
-                  type="button"
-                  data-shop-search-ui
-                  className="inline-flex h-9 w-9 items-center justify-center transition hover:text-blue focus:outline-none"
-                  onClick={toggleSearch}
-                  aria-label={searchOpen ? "Close search" : "Search"}
-                  aria-expanded={searchOpen}
-                >
-                  {searchOpen ? <CloseIcon /> : <SearchIcon />}
-                </button>
               </div>
               <div className="hidden items-center gap-8 xl:flex">
                 <Link className="block shrink-0 py-2" href="/">
@@ -384,34 +399,22 @@ const MainHeader = ({
               <form
                 data-shop-search-ui
                 onSubmit={handleSearchSubmit}
-                className="hidden items-center gap-2 xl:flex"
+                className="relative hidden xl:block"
               >
-                <div
-                  className={`overflow-hidden transition-[max-width,opacity] duration-200 ease-out ${
-                    searchOpen ? "max-w-[min(22rem,34vw)] opacity-100" : "max-w-0 opacity-0"
-                  }`}
-                >
-                  <input
-                    ref={searchInputDesktopRef}
-                    type="search"
-                    name="q"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search products…"
-                    autoComplete="off"
-                    aria-label="Search products"
-                    className="h-9 w-[min(22rem,34vw)] rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm text-dark outline-none focus:border-blue"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center transition hover:text-blue focus:outline-none"
-                  onClick={toggleSearch}
-                  aria-label={searchOpen ? "Close search" : "Open search"}
-                  aria-expanded={searchOpen}
-                >
-                  {searchOpen ? <CloseIcon /> : <SearchIcon />}
-                </button>
+                <input
+                  ref={searchInputDesktopRef}
+                  type="search"
+                  name="q"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search products…"
+                  autoComplete="off"
+                  aria-label="Search products"
+                  className="h-9 w-[min(22rem,34vw)] rounded-lg border border-gray-3 bg-white py-2 pl-3 pr-9 text-sm text-dark outline-none focus:border-blue"
+                />
+                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-meta-4">
+                  <SearchIcon />
+                </span>
               </form>
 
               <button
@@ -503,36 +506,27 @@ const MainHeader = ({
             </div>
           </div>
 
-          {/* Mobile: search expands downward below the header row */}
-          <div
-            className={`xl:hidden overflow-hidden border-t border-gray-3 transition-[max-height] duration-300 ease-in-out ${
-              searchOpen ? "max-h-28" : "max-h-0"
-            }`}
+          {/* Mobile: search always visible below the header row */}
+          <form
+            data-shop-search-ui
+            onSubmit={handleSearchSubmit}
+            className="relative mx-auto max-w-7xl border-t border-gray-3 px-4 py-2 sm:px-6 xl:hidden"
           >
-            <form
-              data-shop-search-ui
-              onSubmit={handleSearchSubmit}
-              className="mx-auto flex max-w-7xl items-stretch gap-2 px-4 pb-3 pt-2 sm:px-6"
-            >
-              <input
-                ref={searchInputMobileRef}
-                type="search"
-                name="q"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search products…"
-                autoComplete="off"
-                aria-label="Search products"
-                className="min-h-[44px] flex-1 rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm text-dark outline-none focus:border-blue"
-              />
-              <button
-                type="submit"
-                className="min-h-[44px] shrink-0 rounded-lg bg-blue px-4 text-sm font-medium text-white hover:bg-blue-dark"
-              >
-                Search
-              </button>
-            </form>
-          </div>
+            <input
+              ref={searchInputMobileRef}
+              type="search"
+              name="q"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products…"
+              autoComplete="off"
+              aria-label="Search products"
+              className="min-h-[40px] w-full rounded-lg border border-gray-3 bg-white py-2 pl-3 pr-9 text-sm text-dark outline-none focus:border-blue"
+            />
+            <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-meta-4 sm:right-9">
+              <SearchIcon />
+            </span>
+          </form>
         </div>
       </header>
 

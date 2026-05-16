@@ -61,15 +61,17 @@ export default function Footer({ storeContact }: { storeContact: StoreContactDis
                 {storeContact.contactAddress}
               </li>
 
-              <li>
-                <Link
-                  href={phoneToTelHref(storeContact.contactPhone)}
-                  className="flex items-center gap-4.5 text-base text-meta-3"
-                >
-                  <CallIcon className="fill-blue" width={24} height={24} />
-                  {storeContact.contactPhone}
-                </Link>
-              </li>
+              {storeContact.contactPhone.trim() ? (
+                <li>
+                  <Link
+                    href={phoneToTelHref(storeContact.contactPhone)}
+                    className="flex items-center gap-4.5 text-base text-meta-3"
+                  >
+                    <CallIcon className="fill-blue" width={24} height={24} />
+                    {storeContact.contactPhone}
+                  </Link>
+                </li>
+              ) : null}
 
               <li>
                 <Link

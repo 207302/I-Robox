@@ -185,8 +185,10 @@ export default async function ShopPage({ searchParams }: Props) {
         <LiveShopFilters formId={formId} />
         <input
           name="q"
+          type="search"
           defaultValue={q}
           placeholder="Search products…"
+          autoComplete="off"
           className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />
         <div className="grid grid-cols-2 gap-2">
@@ -203,7 +205,7 @@ export default async function ShopPage({ searchParams }: Props) {
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
         </div>
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Age groups</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {ageGroups.map((group) => (
@@ -217,7 +219,7 @@ export default async function ShopPage({ searchParams }: Props) {
           </ul>
         </details>
 
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Categories</summary>
           <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
             {allCategories.length > 0 ? (
@@ -243,7 +245,7 @@ export default async function ShopPage({ searchParams }: Props) {
           </ul>
         </details>
 
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Brands</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {shopBrands.map((b) => (
@@ -257,7 +259,7 @@ export default async function ShopPage({ searchParams }: Props) {
           </ul>
         </details>
 
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Product types</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productTypes.map((t) => (
@@ -272,7 +274,7 @@ export default async function ShopPage({ searchParams }: Props) {
           </ul>
         </details>
 
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Subtypes</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productSubtypes.map((s) => (
@@ -287,7 +289,7 @@ export default async function ShopPage({ searchParams }: Props) {
           </ul>
         </details>
 
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Collections</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productCollections.map((c) => (
@@ -307,7 +309,7 @@ export default async function ShopPage({ searchParams }: Props) {
           </ul>
         </details>
 
-        <details className="rounded-lg border border-gray-3 p-3">
+        <details open className="rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Discount</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {discountBuckets.map((d) => (
@@ -322,7 +324,7 @@ export default async function ShopPage({ searchParams }: Props) {
         </details>
 
         {showScales ? (
-          <details className="rounded-lg border border-gray-3 p-3">
+          <details open className="rounded-lg border border-gray-3 p-3">
             <summary className="cursor-pointer text-sm font-semibold text-dark">Scales</summary>
             <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
               {diecastScales.map((s) => (
@@ -360,12 +362,6 @@ export default async function ShopPage({ searchParams }: Props) {
           </select>
         </div>
 
-        <button
-          type="submit"
-          className="w-full rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark transition"
-        >
-          Apply
-        </button>
         <Link
           href="/shop"
           className="block w-full rounded-lg border border-gray-3 bg-white px-4 py-2 text-center text-sm font-medium text-meta-3 hover:bg-gray-1 hover:text-dark transition"
@@ -388,14 +384,11 @@ export default async function ShopPage({ searchParams }: Props) {
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="flex flex-col gap-8 lg:flex-row">
           <aside className="w-full shrink-0 lg:w-64">
-            <details className="rounded-xl border border-gray-3 bg-white lg:hidden">
-              <summary className="cursor-pointer list-none select-none px-4 py-3 text-sm font-semibold text-dark border-b border-gray-3">
-                Filters
-              </summary>
-              <div className="p-1">{renderFilters("shop-filters-form-mobile")}</div>
-            </details>
+            <div className="lg:hidden">{renderFilters("shop-filters-form-mobile")}</div>
 
-            <div className="hidden lg:block">{renderFilters("shop-filters-form")}</div>
+            <div className="hidden lg:block lg:sticky lg:top-24 lg:max-h-[calc(100vh-6.5rem)] lg:overflow-y-auto">
+              {renderFilters("shop-filters-form")}
+            </div>
           </aside>
 
           <div className="flex-1 min-w-0">

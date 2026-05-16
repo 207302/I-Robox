@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { getBestSellingProducts, getNewArrivalsProduct } from "@/get-api-data/product";
@@ -11,13 +11,15 @@ import Home, {
 } from "@/components/Home";
 import type { HeroSlide } from "@/components/Home/HeroBannerCarousel";
 import { withPrismaRetry } from "@/lib/prismaRetry";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
 /** ISR: fresh CMS within ~60s without blocking every request on full SSR. */
 export const revalidate = 60;
 
 const FALLBACK_HIGHLIGHT_IMAGE =
   "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";
-const FALLBACK_PRODUCT_IMAGE = "/images/products/placeholder.png";
+
+const FALLBACK_PRODUCT_IMAGE = PRODUCT_IMAGE_PLACEHOLDER;
 
 const pickCardImage = (images: { url: string; sort_order: number }[] | undefined) =>
   images && images.length > 0

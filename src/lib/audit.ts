@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 export async function writeAuditLog(input: {
   customerId?: string | null;

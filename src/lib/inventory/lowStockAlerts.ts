@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 
 async function adminRecipients(): Promise<string[]> {

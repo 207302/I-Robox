@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 
 export type QuickLinkPageKey = "privacy" | "terms" | "returns" | "faq" | "contact";

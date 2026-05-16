@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 
 /** Product id → flash sale unit price (when active). */

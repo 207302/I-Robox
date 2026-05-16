@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import SafeProductImage from "@/components/Common/SafeProductImage";
+import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 
 const SWIPE_THRESHOLD = 40;
@@ -166,8 +167,8 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                   className="relative h-full shrink-0"
                   style={{ width: `${100 / images.length}%` }}
                 >
-                  <Image
-                    src={src}
+                  <SafeProductImage
+                    src={resolveProductImageSrc(src)}
                     alt={`${title} image ${index + 1}`}
                     fill
                     sizes="(max-width: 1024px) 100vw, 50vw"
@@ -181,8 +182,8 @@ export default function DemoProductGallery({ title, images, galleryId = "default
             </div>
           </>
         ) : images[0] ? (
-          <Image
-            src={images[0]}
+          <SafeProductImage
+            src={resolveProductImageSrc(images[0])}
             alt={`${title} image 1`}
             fill
             sizes="(max-width: 1024px) 100vw, 50vw"
@@ -225,8 +226,8 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                   }`}
                   aria-label={`Show image ${index + 1}`}
                 >
-                  <Image
-                    src={thumbnail}
+                  <SafeProductImage
+                    src={resolveProductImageSrc(thumbnail)}
                     alt={`${title} thumbnail ${index + 1}`}
                     fill
                     sizes="(max-width: 1024px) 33vw, 16vw"
@@ -268,8 +269,8 @@ export default function DemoProductGallery({ title, images, galleryId = "default
               }`}
               aria-label={`Show image ${index + 1}`}
             >
-              <Image
-                src={thumbnail}
+              <SafeProductImage
+                src={resolveProductImageSrc(thumbnail)}
                 alt={`${title} thumbnail ${index + 1}`}
                 fill
                 sizes="(max-width: 1024px) 33vw, 16vw"

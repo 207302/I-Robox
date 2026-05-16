@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata = {

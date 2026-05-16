@@ -10,7 +10,8 @@ import ReviewForm from "@/components/Shop/ReviewForm";
 import ProductActions from "@/components/Shop/ProductActions";
 import ReviewStar from "@/components/Shop/ReviewStar";
 import { getSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
@@ -52,7 +53,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const variantImagesInOrder = product.productVariants.flatMap((v) => v.images ?? []);
   const galleryImages = [...sortedProductLevelImages, ...variantImagesInOrder];
   const galleryImagesSafe =
-    galleryImages.length > 0 ? galleryImages : ["/images/products/placeholder.png"];
+    galleryImages.length > 0 ? galleryImages : [PRODUCT_IMAGE_PLACEHOLDER];
   const variantsForSelector = product.productVariants.map((variant) => {
     const first = variant.images?.[0];
     const galleryIndex =
@@ -134,7 +135,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             ) : null}
             <VariantSelector
               variants={variantsForSelector}
-              fallbackImage={galleryImagesSafe[0] || "/images/products/placeholder.png"}
+              fallbackImage={galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER}
               galleryId={galleryId}
             />
 
@@ -142,7 +143,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               id={product.id}
               title={product.title}
               slug={product.slug}
-              image={galleryImagesSafe[0] || "/images/products/placeholder.png"}
+              image={galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER}
               price={product.price}
               discountedPrice={product.discountedPrice}
               quantity={product.quantity}

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
 

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 // get all categories
 // Keep this uncached so storefront category links always use latest slug/name.

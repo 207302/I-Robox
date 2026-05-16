@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
+import { runApiRoute } from "@/lib/api/runApiRoute";
 
 function isAllowed(roles: string[]) {
   return (
@@ -20,61 +21,65 @@ function slugFromName(name: string) {
 }
 
 export async function PUT(req: NextRequest, ctx: Ctx) {
-  try {
-    assertSameOrigin(req);
-  } catch {
-    return NextResponse.json({ error: "Bad origin" }, { status: 403 });
-  }
-  const session = await getAdminSession();
-  if (!session || !isAllowed(session.roles)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  const { id } = await ctx.params;
-  if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const parsed = await readJsonBody(req);
-  if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  const name = cleanText(parsed.body.name, 120);
-  if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
-  if (hasSuspiciousInput(name)) return NextResponse.json({ error: "Invalid name" }, { status: 400 });
-
-  const baseSlug = slugFromName(name);
-  if (!baseSlug) return NextResponse.json({ error: "Invalid slug from name" }, { status: 400 });
-  const clash = await prisma.brands.findFirst({ where: { slug: baseSlug, NOT: { id } } });
-  const finalSlug = clash ? `${baseSlug}-${Math.random().toString(36).slice(2, 6)}` : baseSlug;
-
-  const row = await prisma.brands.update({
-    where: { id },
-    data: { name, slug: finalSlug },
-    select: { id: true, name: true, slug: true },
-  });
-  return NextResponse.json(row);
-}
+  return runApiRoute(async () => {
+    try {
+      assertSameOrigin(req);
+    } catch {
+      return NextResponse.json({ error: "Bad origin" }, { status: 403 });
+    }
+    const session = await getAdminSession();
+    if (!session || !isAllowed(session.roles)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const { id } = await ctx.params;
+    if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  
+    const parsed = await readJsonBody(req);
+    if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    const name = cleanText(parsed.body.name, 120);
+    if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
+    if (hasSuspiciousInput(name)) return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  
+    const baseSlug = slugFromName(name);
+    if (!baseSlug) return NextResponse.json({ error: "Invalid slug from name" }, { status: 400 });
+    const clash = await prisma.brands.findFirst({ where: { slug: baseSlug, NOT: { id } } });
+    const finalSlug = clash ? `${baseSlug}-${Math.random().toString(36).slice(2, 6)}` : baseSlug;
+  
+    const row = await prisma.brands.update({
+      where: { id },
+      data: { name, slug: finalSlug },
+      select: { id: true, name: true, slug: true },
+    });
+    return NextResponse.json(row);
+  
+  });}
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  try {
-    assertSameOrigin(req);
-  } catch {
-    return NextResponse.json({ error: "Bad origin" }, { status: 403 });
-  }
-  const session = await getAdminSession();
-  if (!session || !isAllowed(session.roles)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  const { id } = await ctx.params;
-  if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  try {
-    await prisma.brands.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    if (e?.code === "P2003") {
-      return NextResponse.json(
-        { error: "Cannot delete this brand because products are linked to it." },
-        { status: 409 }
-      );
+  return runApiRoute(async () => {
+    try {
+      assertSameOrigin(req);
+    } catch {
+      return NextResponse.json({ error: "Bad origin" }, { status: 403 });
     }
-    console.error("[brands DELETE]", e);
-    return NextResponse.json({ error: "Could not delete brand" }, { status: 409 });
-  }
-}
+    const session = await getAdminSession();
+    if (!session || !isAllowed(session.roles)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const { id } = await ctx.params;
+    if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  
+    try {
+      await prisma.brands.delete({ where: { id } });
+      return NextResponse.json({ ok: true });
+    } catch (e: any) {
+      if (e?.code === "P2003") {
+        return NextResponse.json(
+          { error: "Cannot delete this brand because products are linked to it." },
+          { status: 409 }
+        );
+      }
+      console.error("[brands DELETE]", e);
+      return NextResponse.json({ error: "Could not delete brand" }, { status: 409 });
+    }
+  
+  });}

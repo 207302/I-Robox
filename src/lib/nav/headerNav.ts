@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 /** Slug + display name for header dropdowns (categories, brands). */
 export type HeaderNavItem = { slug: string; name: string };

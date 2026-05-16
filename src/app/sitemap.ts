@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 
 /** Regenerate periodically so new products appear without redeploying. */

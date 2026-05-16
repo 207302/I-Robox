@@ -8,7 +8,7 @@
     "dev": "next dev",
     "db:migrate": "node scripts/run-prisma-migrate.mjs",
     "build": "node scripts/run-prisma-build.mjs",
-    "start": "next start",
+    "start": "next start -p 3000",
     "lint": "next lint",
     "algolia:reindex": "node src/algolia/reindex.ts",
     "import-demo-data": "node scripts/import-demo-data.js",

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 export type ResolvedTaxonomy = {
   type_id: string | null;

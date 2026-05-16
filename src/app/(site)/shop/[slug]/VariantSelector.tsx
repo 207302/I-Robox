@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import SafeProductImage from "@/components/Common/SafeProductImage";
+import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
 import { useMemo, useState } from "react";
 
 type VariantItem = {
@@ -77,8 +78,8 @@ export default function VariantSelector({
             }`}
             title={variant.label}
           >
-            <Image
-              src={variant.image || "/images/404.svg"}
+            <SafeProductImage
+              src={resolveProductImageSrc(variant.image || fallbackImage)}
               alt={variant.label}
               width={18}
               height={18}

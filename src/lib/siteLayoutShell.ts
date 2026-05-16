@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHeaderNavData } from "@/lib/nav/headerNav";
 import { getStoreContactDisplay } from "@/lib/marketing/storeContactDisplay";

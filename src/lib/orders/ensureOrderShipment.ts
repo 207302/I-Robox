@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 /** Ensures a shipment row exists after the order is committed (avoid upsert inside long transactions). */
 export async function ensureOrderShipmentCreated(orderId: string) {

@@ -6,7 +6,7 @@ import { updateQuickView } from "@/redux/features/quickView-slice";
 import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { AppDispatch } from "@/redux/store";
 import { Product } from "@/types/product";
-import Image from "next/image";
+import SafeProductImage from "@/components/Common/SafeProductImage";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
@@ -142,8 +142,8 @@ function ProductItemInner({
           href={`/shop/${item?.slug}`}
           className="relative block h-full w-full"
         >
-          <Image
-            src={cardImage || "/images/404.svg"}
+          <SafeProductImage
+            src={cardImage}
             alt={item.title || "product-image"}
             width={640}
             height={640}
@@ -258,7 +258,7 @@ function ProductItemInner({
                 className="inline-flex items-center gap-1 rounded-full border border-gray-3 bg-white px-2 py-0.5 text-[11px] font-medium text-meta-3"
                 title={label}
               >
-                <Image
+                <SafeProductImage
                   src={thumb}
                   alt={label}
                   width={14}

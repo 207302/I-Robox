@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 import { cleanText, hasSuspiciousInput, isUrlSlug } from "@/lib/validation/input";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { validateCommonEmailProvider } from "@/lib/validateEmai";
 import {
   cleanOptionalText,

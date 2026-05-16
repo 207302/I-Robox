@@ -1,4 +1,6 @@
-export const PRODUCT_IMAGE_PLACEHOLDER = "/images/404.svg";
+import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
+
+export { PRODUCT_IMAGE_PLACEHOLDER };
 
 type ProductImageSource = {
   image?: string;

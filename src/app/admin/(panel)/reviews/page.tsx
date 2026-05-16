@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = {
   title: "Admin Reviews | i-Robox",

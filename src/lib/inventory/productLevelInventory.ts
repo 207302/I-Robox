@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 /** Stock row for the product itself (no variant). Prisma upsert cannot use null in compound unique where. */
 export async function upsertProductLevelInventory(

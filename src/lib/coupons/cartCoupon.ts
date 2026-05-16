@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 
 export type CartLineForCoupon = { productId: string; categoryId: string | null };
 

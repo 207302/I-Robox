@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/utils/formatePrice";
 
 export const metadata = {

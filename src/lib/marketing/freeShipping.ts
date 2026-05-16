@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { prisma } from "@/lib/prismaDB";
+import { prisma } from "@/lib/prisma";
 import {
   DEFAULT_FREE_SHIPPING_THRESHOLD_INR,
   resolveFreeShippingThresholdInr,

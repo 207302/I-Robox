@@ -26,8 +26,6 @@ const SWIPE_THRESHOLD = 50;
 
 type Props = {
   slides?: HeroSlide[];
-  /** When true, slide 0 image is server-rendered in HeroBannerSection (LCP). */
-  skipFirstSlideImage?: boolean;
   overlay?: {
     eyebrow?: string;
     heading?: string;
@@ -41,7 +39,7 @@ type Props = {
   };
 };
 
-const HeroBannerCarousel = ({ slides: slidesProp, overlay, skipFirstSlideImage = false }: Props) => {
+const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   const slides = slidesProp && slidesProp.length > 0 ? slidesProp : [];
   const overlayCopy = {
     eyebrow: overlay?.eyebrow?.trim() ?? "",
@@ -149,7 +147,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay, skipFirstSlideImage =
 
   return (
     <div
-      className={`relative w-full touch-pan-y ${skipFirstSlideImage ? "h-full" : "aspect-[3/2] lg:aspect-[2.7/1]"}`}
+      className="relative w-full touch-pan-y aspect-[3/2] lg:aspect-[2.7/1]"
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}
@@ -169,18 +167,16 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay, skipFirstSlideImage =
               className="relative h-full shrink-0"
               style={{ width: `${slideFraction}%` }}
             >
-              {skipFirstSlideImage && index === 0 ? (
-                <div className="h-full w-full" aria-hidden />
-              ) : banner.link_url ? (
+              {banner.link_url ? (
                 <Link href={banner.link_url} className="relative block h-full w-full">
                   <Image
                     src={banner.image_url}
                     alt={banner.title ?? "Hero banner"}
                     fill
-                    priority={!skipFirstSlideImage && index === 0}
+                    priority={index === 0}
                     sizes="100vw"
                     className="object-cover"
-                    loading={index === 0 && !skipFirstSlideImage ? "eager" : "lazy"}
+                    loading={index === 0 ? "eager" : "lazy"}
                   />
                 </Link>
               ) : (
@@ -188,10 +184,10 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay, skipFirstSlideImage =
                   src={banner.image_url}
                   alt={banner.title ?? "Hero banner"}
                   fill
-                  priority={!skipFirstSlideImage && index === 0}
+                  priority={index === 0}
                   sizes="100vw"
                   className="object-cover"
-                  loading={index === 0 && !skipFirstSlideImage ? "eager" : "lazy"}
+                  loading={index === 0 ? "eager" : "lazy"}
                 />
               )}
             </div>
@@ -202,10 +198,10 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay, skipFirstSlideImage =
       {/* Static overlay copy: stays fixed while slides move underneath */}
       {hasOverlayCopy || showCta ? (
         <>
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-[15] w-[88%] bg-gradient-to-r from-black/80 via-black/45 to-transparent sm:w-[70%] lg:w-[52%]" />
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-[16] flex w-full items-center">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 xl:px-0">
-          <div className="max-w-xl text-white">
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-[15] w-[88%] bg-gradient-to-r from-black/80 via-black/45 to-transparent sm:w-[70%] lg:w-[52%]" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-[16] flex w-full items-center">
+            <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 xl:px-0">
+              <div className="max-w-xl text-white">
             {overlayCopy.eyebrow ? (
               <p
                 style={eyebrowStyle}

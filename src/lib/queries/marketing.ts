@@ -1,0 +1,95 @@
+import { unstable_cache } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+
+export const getSiteMarketingSettings = unstable_cache(
+  async () => {
+    try {
+      return await prisma.site_marketing_settings.findUnique({
+        where: { id: SITE_MARKETING_SETTINGS_ID },
+      });
+    } catch {
+      return null;
+    }
+  },
+  ["site-marketing-settings"],
+  { revalidate: 60 }
+);
+
+export const getMarketingPopups = unstable_cache(
+  async () => {
+    try {
+      return await prisma.marketing_popups.findMany({
+        orderBy: { sort_priority: "asc" },
+      });
+    } catch {
+      return [];
+    }
+  },
+  ["marketing-popups"],
+  { revalidate: 60 }
+);
+
+export const getFlashSaleProducts = unstable_cache(
+  async () => {
+    try {
+      return await prisma.flash_sale_products.findMany({
+        orderBy: { updated_at: "desc" },
+        include: { products: { select: { name: true, slug: true } } },
+      });
+    } catch {
+      return [];
+    }
+  },
+  ["flash-sale-products"],
+  { revalidate: 30 }
+);
+
+export const getCouponsForAdmin = unstable_cache(
+  async () => {
+    try {
+      return await prisma.coupons.findMany({
+        orderBy: { code: "asc" },
+        select: {
+          id: true,
+          code: true,
+          discount_type: true,
+          discount_value: true,
+          is_active: true,
+        },
+      });
+    } catch {
+      return [];
+    }
+  },
+  ["coupons-admin"],
+  { revalidate: 60 }
+);
+
+/** Storefront hero/highlights overlay fields only. */
+export const getSiteMarketingSettingsForHome = unstable_cache(
+  async () => {
+    try {
+      return await prisma.site_marketing_settings.findUnique({
+        where: { id: SITE_MARKETING_SETTINGS_ID },
+        select: {
+          highlights_section_eyebrow: true,
+          highlights_section_heading: true,
+          hero_overlay_eyebrow: true,
+          hero_overlay_heading: true,
+          hero_overlay_subheading: true,
+          hero_overlay_cta_label: true,
+          hero_overlay_cta_href: true,
+          hero_overlay_eyebrow_color: true,
+          hero_overlay_heading_color: true,
+          hero_overlay_subheading_color: true,
+          hero_overlay_cta_label_color: true,
+        },
+      });
+    } catch {
+      return null;
+    }
+  },
+  ["site-marketing-settings-home"],
+  { revalidate: 60 }
+);

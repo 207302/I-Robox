@@ -41,7 +41,7 @@ const HeroCarousal = ({ sliders }: { sliders: any }) => {
               </div>
 
               <h1 className="mb-3 text-xl font-semibold text-dark sm:text-3xl">
-                <Link href={`/products/${slider?.product?.slug}`}>
+                <Link href={`/shop/${slider?.product?.slug}`}>
                   {slider?.product?.title}
                 </Link>
               </h1>
@@ -51,7 +51,7 @@ const HeroCarousal = ({ sliders }: { sliders: any }) => {
               </p>
 
               <Link
-                href={`/products/${slider?.product?.slug}`}
+                href={`/shop/${slider?.product?.slug}`}
                 className="inline-flex py-3 mt-10 font-medium text-white duration-200 ease-out rounded-lg text-custom-sm bg-dark px-9 hover:bg-darkLight"
               >
                 Shop Now

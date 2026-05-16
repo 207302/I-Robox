@@ -19,6 +19,8 @@ import {
 } from "./icons";
 import { useAppSelector } from "@/redux/store";
 import toast from "react-hot-toast";
+import { useDebounce } from "@/hooks/useDebounce";
+import { SHOP_QUERY_EVENT, applyShopQuery } from "@/lib/shop/shopQuery";
 
 export type SiteHeaderData = {
   headerLogo?: string | null;
@@ -72,8 +74,8 @@ const MainHeader = ({
   const searchInputMobileRef = useRef<HTMLInputElement>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [stickyMenu, setStickyMenu] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 350);
   const [userName, setUserName] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -101,39 +103,6 @@ const MainHeader = ({
       window.removeEventListener("scroll", handleStickyMenu);
     };
   }, [handleStickyMenu]);
-
-  useEffect(() => {
-    if (!searchOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSearchOpen(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [searchOpen]);
-
-  useEffect(() => {
-    if (!searchOpen) return;
-    const t = window.setTimeout(() => {
-      const el =
-        window.innerWidth >= 1280
-          ? searchInputDesktopRef.current
-          : searchInputMobileRef.current;
-      el?.focus();
-    }, 50);
-    return () => window.clearTimeout(t);
-  }, [searchOpen]);
-
-  useEffect(() => {
-    if (!searchOpen) return;
-    const closeIfOutside = (e: MouseEvent) => {
-      const el = e.target;
-      if (!(el instanceof Element)) return;
-      if (el.closest("[data-shop-search-ui]")) return;
-      setSearchOpen(false);
-    };
-    document.addEventListener("mousedown", closeIfOutside);
-    return () => document.removeEventListener("mousedown", closeIfOutside);
-  }, [searchOpen]);
 
   // Close mobile menu when screen size changes to desktop
   useEffect(() => {
@@ -190,43 +159,57 @@ const MainHeader = ({
     };
   }, [pathname]);
 
-  // Keep header search in sync with /shop?q=…
+  // Keep header search in sync with /shop?q=… (client URL updates + back/forward)
   useEffect(() => {
     if (!pathname.startsWith("/shop")) return;
+
+    const syncFromUrl = () => {
+      const q = new URLSearchParams(window.location.search).get("q")?.trim() ?? "";
+      setSearchQuery((prev) => (prev === q ? prev : q));
+    };
+
+    syncFromUrl();
     const q = searchParams.get("q")?.trim() ?? "";
     setSearchQuery((prev) => (prev === q ? prev : q));
+
+    window.addEventListener(SHOP_QUERY_EVENT, syncFromUrl);
+    window.addEventListener("popstate", syncFromUrl);
+    return () => {
+      window.removeEventListener(SHOP_QUERY_EVENT, syncFromUrl);
+      window.removeEventListener("popstate", syncFromUrl);
+    };
   }, [pathname, searchParams]);
 
-  // Live search while on the shop page (instant — no debounce)
+  // Live search on shop — debounced URL updates (no full page navigation)
   useEffect(() => {
     if (!pathname.startsWith("/shop")) return;
-    const q = searchQuery.trim();
-    const usp = new URLSearchParams(searchParams.toString());
+    const q = debouncedSearchQuery.trim();
+    const usp = new URLSearchParams(window.location.search);
     const current = usp.get("q")?.trim() ?? "";
     if (q === current) return;
     if (q) usp.set("q", q);
     else usp.delete("q");
     usp.delete("page");
-    const next = usp.toString();
-    startTransition(() => {
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-    });
-  }, [searchQuery, pathname, router, searchParams]);
+    applyShopQuery(pathname, usp.toString());
+  }, [debouncedSearchQuery, pathname]);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     const q = searchQuery.trim();
-    setSearchOpen(false);
     setNavigationOpen(false);
+    if (pathname.startsWith("/shop")) {
+      const usp = new URLSearchParams(window.location.search);
+      if (q) usp.set("q", q);
+      else usp.delete("q");
+      usp.delete("page");
+      applyShopQuery(pathname, usp.toString());
+      return;
+    }
     if (q.length > 0) {
       router.push(`/shop?q=${encodeURIComponent(q)}`);
     } else {
       router.push("/shop");
     }
-  }
-
-  function toggleSearch() {
-    setSearchOpen((o) => !o);
   }
 
   async function handleLogout() {
@@ -253,9 +236,9 @@ const MainHeader = ({
           }`}
       >
         {/* Announcement bar */}
-        <div className="bg-[#0c1220] py-2.5 border-b border-white/[0.08]">
-          <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0">
-            <div className="flex items-center justify-between gap-3">
+        <div className="bg-[#0c1220] py-2.5 border-b border-white/[0.08]" suppressHydrationWarning>
+          <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
+            <div className="flex items-center justify-between gap-3" suppressHydrationWarning>
               <p className="text-xs sm:text-sm font-medium text-white">
                 {utilityAnnouncement?.body ? (
                   utilityAnnouncement.linkUrl ? (
@@ -280,7 +263,7 @@ const MainHeader = ({
                   </>
                 ) : null}
               </p>
-              <div className="flex min-w-[80px] shrink-0 items-center justify-end text-right">
+              <div className="flex min-w-[80px] shrink-0 items-center justify-end text-right" suppressHydrationWarning>
                 {userName ? (
                   <span className="text-xs sm:text-sm font-medium text-white">
                     Welcome, {userName}!
@@ -299,8 +282,8 @@ const MainHeader = ({
         </div>
 
         {/* Running promo banner — min height avoids CLS when DB-driven copy length changes */}
-        <div className="flex min-h-[2.75rem] flex-col justify-center overflow-hidden border-b border-blue-dark bg-blue">
-          <div className="relative">
+        <div className="flex min-h-[2.75rem] flex-col justify-center overflow-hidden border-b border-blue-dark bg-blue" suppressHydrationWarning>
+          <div className="relative" suppressHydrationWarning>
             {(() => {
               const items =
                 marqueeAnnouncements && marqueeAnnouncements.length > 0
@@ -318,9 +301,9 @@ const MainHeader = ({
                       { body: "New arrivals added weekly", linkUrl: null },
                     ];
               return (
-                <div className="marquee-track py-2 text-xs sm:text-sm font-medium text-white">
+                <div className="marquee-track py-2 text-xs sm:text-sm font-medium text-white" suppressHydrationWarning>
                   {[0, 1].map((copyIdx) => (
-                    <div key={copyIdx} className="marquee-group">
+                    <div key={copyIdx} className="marquee-group" suppressHydrationWarning>
                       {items.map((item, idx) => (
                         <span key={`${copyIdx}-${idx}`} className="mx-6">
                           {item.linkUrl ? (
@@ -344,11 +327,11 @@ const MainHeader = ({
         </div>
 
         {/* Main Header */}
-        <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0">
-          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:min-h-0 xl:py-0">
+        <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
+          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:min-h-0 xl:py-0" suppressHydrationWarning>
             {/* Left: mobile menu + search | desktop logo + nav */}
-            <div className="z-10 flex min-w-[5rem] shrink-0 items-center gap-2 xl:min-w-0 xl:gap-8">
-              <div className="flex items-center gap-2 xl:hidden">
+            <div className="z-10 flex min-w-[5rem] shrink-0 items-center gap-2 xl:min-w-0 xl:gap-8" suppressHydrationWarning>
+              <div className="flex items-center gap-2 xl:hidden" suppressHydrationWarning>
                 <button
                   type="button"
                   className="inline-flex h-9 w-9 items-center justify-center transition hover:text-blue focus:outline-none"
@@ -358,7 +341,7 @@ const MainHeader = ({
                   {navigationOpen ? <CloseIcon /> : <MenuIcon />}
                 </button>
               </div>
-              <div className="hidden items-center gap-8 xl:flex">
+              <div className="hidden items-center gap-8 xl:flex" suppressHydrationWarning>
                 <Link className="block shrink-0 py-2" href="/">
                   <Image
                     src={headerData?.headerLogo || DEFAULT_HEADER_LOGO}
@@ -366,6 +349,7 @@ const MainHeader = ({
                     width={160}
                     height={160}
                     className="h-14 w-auto xl:h-16"
+                    style={{ width: "auto" }}
                     loading="eager"
                     sizes="160px"
                   />
@@ -381,7 +365,7 @@ const MainHeader = ({
             </div>
 
             {/* Center logo — mobile only */}
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center xl:hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center xl:hidden" suppressHydrationWarning>
               <Link className="pointer-events-auto block py-1" href="/">
                 <Image
                   src={headerData?.headerLogo || DEFAULT_HEADER_LOGO}
@@ -389,6 +373,7 @@ const MainHeader = ({
                   width={160}
                   height={160}
                   className="h-9 w-auto max-h-9 sm:h-10 sm:max-h-10"
+                  style={{ width: "auto" }}
                   loading="eager"
                   sizes="(max-width: 1280px) 120px, 160px"
                 />
@@ -396,7 +381,7 @@ const MainHeader = ({
             </div>
 
             {/* Right: desktop search + account + cart | mobile cart + account */}
-            <div className="z-10 flex min-w-[5rem] shrink-0 items-center justify-end gap-1 xl:min-w-0 xl:gap-2">
+            <div className="z-10 flex min-w-[5rem] shrink-0 items-center justify-end gap-1 xl:min-w-0 xl:gap-2" suppressHydrationWarning>
               {/* Desktop: input expands to the left of the search icon */}
               <form
                 data-shop-search-ui
@@ -446,6 +431,7 @@ const MainHeader = ({
 
               <div
                 className="relative"
+                suppressHydrationWarning
                 onMouseEnter={() => {
                   if (isDesktop) setAccountOpen(true);
                 }}
@@ -472,6 +458,7 @@ const MainHeader = ({
                   className={`absolute right-0 top-full z-20 w-44 rounded-lg border border-gray-3 bg-white p-2 shadow-lg transition ${
                     accountOpen ? "visible opacity-100" : "invisible opacity-0"
                   }`}
+                  suppressHydrationWarning
                 >
                   <Link
                     href={userName ? "/account" : "/login"}
@@ -508,27 +495,6 @@ const MainHeader = ({
             </div>
           </div>
 
-          {/* Mobile: search always visible below the header row */}
-          <form
-            data-shop-search-ui
-            onSubmit={handleSearchSubmit}
-            className="relative mx-auto max-w-7xl border-t border-gray-3 px-4 py-2 sm:px-6 xl:hidden"
-          >
-            <input
-              ref={searchInputMobileRef}
-              type="search"
-              name="q"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search products…"
-              autoComplete="off"
-              aria-label="Search products"
-              className="min-h-[40px] w-full rounded-lg border border-gray-3 bg-white py-2 pl-3 pr-9 text-sm text-dark outline-none focus:border-blue"
-            />
-            <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-meta-4 sm:right-9">
-              <SearchIcon />
-            </span>
-          </form>
         </div>
       </header>
 
@@ -543,6 +509,10 @@ const MainHeader = ({
             ? [{ title: "Home", path: "/" }, ...menuData]
             : menuData
         }
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        searchInputRef={searchInputMobileRef}
       />
     </>
   );

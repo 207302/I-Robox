@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
+import { useMarketingAdminDeferred } from "./MarketingAdminContext";
 
 type SiteSettingsRow = {
   id?: string;
@@ -54,8 +55,6 @@ type Initial = {
   brandRail: unknown[];
   categoryTiles: unknown[];
   announcements: unknown[];
-  popups: unknown[];
-  flashSales: unknown[];
   settings: SiteSettingsRow | null;
   categories: { id: string; name: string; slug: string }[];
   products: {
@@ -66,13 +65,6 @@ type Initial = {
     discounted_price: number | string | null;
   }[];
   brands: { id: string; name: string; slug: string }[];
-  coupons: {
-    id: string;
-    code: string;
-    discount_type: string;
-    discount_value: number;
-    is_active: boolean;
-  }[];
 };
 
 async function j<T>(res: Response): Promise<T> {
@@ -140,6 +132,11 @@ function HeroOverlayColorField({
 
 export default function MarketingAdminClient({ initial }: { initial: Initial }) {
   const router = useRouter();
+  const {
+    popups: deferredPopups,
+    flashSales: deferredFlashSales,
+    coupons: deferredCoupons,
+  } = useMarketingAdminDeferred();
   const [tab, setTab] = useState<
     | "hero"
     | "highlights"
@@ -155,8 +152,16 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [brandRailRows, setBrandRailRows] = useState(initial.brandRail);
   const [categoryGridRows, setCategoryGridRows] = useState(initial.categoryTiles);
   const [announcements, setAnnouncements] = useState(initial.announcements);
-  const [popups, setPopups] = useState(initial.popups);
-  const [flashSales, setFlashSales] = useState(initial.flashSales);
+  const [popups, setPopups] = useState<unknown[]>([]);
+  const [flashSales, setFlashSales] = useState<unknown[]>([]);
+
+  useEffect(() => {
+    setPopups(deferredPopups);
+  }, [deferredPopups]);
+
+  useEffect(() => {
+    setFlashSales(deferredFlashSales);
+  }, [deferredFlashSales]);
   const [firstVisit, setFirstVisit] = useState(initial.settings?.first_visit_coupon_code ?? "");
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(() => {
     const raw = initial.settings?.free_shipping_threshold_inr;
@@ -242,7 +247,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const cats = initial.categories;
   const prods = initial.products;
   const brands = initial.brands;
-  const coupons = initial.coupons;
+  const coupons = deferredCoupons;
   const quickLinkFieldMap: Record<
     QuickLinkPageAdminKey,
     { title: keyof SiteSettingsRow; subtitle: keyof SiteSettingsRow; content: keyof SiteSettingsRow; label: string }

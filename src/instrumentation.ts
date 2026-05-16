@@ -1,10 +1,9 @@
 export async function register() {
-  const disconnect = async () => {
-    const { prisma } = await import("@/lib/prisma");
-    await prisma.$disconnect();
-  };
-
-  process.on("SIGINT", () => void disconnect());
-  process.on("SIGTERM", () => void disconnect());
-  process.on("beforeExit", () => void disconnect());
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { prisma } = await import('@/lib/prisma')
+    const disconnect = () => void prisma.$disconnect()
+    process.on('SIGINT', disconnect)
+    process.on('SIGTERM', disconnect)
+    process.on('beforeExit', disconnect)
+  }
 }

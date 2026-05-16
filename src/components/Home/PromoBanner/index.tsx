@@ -28,7 +28,7 @@ const PromoBanner = () => {
             subtitle="Apple Watch Ultra"
             title="Up to 40% off"
             description="The aerospace-grade titanium case strikes the perfect balance of everything."
-            link="/products/apple-watch-ultra"
+            link="/shop/apple-watch-ultra"
             buttonText="Grab the deal"
           />
         </div>

@@ -1,12 +1,23 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 
-const paymentsData = [
+type PaymentIcon = {
+  id: number;
+  image: string;
+  alt: string;
+  width: number;
+  height: number;
+  style?: CSSProperties;
+};
+
+const paymentsData: PaymentIcon[] = [
   {
     id: 1,
     image: "/images/payment/payment-01.svg",
     alt: "visa card",
     width: 66,
     height: 22,
+    style: { width: "auto", height: "auto" },
   },
   {
     id: 2,
@@ -14,6 +25,7 @@ const paymentsData = [
     alt: "paypal",
     width: 18,
     height: 21,
+    style: { width: "auto", height: "auto" },
   },
   {
     id: 3,
@@ -21,6 +33,7 @@ const paymentsData = [
     alt: "master card",
     width: 33,
     height: 24,
+    style: { width: "auto", height: "auto" },
   },
   {
     id: 4,
@@ -35,6 +48,7 @@ const paymentsData = [
     alt: "google pay",
     width: 56,
     height: 22,
+    style: { width: "auto", height: "auto" },
   },
 ];
 
@@ -74,6 +88,7 @@ export default function FooterBottom() {
                   alt={payment.alt}
                   width={payment.width}
                   height={payment.height}
+                  style={payment.style}
                 />
               ))}
             </div>

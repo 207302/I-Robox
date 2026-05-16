@@ -1,8 +1,15 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 import { cleanText, hasSuspiciousInput, isUrlSlug } from "@/lib/validation/input";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
+import {
+  computeDiscountBucketsForProductIds,
+  discountBucketsFromCounts,
+  getCachedDiecastScales,
+  getCachedGlobalDiscountBuckets,
+  paginateDiscountFilteredProductIds,
+} from "@/lib/shop/shopFacets";
 
 export type ShopListingItem = {
   id: string;
@@ -60,48 +67,182 @@ function facetWhereFrom(base: Record<string, unknown>): Prisma.productsWhereInpu
   };
 }
 
-function normalizeLooseSearchText(input: string): string {
-  return input.toLowerCase().replace(/[^a-z0-9]/g, "");
+function normalizeSearchTerm(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-function levenshteinDistance(a: string, b: string): number {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
-  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
-    }
-  }
-  return dp[a.length][b.length];
+function escapeIlikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, "\\$&");
 }
 
-function fuzzySearchScore(query: string, fields: Array<string | null | undefined>): number {
-  const q = normalizeLooseSearchText(query);
-  if (!q) return 0;
-  let best = 0;
-  for (const raw of fields) {
-    const t = normalizeLooseSearchText(raw ?? "");
-    if (!t) continue;
-    if (t.includes(q) || q.includes(t)) {
-      best = Math.max(best, 1);
-      continue;
+function getSearchVariants(raw: string): string[] {
+  const trimmed = raw.trim();
+  const noSpaces = trimmed.replace(/\s+/g, "");
+  const withSpaces = trimmed.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const spaced = noSpaces.replace(/([a-z]{2,})([a-z])/g, (_, a, b) => `${a} ${b}`);
+
+  return [...new Set([trimmed, noSpaces, withSpaces, spaced])].filter(Boolean);
+}
+
+/** Step 1: space-stripped + spaced ILIKE on product, brand, category (and descriptions). */
+async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> {
+  const compact = normalizeSearchTerm(rawQ);
+  const spaced = rawQ.toLowerCase().trim();
+  if (!compact && !spaced) return [];
+
+  const compactPattern = `%${escapeIlikePattern(compact)}%`;
+  const spacedPattern = `%${escapeIlikePattern(spaced)}%`;
+
+  const extraSpacedPatterns = getSearchVariants(rawQ)
+    .map((v) => v.toLowerCase().trim())
+    .filter((v) => v.length > 0 && v !== spaced && v !== compact)
+    .slice(0, 4)
+    .map((v) => `%${escapeIlikePattern(v)}%`);
+
+  const extraClauseParts = extraSpacedPatterns.flatMap((pattern) => [
+    Prisma.sql`OR LOWER(p.name) ILIKE ${pattern}`,
+    Prisma.sql`OR LOWER(COALESCE(b.name, '')) ILIKE ${pattern}`,
+    Prisma.sql`OR LOWER(COALESCE(p.short_description, '')) ILIKE ${pattern}`,
+  ]);
+  const extraClauses =
+    extraClauseParts.length > 0 ? Prisma.join(extraClauseParts, " ") : Prisma.sql``;
+
+  const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+    SELECT DISTINCT p.id
+    FROM products p
+    LEFT JOIN brands b ON p.brand_id = b.id
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.is_active = true
+      AND (
+        LOWER(REPLACE(p.name, ' ', '')) ILIKE ${compactPattern}
+        OR LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')) ILIKE ${compactPattern}
+        OR LOWER(REPLACE(COALESCE(p.description, ''), ' ', '')) ILIKE ${compactPattern}
+        OR LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')) ILIKE ${compactPattern}
+        OR LOWER(REPLACE(COALESCE(c.name, ''), ' ', '')) ILIKE ${compactPattern}
+        OR LOWER(p.name) ILIKE ${spacedPattern}
+        OR LOWER(COALESCE(p.short_description, '')) ILIKE ${spacedPattern}
+        OR LOWER(COALESCE(p.description, '')) ILIKE ${spacedPattern}
+        OR LOWER(COALESCE(b.name, '')) ILIKE ${spacedPattern}
+        OR LOWER(COALESCE(c.name, '')) ILIKE ${spacedPattern}
+        ${extraClauses}
+      )
+    LIMIT 200
+  `);
+  return rows.map((r) => r.id);
+}
+
+/** Step 2: search_vector full-text (stemming / token match). */
+async function resolveFtsSearchIds(rawQ: string): Promise<string[]> {
+  const variants = getSearchVariants(rawQ).filter((v) => /[a-z0-9]/i.test(v));
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const term of variants.slice(0, 5)) {
+    try {
+      const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT p.id
+        FROM products p
+        WHERE p.is_active = true
+          AND p.search_vector @@ plainto_tsquery('english', ${term})
+        ORDER BY ts_rank(p.search_vector, plainto_tsquery('english', ${term})) DESC
+        LIMIT 200
+      `);
+      for (const row of rows) {
+        if (!seen.has(row.id)) {
+          seen.add(row.id);
+          ids.push(row.id);
+          if (ids.length >= 200) return ids;
+        }
+      }
+    } catch {
+      // plainto_tsquery can fail on odd tokens; try next variant
     }
-    const windowLen = Math.min(Math.max(q.length, 4), t.length);
-    let localBest = 0;
-    for (let i = 0; i + windowLen <= t.length; i++) {
-      const win = t.slice(i, i + windowLen);
-      const d = levenshteinDistance(q, win);
-      const score = 1 - d / Math.max(q.length, windowLen);
-      if (score > localBest) localBest = score;
-    }
-    best = Math.max(best, localBest);
   }
-  return best;
+  return ids;
+}
+
+/** Step 3: pg_trgm typo tolerance on normalized names (requires migration extension). */
+async function resolveTrigramSearchIds(rawQ: string): Promise<string[]> {
+  const compact = normalizeSearchTerm(rawQ);
+  if (compact.length < 3) return [];
+
+  const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+    SELECT p.id
+    FROM products p
+    LEFT JOIN brands b ON p.brand_id = b.id
+    WHERE p.is_active = true
+      AND (
+        similarity(LOWER(REPLACE(p.name, ' ', '')), ${compact}) > 0.3
+        OR similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}) > 0.3
+        OR similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact}) > 0.3
+      )
+    ORDER BY GREATEST(
+      similarity(LOWER(REPLACE(p.name, ' ', '')), ${compact}),
+      similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}),
+      similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact})
+    ) DESC
+    LIMIT 100
+  `);
+  return rows.map((r) => r.id);
+}
+
+/** Step 4: SKU exact match (product or variant). */
+async function resolveSkuSearchIds(term: string): Promise<string[]> {
+  const skuRows = await prisma.products.findMany({
+    where: {
+      is_active: true,
+      OR: [
+        { sku: { equals: term, mode: "insensitive" } },
+        { product_variants: { some: { sku: { equals: term, mode: "insensitive" } } } },
+      ],
+    },
+    select: { id: true },
+    take: 200,
+  });
+  return skuRows.map((r) => r.id);
+}
+
+/**
+ * Search waterfall — first non-empty result wins:
+ * 1. Normalized ILIKE (hotwheels ↔ Hot Wheels)
+ * 2. search_vector FTS
+ * 3. Trigram similarity (typos)
+ * 4. SKU exact
+ */
+async function resolveSearchProductIds(searchTerm: string): Promise<string[]> {
+  const rawQ = searchTerm.trim();
+  if (!rawQ) return [];
+
+  try {
+    const normalized = await resolveNormalizedIlikeSearchIds(rawQ);
+    if (normalized.length > 0) return normalized;
+  } catch (err) {
+    console.error("[shopListing] normalized ILIKE search failed", err);
+  }
+
+  try {
+    const fts = await resolveFtsSearchIds(rawQ);
+    if (fts.length > 0) return fts;
+  } catch (err) {
+    console.error("[shopListing] full-text search failed", err);
+  }
+
+  try {
+    const trgm = await resolveTrigramSearchIds(rawQ);
+    if (trgm.length > 0) return trgm;
+  } catch (err) {
+    console.error("[shopListing] trigram search failed", err);
+  }
+
+  try {
+    return await resolveSkuSearchIds(rawQ);
+  } catch (err) {
+    console.error("[shopListing] SKU search failed", err);
+    return [];
+  }
 }
 
 /**
@@ -367,35 +508,27 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
 
   const where: Record<string, unknown> = { is_active: true };
   if (q) {
-    const compact = normalizeLooseSearchText(q);
-    const tokens = q
-      .split(/\s+/)
-      .map((token) => token.trim())
-      .filter(Boolean)
-      .slice(0, 8);
-    where.AND = [...((where.AND as unknown[]) ?? [])];
-    where.OR = [
-      { name: { contains: q, mode: "insensitive" } },
-      { description: { contains: q, mode: "insensitive" } },
-      { short_description: { contains: q, mode: "insensitive" } },
-      { sku: { contains: q, mode: "insensitive" } },
-      { brands: { is: { name: { contains: q, mode: "insensitive" } } } },
-      { categories: { is: { name: { contains: q, mode: "insensitive" } } } },
-      ...(compact
-        ? [
-            { name: { contains: compact, mode: "insensitive" as const } },
-            { sku: { contains: compact, mode: "insensitive" as const } },
-          ]
-        : []),
-      ...tokens.flatMap((token) => [
-        { name: { contains: token, mode: "insensitive" as const } },
-        { description: { contains: token, mode: "insensitive" as const } },
-        { short_description: { contains: token, mode: "insensitive" as const } },
-        { sku: { contains: token, mode: "insensitive" as const } },
-        { brands: { is: { name: { contains: token, mode: "insensitive" as const } } } },
-        { categories: { is: { name: { contains: token, mode: "insensitive" as const } } } },
-      ]),
-    ];
+    const searchIds = await resolveSearchProductIds(q);
+    if (searchIds.length === 0) {
+      return {
+        ok: true,
+        data: {
+          page,
+          pageSize,
+          total: 0,
+          totalPages: 1,
+          ageGroups: [],
+          diecastScales: [],
+          brands: [],
+          productTypes: [],
+          productSubtypes: [],
+          productCollections: [],
+          discountBuckets: discountBucketsFromCounts(await getCachedGlobalDiscountBuckets()),
+          items: [],
+        },
+      };
+    }
+    where.id = { in: searchIds };
   }
   if (ageGroups.length) where.age_group = { in: ageGroups };
   const diecastNorms: string[] = [];
@@ -628,7 +761,20 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         ? { base_price: "desc" }
         : { updated_at: "desc" };
 
-  const [ageGroupsRaw, diecastScalesRaw, typeGroups, subGroups, colGroups, brandIdGroups, leanForBuckets] =
+  const hasHeavyFilters =
+    Boolean(q) ||
+    categorySlugs.length > 0 ||
+    brandSlugs.length > 0 ||
+    ageGroups.length > 0 ||
+    diecastNorms.length > 0 ||
+    typeSlugs.length > 0 ||
+    subtypeSlugs.length > 0 ||
+    collectionSlugs.length > 0 ||
+    minP !== null ||
+    maxP !== null ||
+    availableOnly;
+
+  const [ageGroupsRaw, typeGroups, subGroups, colGroups, brandIdGroups, diecastScalesCached, discountBucketCounts] =
     await Promise.all([
       prisma.products.findMany({
         where: { ...wNoAge, age_group: { not: null } },
@@ -636,7 +782,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         select: { age_group: true },
         orderBy: { age_group: "asc" },
       }),
-      prisma.diecast_scales.findMany({ select: { ratio: true }, orderBy: { ratio: "asc" } }),
       prisma.products.groupBy({
         by: ["type_id"],
         where: { ...wNoType, type_id: { not: null } } as never,
@@ -663,17 +808,12 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         where: { ...brandFacetWhere, brand_id: { not: null } } as never,
         _count: { _all: true },
       }),
-      prisma.products.findMany({
-        where: fw,
-        take: 8000,
-        select: {
-          base_price: true,
-          discounted_price: true,
-          flash_sale_products: {
-            select: { sale_price: true, is_active: true, active_from: true, active_until: true },
-          },
-        },
-      }),
+      getCachedDiecastScales(),
+      hasHeavyFilters
+        ? prisma.products
+            .findMany({ where: fw, select: { id: true } })
+            .then((rows) => computeDiscountBucketsForProductIds(rows.map((r) => r.id)))
+        : getCachedGlobalDiscountBuckets(),
     ]);
 
   const typeIdList = typeGroups
@@ -723,38 +863,7 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
     count: cCount.get(r.id) ?? 0,
   }));
 
-  const bucket = { b10: 0, b25: 0, b50: 0, b100: 0, on_sale: 0 };
-  for (const r of leanForBuckets) {
-    const pct = percentOffFromRow(
-      {
-        base_price: r.base_price,
-        discounted_price: r.discounted_price,
-        flash_sale_products: r.flash_sale_products
-          ? {
-              is_active: r.flash_sale_products.is_active,
-              active_from: r.flash_sale_products.active_from,
-              active_until: r.flash_sale_products.active_until,
-              sale_price: r.flash_sale_products.sale_price,
-            }
-          : null,
-      },
-      now
-    );
-    if (pct > 0.1) {
-      bucket.on_sale += 1;
-      if (pct > 0.1 && pct <= 10.0001) bucket.b10 += 1;
-      if (pct > 10.0001 && pct <= 25.0001) bucket.b25 += 1;
-      if (pct > 25.0001 && pct <= 50.0001) bucket.b50 += 1;
-      if (pct > 50.0001) bucket.b100 += 1;
-    }
-  }
-  const discountBuckets = [
-    { id: "on_sale", label: "On sale", count: bucket.on_sale },
-    { id: "b10", label: "Up to 10% off", count: bucket.b10 },
-    { id: "b25", label: "10% – 25% off", count: bucket.b25 },
-    { id: "b50", label: "25% – 50% off", count: bucket.b50 },
-    { id: "b100", label: "50%+ off", count: bucket.b100 },
-  ];
+  const discountBuckets = discountBucketsFromCounts(discountBucketCounts);
 
   const brandIdsFromGroups = brandIdGroups.map((g) => g.brand_id).filter((v): v is string => v !== null);
   const brandsIfAny = brandIdsFromGroups.length
@@ -772,122 +881,58 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   }));
   const brandsRaw = brandsWithCounts;
 
+  const listingSelect = {
+    id: true,
+    name: true,
+    short_description: true,
+    description: true,
+    base_price: true,
+    discounted_price: true,
+    age_group: true,
+    diecast_scales: { select: { ratio: true } },
+    slug: true,
+    updated_at: true,
+    sku: true,
+    shipping_per_unit: true,
+    product_images: { select: { url: true, sort_order: true } },
+    product_variants: {
+      select: {
+        name: true,
+        color: true,
+        size: true,
+        is_default: true,
+        product_images: { select: { url: true }, orderBy: { sort_order: "asc" as const }, take: 1 },
+      },
+    },
+    inventory: { select: { available_quantity: true } },
+  } as const;
+
   let total: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let products: any[];
 
   if (discountParams.length > 0) {
-    const leanAll = await prisma.products.findMany({
+    const candidateRows = await prisma.products.findMany({
       where: where as never,
-      select: {
-        id: true,
-        name: true,
-        short_description: true,
-        description: true,
-        base_price: true,
-        discounted_price: true,
-        age_group: true,
-        diecast_scales: { select: { ratio: true } },
-        slug: true,
-        updated_at: true,
-        sku: true,
-        shipping_per_unit: true,
-        product_images: { select: { url: true, sort_order: true } },
-        product_variants: {
-          select: {
-            name: true,
-            color: true,
-            size: true,
-            is_default: true,
-            product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
-          },
-        },
-        inventory: { select: { available_quantity: true } },
-        flash_sale_products: {
-          select: { sale_price: true, is_active: true, active_from: true, active_until: true },
-        },
-      },
+      select: { id: true },
     });
-    const picked = leanAll
-      .filter((p) => {
-        if (availableOnly && !productHasStock(p.inventory)) return false;
-        const pct = percentOffFromRow(
-          {
-            base_price: p.base_price,
-            discounted_price: p.discounted_price,
-            flash_sale_products: p.flash_sale_products
-              ? {
-                  is_active: p.flash_sale_products.is_active,
-                  active_from: p.flash_sale_products.active_from,
-                  active_until: p.flash_sale_products.active_until,
-                  sale_price: p.flash_sale_products.sale_price,
-                }
-              : null,
-          },
-          now
-        );
-        return discountParams.some((key) => matchesDiscountFilter(pct, key));
-      });
-    picked.sort((a, b) => {
-      if (sortPrice === "price_asc" || sortPrice === "price_desc") {
-        const ea =
-          a.flash_sale_products && isActiveInWindow(
-            a.flash_sale_products.is_active,
-            a.flash_sale_products.active_from,
-            a.flash_sale_products.active_until,
-            now
-          )
-            ? Number(a.flash_sale_products.sale_price)
-            : a.discounted_price
-              ? Number(a.discounted_price)
-              : Number(a.base_price);
-        const eb =
-          b.flash_sale_products && isActiveInWindow(
-            b.flash_sale_products.is_active,
-            b.flash_sale_products.active_from,
-            b.flash_sale_products.active_until,
-            now
-          )
-            ? Number(b.flash_sale_products.sale_price)
-            : b.discounted_price
-              ? Number(b.discounted_price)
-              : Number(b.base_price);
-        return sortPrice === "price_asc" ? ea - eb : eb - ea;
-      }
-      return b.updated_at.getTime() - a.updated_at.getTime();
+    const candidateIds = candidateRows.map((r) => r.id);
+    const sortPriceKey =
+      sortPrice === "price_asc" ? "price_asc" : sortPrice === "price_desc" ? "price_desc" : null;
+    const { ids: pageIds, total: discountTotal } = await paginateDiscountFilteredProductIds({
+      candidateIds,
+      discountKeys: discountParams,
+      skip,
+      take: pageSize,
+      sortPrice: sortPriceKey,
     });
-    total = picked.length;
-    const pageIds = picked.slice(skip, skip + pageSize).map((p) => p.id);
+    total = discountTotal;
     if (pageIds.length === 0) {
       products = [];
     } else {
       const reordered = await prisma.products.findMany({
         where: { id: { in: pageIds } },
-        select: {
-          id: true,
-          name: true,
-          short_description: true,
-          description: true,
-          base_price: true,
-          discounted_price: true,
-          age_group: true,
-          diecast_scales: { select: { ratio: true } },
-          slug: true,
-          updated_at: true,
-          sku: true,
-          shipping_per_unit: true,
-          product_images: { select: { url: true, sort_order: true } },
-          product_variants: {
-            select: {
-              name: true,
-              color: true,
-              size: true,
-              is_default: true,
-              product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
-            },
-          },
-          inventory: { select: { available_quantity: true } },
-        },
+        select: listingSelect,
       });
       const order = new Map(pageIds.map((id, i) => [id, i] as const));
       reordered.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
@@ -901,31 +946,7 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         orderBy,
         skip,
         take: pageSize,
-        select: {
-          id: true,
-          name: true,
-          short_description: true,
-          description: true,
-          base_price: true,
-          discounted_price: true,
-          age_group: true,
-          diecast_scales: { select: { ratio: true } },
-          slug: true,
-          updated_at: true,
-          sku: true,
-          shipping_per_unit: true,
-          product_images: { select: { url: true, sort_order: true } },
-          product_variants: {
-            select: {
-              name: true,
-              color: true,
-              size: true,
-              is_default: true,
-              product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
-            },
-          },
-          inventory: { select: { available_quantity: true } },
-        },
+        select: listingSelect,
       }),
     ]);
     total = c;
@@ -950,55 +971,8 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
     }
   }
 
-  const items = mapProductsToItems(products, flashMap);
-  let finalItems = items;
-  let finalTotal = total;
-
-  if (q && items.length === 0 && discountParams.length === 0) {
-    const fuzzyWhere = { ...(where as Record<string, unknown>) };
-    delete fuzzyWhere.OR;
-    const fuzzyCandidates = await prisma.products.findMany({
-      where: fuzzyWhere as never,
-      take: 400,
-      select: {
-        id: true,
-        name: true,
-        short_description: true,
-        description: true,
-        base_price: true,
-        discounted_price: true,
-        age_group: true,
-        diecast_scales: { select: { ratio: true } },
-        slug: true,
-        updated_at: true,
-        sku: true,
-        shipping_per_unit: true,
-        product_images: { select: { url: true, sort_order: true } },
-        product_variants: {
-          select: {
-            name: true,
-            color: true,
-            size: true,
-            is_default: true,
-            product_images: { select: { url: true }, orderBy: { sort_order: "asc" }, take: 1 },
-          },
-        },
-        inventory: { select: { available_quantity: true } },
-      },
-    });
-    const scored = fuzzyCandidates
-      .map((p) => ({
-        p,
-        score: fuzzySearchScore(q, [p.name, p.short_description, p.description, p.sku]),
-      }))
-      .filter((x) => x.score >= 0.66)
-      .sort((a, b) => b.score - a.score || b.p.updated_at.getTime() - a.p.updated_at.getTime());
-    if (scored.length > 0) {
-      const paged = scored.slice(skip, skip + pageSize).map((x) => x.p);
-      finalItems = mapProductsToItems(paged, flashMap);
-      finalTotal = scored.length;
-    }
-  }
+  const finalItems = mapProductsToItems(products, flashMap);
+  const finalTotal = total;
 
   let brandsForUi = brandsRaw.map((b) => ({
     slug: b.slug,
@@ -1029,8 +1003,7 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         .map((x) => x.age_group)
         .filter((v): v is string => typeof v === "string" && v.trim().length > 0),
       diecastScales: (() => {
-        const fromDb = diecastScalesRaw.map((x) => x.ratio).filter(Boolean);
-        const merged = [...new Set([...diecastNorms, ...fromDb])];
+        const merged = [...new Set([...diecastNorms, ...diecastScalesCached])];
         return merged.sort((a, b) => {
           const na = parseInt(a.replace(/^1:/i, ""), 10);
           const nb = parseInt(b.replace(/^1:/i, ""), 10);
@@ -1045,50 +1018,4 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
       items: finalItems,
     },
   };
-}
-
-function percentOffFromRow(
-  row: {
-    base_price: { toString(): string } | number;
-    discounted_price: { toString(): string } | number | null;
-    flash_sale_products: {
-      is_active: boolean;
-      active_from: Date | null;
-      active_until: Date | null;
-      sale_price: { toString(): string } | number;
-    } | null;
-  },
-  now: Date
-): number {
-  const base = Number(row.base_price);
-  if (!Number.isFinite(base) || base <= 0) return 0;
-  const f = row.flash_sale_products;
-  let eff = base;
-  if (f && isActiveInWindow(f.is_active, f.active_from, f.active_until, now)) {
-    eff = Number(f.sale_price);
-  } else if (row.discounted_price) {
-    eff = Number(row.discounted_price);
-  } else {
-    eff = base;
-  }
-  const p = ((base - eff) / base) * 100;
-  return p > 0.05 ? p : 0;
-}
-
-function productHasStock(
-  inv: { available_quantity: number }[] | { available_quantity: number } | null | undefined
-) {
-  if (!inv) return false;
-  if (Array.isArray(inv)) return inv.reduce((s, r) => s + (r?.available_quantity ?? 0), 0) > 0;
-  return (inv as { available_quantity: number }).available_quantity > 0;
-}
-
-function matchesDiscountFilter(pct: number, key: string): boolean {
-  if (!key) return true;
-  if (key === "on_sale") return pct > 0.1;
-  if (key === "b10") return pct > 0.1 && pct <= 10.0001;
-  if (key === "b25") return pct > 10.0001 && pct <= 25.0001;
-  if (key === "b50") return pct > 25.0001 && pct <= 50.0001;
-  if (key === "b100") return pct > 50.0001;
-  return true;
 }

@@ -12,7 +12,7 @@ const SingleItem = ({ item }: any) => {
   };
 
   const handleProductClick = () => {
-    router.push(`/products/${item.slug}`);
+    router.push(`/shop/${item.slug}`);
     setTimeout(() => {
       handleCartClick();
     }, 500);

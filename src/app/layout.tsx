@@ -39,7 +39,7 @@ export default async function RootLayout({
 }) {
   const seoSettings = await getSeoSettings();
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <head>
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />

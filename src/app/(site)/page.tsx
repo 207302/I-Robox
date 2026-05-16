@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
-import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+import { getCategoriesForHome } from "@/lib/queries/catalog";
+import { getSiteMarketingSettingsForHome } from "@/lib/queries/marketing";
 import { getBestSellingProducts, getNewArrivalsProduct } from "@/get-api-data/product";
 import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import Home, {
@@ -61,16 +62,11 @@ export default async function HomePage() {
       })
     );
 
-  const [
-    slidesRaw,
-    highlightsRaw,
-    brandRailRaw,
-    categoryTilesRaw,
-    categoriesRaw,
-    newArrivalsRaw,
-    bestSellersRaw,
-    siteMarketingSettings,
-  ] = await withPrismaRetry(() =>
+  const [siteMarketingSettings, categoriesRaw] = await withPrismaRetry(() =>
+    Promise.all([getSiteMarketingSettingsForHome(), getCategoriesForHome()])
+  );
+
+  const [slidesRaw, highlightsRaw, brandRailRaw, categoryTilesRaw] = await withPrismaRetry(() =>
     Promise.all([
       prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }).catch(() => []),
       highlightsPromise,
@@ -86,32 +82,11 @@ export default async function HomePage() {
           include: { categories: { select: { id: true, name: true, slug: true } } },
         })
         .catch(() => []),
-      prisma.categories.findMany({
-        orderBy: { name: "asc" },
-        take: 8,
-        select: { id: true, name: true, slug: true },
-      }),
-      getNewArrivalsProduct(),
-      getBestSellingProducts(),
-      prisma.site_marketing_settings
-        .findUnique({
-          where: { id: SITE_MARKETING_SETTINGS_ID },
-          select: {
-            highlights_section_eyebrow: true,
-            highlights_section_heading: true,
-            hero_overlay_eyebrow: true,
-            hero_overlay_heading: true,
-            hero_overlay_subheading: true,
-            hero_overlay_cta_label: true,
-            hero_overlay_cta_href: true,
-            hero_overlay_eyebrow_color: true,
-            hero_overlay_heading_color: true,
-            hero_overlay_subheading_color: true,
-            hero_overlay_cta_label_color: true,
-          },
-        })
-        .catch(() => null),
     ])
+  );
+
+  const [newArrivalsRaw, bestSellersRaw] = await withPrismaRetry(() =>
+    Promise.all([getNewArrivalsProduct(), getBestSellingProducts()])
   );
 
   const highlightsSectionEyebrow =

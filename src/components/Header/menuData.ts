@@ -37,7 +37,6 @@ export function buildHeaderMenuData(nav: HeaderNavData): MenuItem[] {
         };
 
   return [
-    { title: "Popular", path: "/popular?sort=popular" },
     { title: "Shop", path: "/shop" },
     categoriesMenu,
     brandsMenu,

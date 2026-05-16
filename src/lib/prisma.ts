@@ -6,15 +6,9 @@ function normalizeDatabaseUrl(raw: string, opts?: { pooled?: boolean }) {
     if (!u.searchParams.has("sslmode")) {
       u.searchParams.set("sslmode", "require");
     }
-    if (!u.searchParams.has("connect_timeout")) {
-      u.searchParams.set("connect_timeout", "30");
-    }
-    if (!u.searchParams.has("connection_limit")) {
-      u.searchParams.set("connection_limit", "5");
-    }
-    if (!u.searchParams.has("pool_timeout")) {
-      u.searchParams.set("pool_timeout", "10");
-    }
+    u.searchParams.set("connect_timeout", "15");
+    u.searchParams.set("connection_limit", "15");
+    u.searchParams.set("pool_timeout", "30");
     if (opts?.pooled && u.hostname.includes("-pooler.") && !u.searchParams.has("pgbouncer")) {
       u.searchParams.set("pgbouncer", "true");
     }

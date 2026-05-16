@@ -92,7 +92,7 @@ const SingleItem = ({ item }: { item: Product }) => {
       <div className="relative overflow-hidden rounded-xl bg-[#F6F7FB] min-h-[403px]">
         <div className="text-center px-4 py-7.5">
           <h3 className="font-semibold text-lg text-dark ease-out duration-200 hover:text-blue mb-1.5">
-            <Link href={`/products/${item?.slug}`}>{item.title}</Link>
+            <Link href={`/shop/${item?.slug}`}>{item.title}</Link>
           </h3>
 
           <span className="flex items-center justify-center gap-2 text-base font-medium">
@@ -138,7 +138,7 @@ const SingleItem = ({ item }: { item: Product }) => {
           ) : null}
         </div>
         <div className="flex items-center justify-center">
-          <Link href={`/products/${item?.slug}`}>
+          <Link href={`/shop/${item?.slug}`}>
             <Image
               src={defaultVariant?.image ? defaultVariant.image : ""}
               alt={item.title || "product-image"}

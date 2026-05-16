@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent, type RefObject } from "react";
 import Link from "next/link";
 import type { MenuItem } from "./types";
-import { CloseIcon } from "./icons";
+import { CloseIcon, SearchIcon } from "./icons";
 import Image from "next/image";
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
@@ -13,9 +13,22 @@ interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
   menuData: MenuItem[];
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
+  onSearchSubmit: (e: FormEvent) => void;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
 }
 
-const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) => {
+const MobileMenu = ({
+  isOpen,
+  onClose,
+  menuData,
+  headerLogo,
+  searchQuery,
+  onSearchQueryChange,
+  onSearchSubmit,
+  searchInputRef,
+}: MobileMenuProps) => {
   const [expandedItems, setExpandedItems] = useState<number[]>([]);
 
   // Close menu when clicking outside
@@ -50,6 +63,12 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const t = window.setTimeout(() => searchInputRef?.current?.focus(), 150);
+    return () => window.clearTimeout(t);
+  }, [isOpen, searchInputRef]);
+
   const toggleSubmenu = (index: number) => {
     setExpandedItems((prev) =>
       prev.includes(index)
@@ -66,6 +85,7 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
+        suppressHydrationWarning
       />
 
       {/* Offcanvas Menu */}
@@ -73,11 +93,12 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
         className={`fixed top-0 left-0 h-full w-[300px] max-w-full bg-white z-50 shadow-xl transform transition-transform duration-300 ease-in-out mobile-menu-container ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        suppressHydrationWarning
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full" suppressHydrationWarning>
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-3">
-            <div>
+          <div className="flex items-center justify-between p-4 border-b border-gray-3" suppressHydrationWarning>
+            <div suppressHydrationWarning>
               <Link className="block shrink-0" href="/">
                 <Image
                   src={
@@ -101,8 +122,29 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
             </button>
           </div>
 
+          <form
+            data-shop-search-ui
+            onSubmit={onSearchSubmit}
+            className="relative border-b border-gray-3 px-4 py-3"
+          >
+            <input
+              ref={searchInputRef}
+              type="search"
+              name="q"
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              placeholder="Search products…"
+              autoComplete="off"
+              aria-label="Search products"
+              className="min-h-[40px] w-full rounded-lg border border-gray-3 bg-white py-2 pl-3 pr-9 text-sm text-dark outline-none focus:border-blue"
+            />
+            <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-meta-4">
+              <SearchIcon />
+            </span>
+          </form>
+
           {/* Menu Items */}
-          <div className="flex-1 py-2 overflow-y-auto">
+          <div className="flex-1 py-2 overflow-y-auto" suppressHydrationWarning>
             <nav>
               <ul className="px-2">
                 {menuData.map((menuItem, i) => {
@@ -117,7 +159,7 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                   return (
                     <li key={menuItem.title} className="">
                       {isDropdown ? (
-                        <div>
+                        <div suppressHydrationWarning>
                           <button
                             type="button"
                             onClick={() => toggleSubmenu(i)}
@@ -146,8 +188,9 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
                             className={`overflow-y-auto overflow-x-hidden transition-all duration-300 ${
                               expandedItems.includes(i) ? expandedMax : "max-h-0"
                             }`}
+                            suppressHydrationWarning
                           >
-                            <div className="pl-2 bg-gray-50 pb-2">
+                            <div className="pl-2 bg-gray-50 pb-2" suppressHydrationWarning>
                               {menuItem.submenu?.map((subItem, j) => (
                                 <Link
                                   key={subItem.path ?? subItem.title}
@@ -198,8 +241,8 @@ const MobileMenu = ({ isOpen, onClose, menuData, headerLogo }: MobileMenuProps) 
           </div>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-3">
-            <div className="flex items-center gap-3">
+          <div className="p-4 border-t border-gray-3" suppressHydrationWarning>
+            <div className="flex items-center gap-3" suppressHydrationWarning>
               <Link
                 href="/login"
                 className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"

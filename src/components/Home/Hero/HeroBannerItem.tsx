@@ -10,7 +10,7 @@ export default function HeroBannerItem({ bannerItem }: { bannerItem: any }) {
         <div className="w-1/2">
           <div className="pt-5 mb-10">
             <h2 className="max-w-[153px] font-semibold text-dark text-xl  hover:text-blue">
-              <Link href={`/products/${bannerItem?.product?.slug}`}>
+              <Link href={`/shop/${bannerItem?.product?.slug}`}>
                 {" "}
                 {bannerItem.bannerName}{" "}
               </Link>

@@ -89,9 +89,12 @@ export default function CartPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <p className="font-semibold text-dark line-clamp-1">
+                          <Link
+                            href={`/shop/${item.slug}`}
+                            className="font-semibold text-dark line-clamp-1 hover:text-blue"
+                          >
                             {item.name}
-                          </p>
+                          </Link>
                           <p className="mt-1 text-sm text-meta-3">
                             {formatPrice(item.price)}
                           </p>

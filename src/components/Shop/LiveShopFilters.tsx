@@ -1,21 +1,23 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
-import { startTransition, useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { applyShopQuery } from "@/lib/shop/shopQuery";
 
 type Props = {
   formId: string;
+  /** Current query string (without leading ?) — keeps form in sync after pagination etc. */
+  queryString: string;
 };
 
-export default function LiveShopFilters({ formId }: Props) {
-  const router = useRouter();
+export default function LiveShopFilters({ formId, queryString }: Props) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     const form = document.getElementById(formId) as HTMLFormElement | null;
     if (!form) return;
+
+    const usp = new URLSearchParams(queryString);
 
     const syncFormFromQuery = () => {
       const fields = Array.from(
@@ -28,7 +30,7 @@ export default function LiveShopFilters({ formId }: Props) {
 
         if (field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio")) {
           const selected = new Set(
-            searchParams
+            usp
               .getAll(name)
               .map((v) => v.trim())
               .filter(Boolean)
@@ -37,7 +39,7 @@ export default function LiveShopFilters({ formId }: Props) {
           continue;
         }
 
-        const nextValue = searchParams.get(name) ?? "";
+        const nextValue = usp.get(name) ?? "";
         if (field.value !== nextValue) {
           field.value = nextValue;
         }
@@ -103,8 +105,10 @@ export default function LiveShopFilters({ formId }: Props) {
       }
     };
 
+    let qDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     const pushFromForm = () => {
-      const usp = new URLSearchParams();
+      const nextUsp = new URLSearchParams();
 
       const selectedCategoryCount = form.querySelectorAll('input[name="category"]:checked').length;
       const inputs = Array.from(
@@ -122,7 +126,6 @@ export default function LiveShopFilters({ formId }: Props) {
         const value = String(field.value ?? "").trim();
         if (!value) continue;
 
-        // Category-dependent facets: avoid persisting stale selections that now show as (0)
         if (
           selectedCategoryCount > 0 &&
           field instanceof HTMLInputElement &&
@@ -133,12 +136,10 @@ export default function LiveShopFilters({ formId }: Props) {
           if (count === 0) continue;
         }
 
-        usp.append(k, value);
+        nextUsp.append(k, value);
       }
-      const next = usp.toString();
-      startTransition(() => {
-        router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-      });
+
+      applyShopQuery(pathname, nextUsp.toString());
     };
 
     const onInput = (e: Event) => {
@@ -146,6 +147,11 @@ export default function LiveShopFilters({ formId }: Props) {
       if (!t) return;
       if (t.name === "category") {
         handleCategoryDrivenReset();
+      }
+      if (t.name === "q") {
+        if (qDebounceTimer) clearTimeout(qDebounceTimer);
+        qDebounceTimer = setTimeout(() => pushFromForm(), 350);
+        return;
       }
       pushFromForm();
     };
@@ -157,8 +163,10 @@ export default function LiveShopFilters({ formId }: Props) {
       }
       pushFromForm();
     };
+
     const onSubmit = (e: Event) => {
       e.preventDefault();
+      if (qDebounceTimer) clearTimeout(qDebounceTimer);
       pushFromForm();
     };
 
@@ -167,12 +175,12 @@ export default function LiveShopFilters({ formId }: Props) {
     form.addEventListener("submit", onSubmit);
 
     return () => {
+      if (qDebounceTimer) clearTimeout(qDebounceTimer);
       form.removeEventListener("input", onInput);
       form.removeEventListener("change", onChange);
       form.removeEventListener("submit", onSubmit);
     };
-  }, [formId, pathname, router, searchParams]);
+  }, [formId, pathname, queryString]);
 
   return null;
 }
-

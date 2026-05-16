@@ -73,6 +73,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                         ? "opacity-100 translate-y-0 visible"
                         : "opacity-0 translate-y-2 invisible"
                       }`}
+                    suppressHydrationWarning
                   >
                     {menuItem.submenu?.map((subItem, j) => (
                       <Link

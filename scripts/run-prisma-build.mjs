@@ -23,9 +23,8 @@ function run(command, args) {
 
 run("npx", ["prisma", "generate"]);
 
-const originalUrl = process.env.DATABASE_URL;
-process.env.DATABASE_URL = process.env.DIRECT_URL || originalUrl;
-run("npx", ["prisma", "migrate", "deploy"]);
-process.env.DATABASE_URL = originalUrl;
+// Migrations are run manually before deploying via:
+// npx prisma migrate deploy
+// Do NOT run during build — Neon free tier advisory lock times out.
 
 run("npx", ["next", "build"]);

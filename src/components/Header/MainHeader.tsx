@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { throttle } from "@/lib/perf/throttle";
-import { useDebounce } from "@/hooks/useDebounce";
 import { useCart } from "@/hooks/useCart";
 import { buildHeaderMenuData } from "./menuData";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
@@ -198,12 +197,10 @@ const MainHeader = ({
     setSearchQuery((prev) => (prev === q ? prev : q));
   }, [pathname, searchParams]);
 
-  const debouncedSearchQuery = useDebounce(searchQuery, 250);
-
-  // Live search while on the shop page
+  // Live search while on the shop page (instant — no debounce)
   useEffect(() => {
     if (!pathname.startsWith("/shop")) return;
-    const q = debouncedSearchQuery.trim();
+    const q = searchQuery.trim();
     const usp = new URLSearchParams(searchParams.toString());
     const current = usp.get("q")?.trim() ?? "";
     if (q === current) return;
@@ -214,7 +211,7 @@ const MainHeader = ({
     startTransition(() => {
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     });
-  }, [debouncedSearchQuery, pathname, router, searchParams]);
+  }, [searchQuery, pathname, router, searchParams]);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();

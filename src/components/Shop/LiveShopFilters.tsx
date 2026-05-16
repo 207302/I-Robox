@@ -46,7 +46,6 @@ export default function LiveShopFilters({ formId }: Props) {
 
     syncFormFromQuery();
 
-    let debounceTimer: number | null = null;
     let prevCategorySignature = Array.from(
       form.querySelectorAll('input[name="category"]:checked')
     )
@@ -104,45 +103,42 @@ export default function LiveShopFilters({ formId }: Props) {
       }
     };
 
-    const pushFromForm = (delayMs: number) => {
-      if (debounceTimer) window.clearTimeout(debounceTimer);
-      debounceTimer = window.setTimeout(() => {
-        const usp = new URLSearchParams();
+    const pushFromForm = () => {
+      const usp = new URLSearchParams();
 
-        const selectedCategoryCount = form.querySelectorAll('input[name="category"]:checked').length;
-        const inputs = Array.from(
-          form.querySelectorAll("input, select, textarea")
-        ) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
+      const selectedCategoryCount = form.querySelectorAll('input[name="category"]:checked').length;
+      const inputs = Array.from(
+        form.querySelectorAll("input, select, textarea")
+      ) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
 
-        for (const field of inputs) {
-          const k = field.name;
-          if (!k || k === "page" || field.disabled) continue;
+      for (const field of inputs) {
+        const k = field.name;
+        if (!k || k === "page" || field.disabled) continue;
 
-          if (field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio")) {
-            if (!field.checked) continue;
-          }
-
-          const value = String(field.value ?? "").trim();
-          if (!value) continue;
-
-          // Category-dependent facets: avoid persisting stale selections that now show as (0)
-          if (
-            selectedCategoryCount > 0 &&
-            field instanceof HTMLInputElement &&
-            field.type === "checkbox" &&
-            (k === "brand" || k === "type" || k === "subtype" || k === "collection")
-          ) {
-            const count = optionCountFromLabel(field);
-            if (count === 0) continue;
-          }
-
-          usp.append(k, value);
+        if (field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio")) {
+          if (!field.checked) continue;
         }
-        const q = usp.toString();
-        startTransition(() => {
-          router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-        });
-      }, delayMs);
+
+        const value = String(field.value ?? "").trim();
+        if (!value) continue;
+
+        // Category-dependent facets: avoid persisting stale selections that now show as (0)
+        if (
+          selectedCategoryCount > 0 &&
+          field instanceof HTMLInputElement &&
+          field.type === "checkbox" &&
+          (k === "brand" || k === "type" || k === "subtype" || k === "collection")
+        ) {
+          const count = optionCountFromLabel(field);
+          if (count === 0) continue;
+        }
+
+        usp.append(k, value);
+      }
+      const next = usp.toString();
+      startTransition(() => {
+        router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+      });
     };
 
     const onInput = (e: Event) => {
@@ -151,10 +147,7 @@ export default function LiveShopFilters({ formId }: Props) {
       if (t.name === "category") {
         handleCategoryDrivenReset();
       }
-      const isTextLike =
-        t.tagName === "TEXTAREA" ||
-        (t.tagName === "INPUT" && (t.type === "text" || t.type === "search" || t.type === "number"));
-      pushFromForm(isTextLike ? 250 : 0);
+      pushFromForm();
     };
 
     const onChange = (e: Event) => {
@@ -162,11 +155,11 @@ export default function LiveShopFilters({ formId }: Props) {
       if (t?.name === "category") {
         handleCategoryDrivenReset();
       }
-      pushFromForm(0);
+      pushFromForm();
     };
     const onSubmit = (e: Event) => {
       e.preventDefault();
-      pushFromForm(0);
+      pushFromForm();
     };
 
     form.addEventListener("input", onInput);
@@ -174,7 +167,6 @@ export default function LiveShopFilters({ formId }: Props) {
     form.addEventListener("submit", onSubmit);
 
     return () => {
-      if (debounceTimer) window.clearTimeout(debounceTimer);
       form.removeEventListener("input", onInput);
       form.removeEventListener("change", onChange);
       form.removeEventListener("submit", onSubmit);

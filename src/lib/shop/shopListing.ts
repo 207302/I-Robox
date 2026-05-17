@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { safeCategoriesFindMany } from "@/lib/db/safeReads";
 import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 import { cleanText, hasSuspiciousInput, isUrlSlug } from "@/lib/validation/input";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
@@ -310,7 +311,7 @@ function slugMatchOrClause(slug: string) {
 
 /** All category ids in the subtree rooted at rootId (includes root). */
 async function collectDescendantCategoryIds(rootId: string): Promise<string[]> {
-  const all = await prisma.categories.findMany({
+  const all = await safeCategoriesFindMany({
     select: { id: true, parent_id: true },
   });
   const childrenByParent = new Map<string | null, string[]>();
@@ -333,7 +334,7 @@ async function collectDescendantCategoryIds(rootId: string): Promise<string[]> {
 }
 
 async function categoryIdsForFilter(slug: string): Promise<string[] | null> {
-  let roots = await prisma.categories.findMany({
+  let roots = await safeCategoriesFindMany({
     where: { OR: slugMatchOrClause(slug) },
     select: { id: true },
   });
@@ -341,7 +342,7 @@ async function categoryIdsForFilter(slug: string): Promise<string[] | null> {
   if (roots.length === 0) {
     const firstSegment = slug.split("-").filter(Boolean)[0] ?? "";
     if (firstSegment.length >= 3) {
-      roots = await prisma.categories.findMany({
+      roots = await safeCategoriesFindMany({
         where: { slug: { contains: firstSegment, mode: "insensitive" } },
         select: { id: true },
         take: 25,

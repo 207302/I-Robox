@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
@@ -19,7 +20,7 @@ export async function GET() {
   return runApiRoute(async () => {
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const row = await prisma.site_marketing_settings.findUnique({
+    const row = await safeSiteMarketingSettingsFindUnique({
       where: { id: SITE_MARKETING_SETTINGS_ID },
     });
     return NextResponse.json(row ?? { id: SITE_MARKETING_SETTINGS_ID, first_visit_coupon_code: null });

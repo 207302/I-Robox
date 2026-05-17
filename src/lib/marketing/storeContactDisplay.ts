@@ -1,6 +1,5 @@
 import { cache } from "react";
-import { prisma } from "@/lib/prisma";
-import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+import { getSiteMarketingSettings } from "@/lib/queries/marketing";
 
 /** Resolved storefront strings used in the footer/home sections. */
 export type StoreContactDisplay = {
@@ -47,21 +46,7 @@ export function phoneToWhatsAppHref(phone: string, message?: string) {
 }
 
 export const getStoreContactDisplay = cache(async function getStoreContactDisplay(): Promise<StoreContactDisplay> {
-  const row = await prisma.site_marketing_settings
-    .findUnique({
-      where: { id: SITE_MARKETING_SETTINGS_ID },
-      select: {
-        help_support_title: true,
-        contact_address: true,
-        contact_phone: true,
-        contact_email: true,
-        social_facebook_url: true,
-        social_twitter_url: true,
-        social_instagram_url: true,
-        social_linkedin_url: true,
-      },
-    })
-    .catch(() => null);
+  const row = await getSiteMarketingSettings().catch(() => null);
 
   if (!row) return { ...DEFAULTS };
 

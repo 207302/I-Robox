@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { safeCategoriesFindMany } from "@/lib/db/safeReads";
 
 /** Slug + display name for header dropdowns (categories, brands). */
 export type HeaderNavItem = { slug: string; name: string };
@@ -8,20 +10,47 @@ export type HeaderNavData = {
   brands: HeaderNavItem[];
 };
 
+const BUILD_QUERY_CACHE_SECONDS = 3600;
+
+/** Shared across all SSG workers during `next build` — one DB round-trip per deploy. */
+const getCachedNavCategories = unstable_cache(
+  async (): Promise<HeaderNavItem[]> => {
+    try {
+      return await safeCategoriesFindMany({
+        select: { slug: true, name: true },
+        orderBy: { name: "asc" },
+      });
+    } catch {
+      return [];
+    }
+  },
+  ["nav-categories-all"],
+  { revalidate: BUILD_QUERY_CACHE_SECONDS, tags: ["categories", "header-nav"] }
+);
+
+const getCachedNavBrands = unstable_cache(
+  async (): Promise<HeaderNavItem[]> => {
+    try {
+      return await prisma.brands.findMany({
+        select: { slug: true, name: true },
+        orderBy: { name: "asc" },
+      });
+    } catch {
+      return [];
+    }
+  },
+  ["nav-brands-all"],
+  { revalidate: BUILD_QUERY_CACHE_SECONDS, tags: ["brands", "header-nav"] }
+);
+
 /**
  * Primary nav: all categories and all brands (alphabetical).
  * Shop links use `/shop?category=…` and `/shop?brand=…`.
  */
 export async function getHeaderNavData(): Promise<HeaderNavData> {
   const [categories, brands] = await Promise.all([
-    prisma.categories.findMany({
-      select: { slug: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.brands.findMany({
-      select: { slug: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    getCachedNavCategories(),
+    getCachedNavBrands(),
   ]);
 
   return { categories, brands };

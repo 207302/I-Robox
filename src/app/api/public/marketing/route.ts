@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { getSession } from "@/lib/auth/session";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
@@ -19,7 +20,7 @@ export async function GET() {
     const isLoggedIn = Boolean(session?.sub);
   
     const [settings, freeShippingThresholdInr] = await Promise.all([
-      prisma.site_marketing_settings.findUnique({
+      safeSiteMarketingSettingsFindUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
         select: { first_visit_coupon_code: true },
       }),

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { getSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
   
     // Extra guard for first-visit coupon on logged-in users.
     if (session?.sub) {
-      const settings = await prisma.site_marketing_settings.findUnique({
+      const settings = await safeSiteMarketingSettingsFindUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
         select: { first_visit_coupon_code: true },
       });

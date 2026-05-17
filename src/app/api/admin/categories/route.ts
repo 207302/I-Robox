@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeCategoriesFindMany } from "@/lib/db/safeReads";
 import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, readJsonBody } from "@/lib/validation/input";
@@ -21,7 +22,7 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     try {
-      const categories = await prisma.categories.findMany({
+      const categories = await safeCategoriesFindMany({
         orderBy: { name: "asc" },
         select: { id: true, name: true, slug: true, parent_id: true },
       });

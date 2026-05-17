@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { validateCommonEmailProvider } from "@/lib/validateEmai";
 import {
   cleanOptionalText,
@@ -259,7 +260,7 @@ export async function buildCheckoutContext(input: {
     if (usageErr) throw new Error(usageErr);
 
     if (checkoutUserId) {
-      const settings = await prisma.site_marketing_settings.findUnique({
+      const settings = await safeSiteMarketingSettingsFindUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
         select: { first_visit_coupon_code: true },
       });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { getSession } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
 import { sendEmail, orderPendingCustomerEmailHtml, orderPendingCustomerEmailText } from "@/lib/email";
@@ -234,7 +235,7 @@ export async function POST(req: NextRequest) {
   
       // First-visit coupon is enforced one-time per customer/email regardless of browser storage.
       if (checkoutUserId) {
-        const settings = await prisma.site_marketing_settings.findUnique({
+        const settings = await safeSiteMarketingSettingsFindUnique({
           where: { id: SITE_MARKETING_SETTINGS_ID },
           select: { first_visit_coupon_code: true },
         });

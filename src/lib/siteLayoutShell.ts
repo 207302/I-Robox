@@ -6,7 +6,6 @@ import { getStoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
 import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { getSiteChromeColors } from "@/lib/queries/marketing";
-import { withPrismaRetry } from "@/lib/prismaRetry";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
 
 export type SiteLayoutShell = {
@@ -16,16 +15,16 @@ export type SiteLayoutShell = {
     linkLabel: string | null;
   } | null;
   marqueeAnnouncements: { body: string; linkUrl: string | null }[];
-  headerNav: Awaited<ReturnType<typeof getHeaderNavData>>;
+  headerNav: HeaderNavData;
   storeContact: Awaited<ReturnType<typeof getStoreContactDisplay>>;
   freeShippingThresholdInr: Awaited<ReturnType<typeof getFreeShippingThresholdInr>>;
   chromeColors: SiteChromeColors;
 };
 
-const EMPTY_SHELL: SiteLayoutShell = {
+export const EMPTY_SHELL: SiteLayoutShell = {
   utilityAnnouncement: null,
   marqueeAnnouncements: [],
-  headerNav: { categories: [], brands: [] } as HeaderNavData,
+  headerNav: { categories: [], brands: [] },
   storeContact: {
     helpSupportTitle: "Help & Support",
     contactAddress: "",
@@ -40,12 +39,24 @@ const EMPTY_SHELL: SiteLayoutShell = {
   chromeColors: EMPTY_CHROME_COLORS,
 };
 
+async function safe<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[siteLayoutShell] ${label}:`, err);
+    return fallback;
+  }
+}
+
 async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
-  return withPrismaRetry(async () => {
   const now = new Date();
-  const announcementRows = await prisma.announcement_entries.findMany({
-    orderBy: [{ placement: "asc" }, { sort_order: "asc" }],
-  });
+
+  const announcementRows = await safe("announcements", [], () =>
+    prisma.announcement_entries.findMany({
+      orderBy: [{ placement: "asc" }, { sort_order: "asc" }],
+    })
+  );
+
   const activeAnnouncements = announcementRows.filter((e) =>
     isActiveInWindow(e.is_active, e.active_from, e.active_until, now)
   );
@@ -54,10 +65,10 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
   const utilityPrimary = utilityRows[0];
 
   const [headerNav, storeContact, freeShippingThresholdInr, chromeColors] = await Promise.all([
-    getHeaderNavData(),
-    getStoreContactDisplay(),
-    getFreeShippingThresholdInr(),
-    getSiteChromeColors(),
+    safe("headerNav", EMPTY_SHELL.headerNav, getHeaderNavData),
+    safe("storeContact", EMPTY_SHELL.storeContact, getStoreContactDisplay),
+    safe("freeShippingThresholdInr", EMPTY_SHELL.freeShippingThresholdInr, getFreeShippingThresholdInr),
+    safe("chromeColors", EMPTY_SHELL.chromeColors, getSiteChromeColors),
   ]);
 
   return {
@@ -77,13 +88,9 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
     freeShippingThresholdInr,
     chromeColors,
   };
-  }).catch((err) => {
-    console.error("[siteLayoutShell] database unavailable:", err);
-    return EMPTY_SHELL;
-  });
 }
 
 export const getSiteLayoutShell = unstable_cache(loadSiteLayoutShell, ["site-layout-shell"], {
-  revalidate: 120,
-  tags: ["marketing", "announcements", "header-nav"],
+  revalidate: 3600,
+  tags: ["marketing", "announcements", "header-nav", "categories"],
 });

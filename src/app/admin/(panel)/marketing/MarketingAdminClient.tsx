@@ -48,6 +48,8 @@ type SiteSettingsRow = {
   utility_bar_bg_color?: string | null;
   marquee_bar_bg_color?: string | null;
   footer_bg_color?: string | null;
+  footer_text_color?: string | null;
+  footer_link_color?: string | null;
 };
 
 type QuickLinkPageAdminKey = "privacy" | "terms" | "returns" | "faq" | "contact";
@@ -203,6 +205,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [utilityBarBgColor, setUtilityBarBgColor] = useState(st0?.utility_bar_bg_color ?? "");
   const [marqueeBarBgColor, setMarqueeBarBgColor] = useState(st0?.marquee_bar_bg_color ?? "");
   const [footerBgColor, setFooterBgColor] = useState(st0?.footer_bg_color ?? "");
+  const [footerTextColor, setFooterTextColor] = useState(st0?.footer_text_color ?? "");
+  const [footerLinkColor, setFooterLinkColor] = useState(st0?.footer_link_color ?? "");
   const [chromeColorsSaving, setChromeColorsSaving] = useState(false);
   const [quickLinkPages, setQuickLinkPages] = useState<
     Record<QuickLinkPageAdminKey, { title: string; subtitle: string; content: string }>
@@ -1188,8 +1192,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
         <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-2xl">
           <h2 className="text-lg font-semibold">Bar &amp; footer colors</h2>
           <p className="text-sm text-meta-3">
-            Customize background colors for the top utility strip, scrolling marquee, and footer.
-            Leave empty to use the theme defaults.
+            Customize bar backgrounds and footer background/text. Leave empty to use theme defaults.
           </p>
           <div className="grid gap-4 sm:grid-cols-1">
             <HexColorField
@@ -1208,7 +1211,19 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               label="Footer background"
               value={footerBgColor}
               onChange={setFooterBgColor}
-              placeholder="#f9fafb"
+              placeholder="#0c1220"
+            />
+            <HexColorField
+              label="Footer text"
+              value={footerTextColor}
+              onChange={setFooterTextColor}
+              placeholder="#94a3b8"
+            />
+            <HexColorField
+              label="Footer links & accents"
+              value={footerLinkColor}
+              onChange={setFooterLinkColor}
+              placeholder="#ff3d3d"
             />
           </div>
           <button
@@ -1226,12 +1241,16 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                       utility_bar_bg_color: utilityBarBgColor.trim() || null,
                       marquee_bar_bg_color: marqueeBarBgColor.trim() || null,
                       footer_bg_color: footerBgColor.trim() || null,
+                      footer_text_color: footerTextColor.trim() || null,
+                      footer_link_color: footerLinkColor.trim() || null,
                     }),
                   })
                 );
                 setUtilityBarBgColor(row.utility_bar_bg_color ?? "");
                 setMarqueeBarBgColor(row.marquee_bar_bg_color ?? "");
                 setFooterBgColor(row.footer_bg_color ?? "");
+                setFooterTextColor(row.footer_text_color ?? "");
+                setFooterLinkColor(row.footer_link_color ?? "");
                 toast.success("Bar & footer colors saved");
                 router.refresh();
               } catch (err: unknown) {

@@ -53,7 +53,13 @@ const paymentsData: PaymentIcon[] = [
   },
 ];
 
-export default function FooterBottom({ backgroundColor }: { backgroundColor?: string | null }) {
+type Props = {
+  backgroundColor?: string | null;
+  textStyle?: CSSProperties;
+  linkStyle?: CSSProperties;
+};
+
+export default function FooterBottom({ backgroundColor, textStyle, linkStyle }: Props) {
   const year = new Date().getFullYear();
   const bottomStyle = chromeBgStyle(backgroundColor);
 
@@ -62,16 +68,23 @@ export default function FooterBottom({ backgroundColor }: { backgroundColor?: st
       <div className="px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div>
-            <p className="text-sm font-normal text-dark">
+            <p
+              className={`text-sm font-normal ${textStyle ? "" : "text-dark"}`}
+              style={textStyle}
+            >
               &copy; {year} Robox. All rights reserved.
             </p>
-            <p className="text-sm font-normal text-dark mt-1">
+            <p
+              className={`mt-1 text-sm font-normal ${textStyle ? "" : "text-dark"}`}
+              style={textStyle}
+            >
               Designed by{" "}
               <a
                 href="https://www.linkedin.com/in/vishakhs17/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue hover:underline font-medium"
+                className={`font-medium ${linkStyle ? "hover:opacity-80" : "text-blue hover:underline"}`}
+                style={linkStyle}
               >
                 Vishakh S
               </a>
@@ -79,7 +92,9 @@ export default function FooterBottom({ backgroundColor }: { backgroundColor?: st
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            <p className="font-normal">We Accept:</p>
+            <p className={`font-normal ${textStyle ? "" : "text-dark"}`} style={textStyle}>
+              We Accept:
+            </p>
 
             <div className="flex flex-wrap items-center gap-5">
               {paymentsData.map((payment) => (

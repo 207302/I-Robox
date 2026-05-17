@@ -826,5 +826,9 @@ model site_marketing_settings {
   marquee_bar_bg_color    String?  @db.VarChar(20)
   /// Footer and footer bottom strip background (e.g. #f9fafb).
   footer_bg_color         String?  @db.VarChar(20)
+  /// Footer body and heading text (e.g. #94a3b8).
+  footer_text_color       String?  @db.VarChar(20)
+  /// Footer links and accent text (e.g. #ff3d3d).
+  footer_link_color       String?  @db.VarChar(20)
   updated_at              DateTime @default(now()) @db.Timestamptz(6)
 }

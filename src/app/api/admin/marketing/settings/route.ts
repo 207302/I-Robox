@@ -184,6 +184,12 @@ export async function PATCH(req: NextRequest) {
     if (body.footer_bg_color !== undefined) {
       data.footer_bg_color = cleanOptionalHexColor(body.footer_bg_color);
     }
+    if (body.footer_text_color !== undefined) {
+      data.footer_text_color = cleanOptionalHexColor(body.footer_text_color);
+    }
+    if (body.footer_link_color !== undefined) {
+      data.footer_link_color = cleanOptionalHexColor(body.footer_link_color);
+    }
   
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "No recognized fields to update" }, { status: 400 });
@@ -230,6 +236,8 @@ export async function PATCH(req: NextRequest) {
       utility_bar_bg_color: null,
       marquee_bar_bg_color: null,
       footer_bg_color: null,
+      footer_text_color: null,
+      footer_link_color: null,
     };
   
     try {

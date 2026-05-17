@@ -5,7 +5,11 @@ import {
   LinkedInIcon,
   TwitterIcon,
 } from "@/assets/icons/social";
-import { chromeBgStyle, type SiteChromeColors } from "@/lib/marketing/chromeColors";
+import {
+  chromeBgStyle,
+  footerColorStyles,
+  type SiteChromeColors,
+} from "@/lib/marketing/chromeColors";
 import type { StoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
 import { phoneToTelHref } from "@/lib/marketing/storeContactDisplay";
 import Link from "next/link";
@@ -18,10 +22,12 @@ function SocialLink({
   href,
   label,
   children,
+  linkStyle,
 }: {
   href: string;
   label: string;
   children: ReactNode;
+  linkStyle?: React.CSSProperties;
 }) {
   if (!href.trim()) {
     return (
@@ -35,7 +41,8 @@ function SocialLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex duration-200 ease-out hover:text-blue"
+      className={`flex duration-200 ease-out ${linkStyle ? "hover:opacity-80" : "hover:text-blue"}`}
+      style={linkStyle}
     >
       <span className="sr-only">{label}</span>
       {children}
@@ -51,6 +58,7 @@ export default function Footer({
   chromeColors?: SiteChromeColors;
 }) {
   const footerBgStyle = chromeBgStyle(chromeColors?.footerBg);
+  const { textStyle, linkStyle, iconFill } = footerColorStyles(chromeColors);
   return (
     <footer
       className={`overflow-hidden border-t border-gray-3 ${footerBgStyle ? "" : "bg-white"}`}
@@ -60,14 +68,25 @@ export default function Footer({
         {/* <!-- footer menu start --> */}
         <div className="flex flex-wrap xl:flex-nowrap gap-10 xl:gap-19 xl:justify-between pt-17.5 xl:pt-22.5 pb-10 xl:pb-20">
           <div className="max-w-[330px] w-full">
-            <h2 className="mb-7.5 text-xl font-semibold text-dark">
+            <h2
+              className={`mb-7.5 text-xl font-semibold ${textStyle ? "" : "text-dark"}`}
+              style={textStyle}
+            >
               {storeContact.helpSupportTitle}
             </h2>
 
             <ul className="flex flex-col gap-3">
-              <li className="flex gap-4.5 text-base text-meta-3">
+              <li
+                className={`flex gap-4.5 text-base ${textStyle ? "" : "text-meta-3"}`}
+                style={textStyle}
+              >
                 <span className="shrink-0">
-                  <MapIcon className="fill-blue" width={24} height={24} />
+                  <MapIcon
+                    className={iconFill ? "" : "fill-blue"}
+                    style={iconFill ? { fill: iconFill } : undefined}
+                    width={24}
+                    height={24}
+                  />
                 </span>
                 {storeContact.contactAddress}
               </li>
@@ -76,9 +95,15 @@ export default function Footer({
                 <li>
                   <Link
                     href={phoneToTelHref(storeContact.contactPhone)}
-                    className="flex items-center gap-4.5 text-base text-meta-3"
+                    className={`flex items-center gap-4.5 text-base ${textStyle ? "hover:opacity-80" : "text-meta-3"}`}
+                    style={textStyle}
                   >
-                    <CallIcon className="fill-blue" width={24} height={24} />
+                    <CallIcon
+                      className={iconFill ? "" : "fill-blue"}
+                      style={iconFill ? { fill: iconFill } : undefined}
+                      width={24}
+                      height={24}
+                    />
                     {storeContact.contactPhone}
                   </Link>
                 </li>
@@ -87,58 +112,91 @@ export default function Footer({
               <li>
                 <Link
                   href={`mailto:${storeContact.contactEmail}`}
-                  className="flex items-center gap-4.5 text-base text-meta-3"
+                  className={`flex items-center gap-4.5 text-base ${linkStyle ? "hover:opacity-80" : "text-meta-3"}`}
+                  style={linkStyle ?? textStyle}
                 >
-                  <EmailIcon className="fill-blue" width={24} height={24} />
+                  <EmailIcon
+                    className={iconFill ? "" : "fill-blue"}
+                    style={iconFill ? { fill: iconFill } : undefined}
+                    width={24}
+                    height={24}
+                  />
                   {storeContact.contactEmail}
                 </Link>
               </li>
             </ul>
 
             {/* <!-- Social Links start --> */}
-            <div className="flex items-center gap-4 mt-7.5">
-              <SocialLink href={storeContact.socialFacebookUrl} label="Facebook">
+            <div className="mt-7.5 flex items-center gap-4">
+              <SocialLink href={storeContact.socialFacebookUrl} label="Facebook" linkStyle={linkStyle}>
                 <FacebookIcon />
               </SocialLink>
 
-              <SocialLink href={storeContact.socialTwitterUrl} label="Twitter">
+              <SocialLink href={storeContact.socialTwitterUrl} label="Twitter" linkStyle={linkStyle}>
                 <TwitterIcon />
               </SocialLink>
 
-              <SocialLink href={storeContact.socialInstagramUrl} label="Instagram">
+              <SocialLink href={storeContact.socialInstagramUrl} label="Instagram" linkStyle={linkStyle}>
                 <InstagramIcon />
               </SocialLink>
 
-              <SocialLink href={storeContact.socialLinkedInUrl} label="LinkedIn">
+              <SocialLink href={storeContact.socialLinkedInUrl} label="LinkedIn" linkStyle={linkStyle}>
                 <LinkedInIcon />
               </SocialLink>
             </div>
             {/* <!-- Social Links end --> */}
           </div>
 
-          <AccountLinks />
+          <AccountLinks textStyle={textStyle} linkStyle={linkStyle} />
 
-          <QuickLinks />
+          <QuickLinks textStyle={textStyle} linkStyle={linkStyle} />
 
           <div className="w-full sm:w-auto">
-            <h2 className="mb-7.5 text-xl font-semibold text-dark">
+            <h2
+              className={`mb-7.5 text-xl font-semibold ${textStyle ? "" : "text-dark"}`}
+              style={textStyle}
+            >
               Business
             </h2>
             <ul className="flex flex-col gap-3">
               <li className="text-base">
-                <span className="font-medium text-dark">Wholesale enquiries</span>
-                <div className="text-sm text-meta-3 mt-1">
+                <span
+                  className={`font-medium ${textStyle ? "" : "text-dark"}`}
+                  style={textStyle}
+                >
+                  Wholesale enquiries
+                </span>
+                <div
+                  className={`mt-1 text-sm ${textStyle ? "" : "text-meta-3"}`}
+                  style={textStyle}
+                >
                   Email:{" "}
-                  <Link className="text-blue hover:underline" href="mailto:wholesale@example.com">
+                  <Link
+                    className={linkStyle ? "hover:opacity-80" : "text-blue hover:underline"}
+                    style={linkStyle}
+                    href="mailto:wholesale@example.com"
+                  >
                     wholesale@example.com
                   </Link>
                 </div>
               </li>
               <li className="text-base">
-                <span className="font-medium text-dark">Retail partnerships</span>
-                <div className="text-sm text-meta-3 mt-1">
+                <span
+                  className={`font-medium ${textStyle ? "" : "text-dark"}`}
+                  style={textStyle}
+                >
+                  Retail partnerships
+                </span>
+                <div
+                  className={`mt-1 text-sm ${textStyle ? "" : "text-meta-3"}`}
+                  style={textStyle}
+                >
                   Email:{" "}
-                  <Link className="text-blue hover:underline" href="mailto:partnerships@example.com">
+                  <Link
+                    className={linkStyle ? "hover:opacity-80" : "text-blue hover:underline"}
+                    style={linkStyle}
+                    href="mailto:partnerships@example.com"
+                  >
                     partnerships@example.com
                   </Link>
                 </div>
@@ -149,7 +207,11 @@ export default function Footer({
         {/* <!-- footer menu end --> */}
       </div>
 
-      <FooterBottom backgroundColor={chromeColors?.footerBg} />
+      <FooterBottom
+        backgroundColor={chromeColors?.footerBg}
+        textStyle={textStyle}
+        linkStyle={linkStyle}
+      />
     </footer>
   );
 }

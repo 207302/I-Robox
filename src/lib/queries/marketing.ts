@@ -104,6 +104,8 @@ export const getSiteChromeColors = unstable_cache(
           utility_bar_bg_color: true,
           marquee_bar_bg_color: true,
           footer_bg_color: true,
+          footer_text_color: true,
+          footer_link_color: true,
         },
       });
       if (!row) return EMPTY_CHROME_COLORS;
@@ -111,6 +113,8 @@ export const getSiteChromeColors = unstable_cache(
         utilityBarBg: row.utility_bar_bg_color,
         marqueeBarBg: row.marquee_bar_bg_color,
         footerBg: row.footer_bg_color,
+        footerText: row.footer_text_color,
+        footerLink: row.footer_link_color,
       };
     } catch {
       return EMPTY_CHROME_COLORS;

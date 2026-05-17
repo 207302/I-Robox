@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 const quickLinks = [
   {
@@ -28,16 +29,27 @@ const quickLinks = [
   },
 ];
 
-export default function QuickLinks() {
+type Props = {
+  textStyle?: CSSProperties;
+  linkStyle?: CSSProperties;
+};
+
+export default function QuickLinks({ textStyle, linkStyle }: Props) {
   return (
     <div className="w-full sm:w-auto">
-      <h2 className="mb-7.5 text-xl font-semibold text-dark">Quick Link</h2>
+      <h2
+        className={`mb-7.5 text-xl font-semibold ${textStyle ? "" : "text-dark"}`}
+        style={textStyle}
+      >
+        Quick Link
+      </h2>
 
       <ul className="flex flex-col gap-3">
         {quickLinks.map((link) => (
           <li key={link.id}>
             <Link
-              className="text-base duration-200 ease-out hover:text-blue"
+              className={`text-base duration-200 ease-out ${linkStyle ? "hover:opacity-80" : "hover:text-blue"}`}
+              style={linkStyle ?? textStyle}
               href={link.href}
             >
               {link.label}

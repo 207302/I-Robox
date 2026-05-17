@@ -33,6 +33,9 @@ const nextConfig = {
   experimental: {
     optimizeCss: true,
     optimizePackageImports: [
+      "lucide-react",
+      "@heroicons/react",
+      "date-fns",
       "lodash",
       "dayjs",
       "react-hot-toast",
@@ -43,7 +46,25 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/:all*(svg|jpg|jpeg|png|gif|ico|webp|avif|woff|woff2)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/images/:path*",
         headers: [
           {
             key: "Cache-Control",

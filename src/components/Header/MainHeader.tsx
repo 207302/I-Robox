@@ -20,6 +20,8 @@ import {
 import { useAppSelector } from "@/redux/store";
 import toast from "react-hot-toast";
 import { useDebounce } from "@/hooks/useDebounce";
+import SiteSearchPreloader from "@/components/Common/SiteSearchPreloader";
+import { setSearchProgress, startSearchProgress } from "@/lib/shop/searchProgress";
 import { SHOP_QUERY_EVENT, applyShopQuery } from "@/lib/shop/shopQuery";
 
 export type SiteHeaderData = {
@@ -76,6 +78,7 @@ const MainHeader = ({
   const [stickyMenu, setStickyMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 350);
+  const [searchPreloaderOpen, setSearchPreloaderOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -193,10 +196,19 @@ const MainHeader = ({
     applyShopQuery(pathname, usp.toString());
   }, [debouncedSearchQuery, pathname]);
 
+  useEffect(() => {
+    if (!searchPreloaderOpen) return;
+    if (pathname.startsWith("/shop")) {
+      setSearchProgress(38);
+    }
+  }, [pathname, searchPreloaderOpen]);
+
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     const q = searchQuery.trim();
     setNavigationOpen(false);
+    startSearchProgress();
+    setSearchPreloaderOpen(true);
     if (pathname.startsWith("/shop")) {
       const usp = new URLSearchParams(window.location.search);
       if (q) usp.set("q", q);
@@ -514,6 +526,10 @@ const MainHeader = ({
         onSearchSubmit={handleSearchSubmit}
         searchInputRef={searchInputMobileRef}
       />
+
+      {searchPreloaderOpen ? (
+        <SiteSearchPreloader onDone={() => setSearchPreloaderOpen(false)} />
+      ) : null}
     </>
   );
 };

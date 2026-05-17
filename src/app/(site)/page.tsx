@@ -62,10 +62,17 @@ export default async function HomePage() {
       })
     );
 
+  // Wave 1 — critical shell (settings + categories; marketing settings cached)
   const [siteMarketingSettings, categoriesRaw] = await withPrismaRetry(() =>
     Promise.all([getSiteMarketingSettingsForHome(), getCategoriesForHome()])
   );
 
+  // Wave 2 — product rails (content)
+  const [newArrivalsRaw, bestSellersRaw] = await withPrismaRetry(() =>
+    Promise.all([getNewArrivalsProduct(), getBestSellingProducts()])
+  );
+
+  // Wave 3 — homepage CMS blocks (hero, highlights, tiles)
   const [slidesRaw, highlightsRaw, brandRailRaw, categoryTilesRaw] = await withPrismaRetry(() =>
     Promise.all([
       prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }).catch(() => []),
@@ -83,10 +90,6 @@ export default async function HomePage() {
         })
         .catch(() => []),
     ])
-  );
-
-  const [newArrivalsRaw, bestSellersRaw] = await withPrismaRetry(() =>
-    Promise.all([getNewArrivalsProduct(), getBestSellingProducts()])
   );
 
   const highlightsSectionEyebrow =

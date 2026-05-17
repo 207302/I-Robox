@@ -287,5 +287,4 @@ function ProductItemInner({
   );
 }
 
-const ProductItem = memo(ProductItemInner);
-export default ProductItem;
+export default memo(ProductItemInner);

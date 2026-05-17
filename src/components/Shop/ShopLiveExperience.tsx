@@ -1,6 +1,7 @@
 "use client";
 
 import ProductItem from "@/components/Common/ProductItem";
+import { ChevronDown } from "@/components/Header/icons";
 import LiveShopFilters from "@/components/Shop/LiveShopFilters";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import type { ShopListingData } from "@/lib/shop/shopListing";
@@ -13,10 +14,39 @@ import {
   type ShopQueryState,
 } from "@/lib/shop/shopQuery";
 import { useDebounce } from "@/hooks/useDebounce";
+import {
+  completeSearchProgress,
+  isSearchProgressPending,
+  setSearchProgress,
+} from "@/lib/shop/searchProgress";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 const DIECAST_ONLY_CATEGORY = "toy cars, trains & vehicles";
+
+function countActiveShopFilters(q: ShopQueryState): number {
+  let n = 0;
+  if (q.q.trim()) n++;
+  if (q.minPrice.trim() || q.maxPrice.trim()) n++;
+  n += q.categorySlugs.length;
+  n += q.brands.length;
+  n += q.ageGroups.length;
+  n += q.diecastScales.length;
+  n += q.types.length;
+  n += q.subtypes.length;
+  n += q.collections.length;
+  n += q.discounts.length;
+  if (q.available === "true") n++;
+  if (q.sort) n++;
+  return n;
+}
 
 type CategoryRow = {
   id: string;
@@ -39,39 +69,49 @@ export default function ShopLiveExperience({
   const pathname = usePathname();
   const [listing, setListing] = useState(initialListing);
   const [queryString, setQueryString] = useState(initialQueryString);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchInput, setSearchInput] = useState(
+    () => parseShopQueryString(initialQueryString).q
+  );
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const skipFetchRef = useRef(true);
 
   const query = parseShopQueryString(queryString);
-  const debouncedQ = useDebounce(query.q, 350);
+  const activeFilterCount = useMemo(() => countActiveShopFilters(query), [query]);
+  const debouncedSearchInput = useDebounce(searchInput, 350);
   const effectiveQueryString = useMemo(() => {
     const parsed = parseShopQueryString(queryString);
-    return buildListingQueryString({ ...parsed, q: debouncedQ });
-  }, [queryString, debouncedQ]);
-  const searchPending = query.q !== debouncedQ;
+    return buildListingQueryString({ ...parsed, q: debouncedSearchInput });
+  }, [queryString, debouncedSearchInput]);
+  const searchPending = searchInput !== debouncedSearchInput;
 
   const fetchListing = useCallback(async (qs: string) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setLoading(true);
+    setIsLoading(true);
+    const trackProgress = isSearchProgressPending();
+    if (trackProgress) setSearchProgress(55);
     try {
       const res = await fetch(qs ? `/api/products?${qs}` : "/api/products", {
         signal: controller.signal,
         cache: "no-store",
       });
+      if (trackProgress) setSearchProgress(82);
       const data = (await res.json()) as ShopListingData & { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to load products");
       if (!controller.signal.aborted) {
         setListing(data);
+        if (trackProgress) completeSearchProgress();
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       console.error("[shop] listing fetch failed", err);
+      if (trackProgress) completeSearchProgress();
     } finally {
       if (!controller.signal.aborted) {
-        setLoading(false);
+        setIsLoading(false);
       }
     }
   }, []);
@@ -80,19 +120,46 @@ export default function ShopLiveExperience({
     const onQuery = (event: Event) => {
       const detail = (event as CustomEvent<{ queryString: string }>).detail;
       const next = detail?.queryString ?? "";
-      setQueryString(next);
+      startTransition(() => setQueryString(next));
+      if (isSearchProgressPending()) {
+        skipFetchRef.current = false;
+        void fetchListing(next);
+      }
     };
     window.addEventListener(SHOP_QUERY_EVENT, onQuery);
     return () => window.removeEventListener(SHOP_QUERY_EVENT, onQuery);
-  }, []);
+  }, [fetchListing]);
 
   useEffect(() => {
     const onPopState = () => {
       const qs = window.location.search.replace(/^\?/, "");
-      setQueryString(qs);
+      startTransition(() => setQueryString(qs));
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    const q = parseShopQueryString(queryString).q;
+    setSearchInput((prev) => (prev === q ? prev : q));
+  }, [queryString]);
+
+  useEffect(() => {
+    startTransition(() => {
+      setQueryString((prev) => {
+        const parsed = parseShopQueryString(prev);
+        if (parsed.q === debouncedSearchInput) return prev;
+        return buildListingQueryString({ ...parsed, q: debouncedSearchInput, page: 1 });
+      });
+    });
+  }, [debouncedSearchInput]);
+
+  useEffect(() => {
+    if (!isSearchProgressPending()) return;
+    setSearchProgress(48);
+    const immediateQs = buildListingQueryString(parseShopQueryString(queryString));
+    void fetchListing(immediateQs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when shop mounts after header search
   }, []);
 
   useEffect(() => {
@@ -100,17 +167,22 @@ export default function ShopLiveExperience({
       skipFetchRef.current = false;
       if (effectiveQueryString === initialQueryString) return;
     }
+    if (isSearchProgressPending()) return;
     void fetchListing(effectiveQueryString);
   }, [effectiveQueryString, fetchListing, initialQueryString]);
 
-  const goToPage = (page: number) => {
-    const nextState: ShopQueryState = { ...query, page };
-    applyShopQuery(pathname, buildListingQueryString(nextState));
-  };
+  const goToPage = useCallback(
+    (page: number) => {
+      const nextState: ShopQueryState = { ...query, page };
+      applyShopQuery(pathname, buildListingQueryString(nextState));
+    },
+    [pathname, query]
+  );
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
+    setSearchInput("");
     applyShopQuery(pathname, "");
-  };
+  }, [pathname]);
 
   const products = listing.items ?? [];
   const totalPages = Math.max(1, listing.totalPages ?? 1);
@@ -131,14 +203,47 @@ export default function ShopLiveExperience({
   );
   const showScales = selectedCategoryNames.has(DIECAST_ONLY_CATEGORY);
 
-  const renderFilters = (formId: string) => (
+  const productGrid = useMemo(
+    () =>
+      products.map((item, index) => (
+        <ProductItem
+          item={{
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            discountedPrice: item.discountedPrice,
+            slug: item.slug,
+            quantity: item.quantity,
+            updatedAt: item.updatedAt,
+            reviews: item.reviews,
+            shortDescription: item.shortDescription,
+            ageGroup: item.ageGroup,
+            diecastScale: item.diecastScale,
+            shippingPerUnit: item.shippingPerUnit,
+            productVariants: item.productVariants,
+            product_images: item.product_images,
+            image: item.image,
+          }}
+          key={item.id}
+          cardImageSizes={SHOP_GRID_CARD_SIZES}
+          shopListingImage={index === 0 ? "lcp" : index < 3 ? "eager" : "lazy"}
+        />
+      )),
+    [products]
+  );
+
+  const renderFilters = (formId: string, expandSections = false) => {
+    const sectionProps = expandSections ? ({ open: true } as const) : {};
+
+    return (
     <div className="rounded-xl border border-gray-3 bg-white p-5">
       <form id={formId} className="mb-5 space-y-3" onSubmit={(e) => e.preventDefault()}>
         <LiveShopFilters formId={formId} queryString={queryString} />
         <input
           name="q"
           type="search"
-          defaultValue={query.q}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search products…"
           autoComplete="off"
           className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
@@ -157,7 +262,7 @@ export default function ShopLiveExperience({
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
         </div>
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Age groups</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {ageGroups.map((group) => (
@@ -176,7 +281,7 @@ export default function ShopLiveExperience({
           </ul>
         </details>
 
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Categories</summary>
           <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
             {allCategories.length > 0 ? (
@@ -200,7 +305,7 @@ export default function ShopLiveExperience({
           </ul>
         </details>
 
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Brands</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {shopBrands.map((b) => (
@@ -219,7 +324,7 @@ export default function ShopLiveExperience({
           </ul>
         </details>
 
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Product types</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productTypes.map((t) => (
@@ -241,7 +346,7 @@ export default function ShopLiveExperience({
           </ul>
         </details>
 
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Subtypes</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productSubtypes.map((s) => (
@@ -263,7 +368,7 @@ export default function ShopLiveExperience({
           </ul>
         </details>
 
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Collections</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productCollections.map((c) => (
@@ -285,7 +390,7 @@ export default function ShopLiveExperience({
           </ul>
         </details>
 
-        <details open className="rounded-lg border border-gray-3 p-3">
+        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Discount</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {discountBuckets.map((d) => (
@@ -305,7 +410,7 @@ export default function ShopLiveExperience({
         </details>
 
         {showScales ? (
-          <details open className="rounded-lg border border-gray-3 p-3">
+          <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
             <summary className="cursor-pointer text-sm font-semibold text-dark">Scales</summary>
             <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
               {diecastScales.map((s) => (
@@ -357,27 +462,56 @@ export default function ShopLiveExperience({
         </button>
       </form>
     </div>
-  );
+    );
+  };
 
   return (
     <section className="overflow-hidden py-10 pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="flex flex-col gap-8 lg:flex-row">
-          <aside className="w-full shrink-0 lg:w-64">
-            <div className="lg:hidden">{renderFilters("shop-filters-form-mobile")}</div>
+          <aside className="order-2 w-full shrink-0 lg:order-none lg:w-64">
+            <div className="lg:hidden">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-3 bg-white px-4 py-3.5 text-left text-sm font-semibold text-dark"
+                aria-expanded={mobileFiltersOpen}
+                aria-controls="shop-filters-mobile-panel"
+                onClick={() => setMobileFiltersOpen((open) => !open)}
+              >
+                <span className="flex items-center gap-2">
+                  Filters
+                  {activeFilterCount > 0 ? (
+                    <span className="rounded-full bg-blue px-2 py-0.5 text-xs font-semibold text-white">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </span>
+                <span
+                  className={`shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${mobileFiltersOpen ? "rotate-180" : ""}`}
+                  aria-hidden
+                >
+                  <ChevronDown />
+                </span>
+              </button>
+              {mobileFiltersOpen ? (
+                <div id="shop-filters-mobile-panel" className="shop-filters-mobile-panel mt-3">
+                  {renderFilters("shop-filters-form-mobile")}
+                </div>
+              ) : null}
+            </div>
             <div className="hidden lg:block lg:sticky lg:top-24 lg:max-h-[calc(100vh-6.5rem)] lg:overflow-y-auto">
-              {renderFilters("shop-filters-form")}
+              {renderFilters("shop-filters-form", true)}
             </div>
           </aside>
 
-          <div className="flex-1 min-w-0">
+          <div className="order-1 min-w-0 flex-1 lg:order-none">
             <div className="mb-6 flex items-center justify-between gap-3">
               <h1 className="text-2xl font-semibold text-dark">Shop</h1>
-              {searchPending || loading ? (
+              {searchPending || isLoading ? (
                 <span className="text-xs font-medium text-meta-3 animate-pulse">Updating…</span>
               ) : null}
             </div>
-            {searchPending || loading ? (
+            {searchPending || isLoading ? (
               <div
                 className="mb-4 h-0.5 w-full overflow-hidden rounded-full bg-gray-2"
                 role="status"
@@ -387,41 +521,14 @@ export default function ShopLiveExperience({
               </div>
             ) : null}
             <div
-              className={
-                searchPending || loading
-                  ? "opacity-50 pointer-events-none transition-opacity"
-                  : "transition-opacity"
-              }
-              aria-busy={searchPending || loading}
+              className={`transition-opacity duration-150 ${
+                searchPending || isLoading ? "opacity-40" : "opacity-100"
+              }`}
+              aria-busy={searchPending || isLoading}
             >
               {products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9">
-                  {products.map((item, index) => (
-                    <ProductItem
-                      item={{
-                        id: item.id,
-                        title: item.title,
-                        price: item.price,
-                        discountedPrice: item.discountedPrice,
-                        slug: item.slug,
-                        quantity: item.quantity,
-                        updatedAt: item.updatedAt,
-                        reviews: item.reviews,
-                        shortDescription: item.shortDescription,
-                        ageGroup: item.ageGroup,
-                        diecastScale: item.diecastScale,
-                        shippingPerUnit: item.shippingPerUnit,
-                        productVariants: item.productVariants,
-                        product_images: item.product_images,
-                        image: item.image,
-                      }}
-                      key={item.id}
-                      cardImageSizes={SHOP_GRID_CARD_SIZES}
-                      shopListingImage={
-                        index === 0 ? "lcp" : index < 3 ? "eager" : "lazy"
-                      }
-                    />
-                  ))}
+                  {productGrid}
                 </div>
               ) : (
                 <p className="text-sm text-meta-3">No products match your filters.</p>

@@ -12,6 +12,9 @@ export const metadata = {
   description: "Browse toys and games at i-Robox.",
 };
 
+/** ISR: cache shop SSR listing; revalidate every 30s. */
+export const revalidate = 30;
+
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };

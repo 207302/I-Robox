@@ -87,7 +87,7 @@ function getSearchVariants(raw: string): string[] {
   return [...new Set([trimmed, noSpaces, withSpaces, spaced])].filter(Boolean);
 }
 
-/** Step 1: space-stripped + spaced ILIKE on product, brand, category (and descriptions). */
+/** Step 2: space-stripped + spaced ILIKE on product, brand, category (and descriptions). */
 async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> {
   const compact = normalizeSearchTerm(rawQ);
   const spaced = rawQ.toLowerCase().trim();
@@ -129,12 +129,12 @@ async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> 
         OR LOWER(COALESCE(c.name, '')) ILIKE ${spacedPattern}
         ${extraClauses}
       )
-    LIMIT 200
+    LIMIT 50
   `);
   return rows.map((r) => r.id);
 }
 
-/** Step 2: search_vector full-text (stemming / token match). */
+/** Step 1: search_vector full-text (GIN index). */
 async function resolveFtsSearchIds(rawQ: string): Promise<string[]> {
   const variants = getSearchVariants(rawQ).filter((v) => /[a-z0-9]/i.test(v));
   const ids: string[] = [];
@@ -148,13 +148,13 @@ async function resolveFtsSearchIds(rawQ: string): Promise<string[]> {
         WHERE p.is_active = true
           AND p.search_vector @@ plainto_tsquery('english', ${term})
         ORDER BY ts_rank(p.search_vector, plainto_tsquery('english', ${term})) DESC
-        LIMIT 200
+        LIMIT 50
       `);
       for (const row of rows) {
         if (!seen.has(row.id)) {
           seen.add(row.id);
           ids.push(row.id);
-          if (ids.length >= 200) return ids;
+          if (ids.length >= 50) return ids;
         }
       }
     } catch {
@@ -164,7 +164,7 @@ async function resolveFtsSearchIds(rawQ: string): Promise<string[]> {
   return ids;
 }
 
-/** Step 3: pg_trgm typo tolerance on normalized names (requires migration extension). */
+/** Step 3: pg_trgm typo tolerance (fuzzy fallback, max 50). */
 async function resolveTrigramSearchIds(rawQ: string): Promise<string[]> {
   const compact = normalizeSearchTerm(rawQ);
   if (compact.length < 3) return [];
@@ -184,7 +184,7 @@ async function resolveTrigramSearchIds(rawQ: string): Promise<string[]> {
       similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}),
       similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact})
     ) DESC
-    LIMIT 100
+    LIMIT 50
   `);
   return rows.map((r) => r.id);
 }
@@ -207,9 +207,9 @@ async function resolveSkuSearchIds(term: string): Promise<string[]> {
 
 /**
  * Search waterfall — first non-empty result wins:
- * 1. Normalized ILIKE (hotwheels ↔ Hot Wheels)
- * 2. search_vector FTS
- * 3. Trigram similarity (typos)
+ * 1. search_vector FTS (GIN)
+ * 2. Normalized ILIKE (hotwheels ↔ Hot Wheels)
+ * 3. Trigram similarity (typos, LIMIT 50)
  * 4. SKU exact
  */
 async function resolveSearchProductIds(searchTerm: string): Promise<string[]> {
@@ -217,17 +217,17 @@ async function resolveSearchProductIds(searchTerm: string): Promise<string[]> {
   if (!rawQ) return [];
 
   try {
-    const normalized = await resolveNormalizedIlikeSearchIds(rawQ);
-    if (normalized.length > 0) return normalized;
-  } catch (err) {
-    console.error("[shopListing] normalized ILIKE search failed", err);
-  }
-
-  try {
     const fts = await resolveFtsSearchIds(rawQ);
     if (fts.length > 0) return fts;
   } catch (err) {
     console.error("[shopListing] full-text search failed", err);
+  }
+
+  try {
+    const normalized = await resolveNormalizedIlikeSearchIds(rawQ);
+    if (normalized.length > 0) return normalized;
+  } catch (err) {
+    console.error("[shopListing] normalized ILIKE search failed", err);
   }
 
   try {

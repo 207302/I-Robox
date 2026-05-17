@@ -149,8 +149,6 @@ export default function LiveShopFilters({ formId, queryString }: Props) {
         handleCategoryDrivenReset();
       }
       if (t.name === "q") {
-        if (qDebounceTimer) clearTimeout(qDebounceTimer);
-        qDebounceTimer = setTimeout(() => pushFromForm(), 350);
         return;
       }
       pushFromForm();

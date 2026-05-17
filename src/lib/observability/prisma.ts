@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { PrismaClient } from "@prisma/client";
 import { perfSlowPrismaMs } from "@/lib/observability/config";
 import { recordPrismaQuery, recordSlowPrismaQuery } from "@/lib/observability/context";

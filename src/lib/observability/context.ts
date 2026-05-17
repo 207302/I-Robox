@@ -1,3 +1,5 @@
+import "server-only";
+
 import { AsyncLocalStorage } from "async_hooks";
 import {
   isPerfLogEnabled,

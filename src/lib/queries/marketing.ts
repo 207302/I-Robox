@@ -1,3 +1,5 @@
+import "server-only";
+
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";

@@ -7,10 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { shopListingResponseHeaders } from "@/lib/api/httpCache";
-import {
-  getShopListingForApi,
-  SHOP_LISTING_API_REVALIDATE_SECONDS,
-} from "@/lib/shop/shopListingCache";
+import { getShopListingForApi } from "@/lib/shop/shopListingCache";
 
 export async function GET(req: NextRequest) {
   return runApiRoute(
@@ -34,6 +31,3 @@ export async function GET(req: NextRequest) {
     }
   );
 }
-
-/** Documented for route segment config consumers. */
-export const revalidate = SHOP_LISTING_API_REVALIDATE_SECONDS;

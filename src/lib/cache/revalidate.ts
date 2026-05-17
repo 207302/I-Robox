@@ -1,3 +1,5 @@
+import "server-only";
+
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import {
@@ -174,9 +176,4 @@ export function revalidateInventoryCatalog(options?: { productId?: string }): vo
 
 export function revalidateSitemap(): void {
   revalidatePath("/sitemap.xml");
-}
-
-/** Homepage CMS only (hero, highlights, brand rail, category tiles). */
-export function revalidateHomePageContent(): void {
-  revalidateHomePage();
 }

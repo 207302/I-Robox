@@ -27,6 +27,6 @@ export async function register() {
     }
   };
 
-  process.once("SIGINT", () => void disconnect());
-  process.once("SIGTERM", () => void disconnect());
+  const { registerPrismaSignalHandlers } = await import("./instrumentation.node");
+  registerPrismaSignalHandlers(disconnect);
 }

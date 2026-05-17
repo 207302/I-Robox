@@ -44,4 +44,9 @@ if (process.env.DATABASE_URL) {
   console.warn("[build] Neon wake-up ping skipped: DATABASE_URL not set");
 }
 
+// Next.js requires a standard NODE_ENV during production builds.
+if (!process.env.NODE_ENV || !/^(production|development|test)$/.test(process.env.NODE_ENV)) {
+  process.env.NODE_ENV = "production";
+}
+
 run("npx", ["next", "build"]);

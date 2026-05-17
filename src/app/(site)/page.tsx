@@ -1,6 +1,5 @@
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHomePageData } from "@/lib/queries/homePage";
-import { HOME_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/homePageCache";
 import { withPagePerf } from "@/lib/observability/route";
 import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import Home, {
@@ -12,8 +11,8 @@ import Home, {
 import type { HeroSlide } from "@/components/Home/HeroBannerCarousel";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
-/** ISR: one cached bundle per window; aligns with `getHomePageData` revalidate. */
-export const revalidate = HOME_PAGE_REVALIDATE_SECONDS;
+/** ISR: keep in sync with `HOME_PAGE_REVALIDATE_SECONDS` in homePageCache.ts */
+export const revalidate = 60;
 
 const FALLBACK_HIGHLIGHT_IMAGE =
   "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";

@@ -11,11 +11,10 @@ import ReviewStar from "@/components/Shop/ReviewStar";
 import ProductReviewComposer from "@/components/Shop/ProductReviewComposer";
 import { getApprovedReviewsForProduct } from "@/lib/queries/productReviews";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
-import { PRODUCT_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/constants";
 import { getProductSlugsForStaticGeneration } from "@/lib/shop/productStaticParams";
 
-/** ISR: cached product + reviews; no `cookies()` — enables static/ISR shell. */
-export const revalidate = PRODUCT_PAGE_REVALIDATE_SECONDS;
+/** ISR: keep in sync with `PRODUCT_PAGE_REVALIDATE_SECONDS` in cache/constants.ts */
+export const revalidate = 300;
 
 export const dynamicParams = true;
 

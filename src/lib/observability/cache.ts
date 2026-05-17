@@ -1,3 +1,5 @@
+import "server-only";
+
 import { recordCacheMiss } from "@/lib/observability/context";
 import { isPerfLogEnabled } from "@/lib/observability/config";
 import { perfLog } from "@/lib/observability/logger";

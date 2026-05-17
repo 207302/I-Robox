@@ -1,3 +1,5 @@
+import "server-only";
+
 import { runWithPerfContext } from "@/lib/observability/context";
 
 /** Wrap a server page / layout data load for route-level timing. */

@@ -11,7 +11,7 @@ import {
   type SiteChromeColors,
 } from "@/lib/marketing/chromeColors";
 import type { StoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
-import { phoneToTelHref } from "@/lib/marketing/storeContactDisplay";
+import { phoneToTelHref } from "@/lib/marketing/contactPhoneUtils";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import AccountLinks from "./AccountLinks";

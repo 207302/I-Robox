@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { phoneToWhatsAppHref } from "@/lib/marketing/storeContactDisplay";
+import { phoneToWhatsAppHref } from "@/lib/marketing/contactPhoneUtils";
 
 const MAX_MESSAGE = 1800;
 

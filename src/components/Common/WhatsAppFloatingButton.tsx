@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { phoneToWhatsAppHref } from "@/lib/marketing/storeContactDisplay";
+import { phoneToWhatsAppHref } from "@/lib/marketing/contactPhoneUtils";
 
 type Props = {
   phone: string;

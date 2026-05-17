@@ -1,7 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { isProductionBuildPhase, prismaReady, reinitializePrismaClient } from "@/lib/prisma";
 
-const DB_TIMEOUT_MS = isProductionBuildPhase() ? 3_000 : 8_000;
+const DB_TIMEOUT_MS = isProductionBuildPhase()
+  ? 3_000
+  : process.env.NODE_ENV === "production"
+    ? 8_000
+    : 30_000;
 const UNREACHABLE_RETRY_MS = 2_000;
 
 class DbTimeoutError extends Error {
@@ -55,6 +59,9 @@ async function runWithTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promi
 export async function withDb<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   const execute = async (): Promise<T> => {
     await prismaReady();
+    if (process.env.NODE_ENV !== "production") {
+      return fn();
+    }
     return runWithTimeout(fn, DB_TIMEOUT_MS);
   };
 

@@ -3,8 +3,8 @@ import ShopLiveExperience from "@/components/Shop/ShopLiveExperience";
 import { getCategories } from "@/get-api-data/category";
 import { getProductCardImageUrl } from "@/lib/shop/productCardImage";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
-import { getShopListing } from "@/lib/shop/shopListing";
 import type { ShopListingData } from "@/lib/shop/shopListing";
+import { getShopListingForApi } from "@/lib/shop/shopListingCache";
 import { buildListingQueryString } from "@/lib/shop/shopQuery";
 import { withPagePerf } from "@/lib/observability/route";
 
@@ -77,12 +77,13 @@ export default async function ShopPage({ searchParams }: Props) {
   const initialQueryString = searchParamsToQueryString(sp);
   const listingParams = new URLSearchParams(initialQueryString);
 
-  const [allCategories, listingResult] = await Promise.all([
+  const [allCategories, listingEnvelope] = await Promise.all([
     getCategories(),
-    getShopListing(listingParams),
+    getShopListingForApi(listingParams),
   ]);
 
-  const initialListing = listingResult.ok ? listingResult.data : EMPTY_LISTING;
+  const initialListing =
+    listingEnvelope.ok && listingEnvelope.data ? listingEnvelope.data : EMPTY_LISTING;
   const lcpPreloadUrl =
     initialListing.items.length > 0
       ? getProductCardImageUrl(initialListing.items[0])

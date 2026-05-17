@@ -1,3 +1,14 @@
+const { existsSync } = require("node:fs");
+const { resolve } = require("node:path");
+const { config: loadDotenv } = require("dotenv");
+
+// Load env before Next boots workers (fixes Prisma before `.env.local` injection in dev).
+const root = __dirname;
+for (const name of [".env.local", ".env"]) {
+  const path = resolve(root, name);
+  if (existsSync(path)) loadDotenv({ path, override: true });
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,

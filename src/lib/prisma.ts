@@ -1,9 +1,7 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import ws from "ws";
+import { ensureDatabaseEnvLoaded, getDatabaseUrlFromEnv } from "@/lib/loadDatabaseEnv";
 import { extendPrismaForPerf } from "@/lib/observability/prisma";
 
 const BUILD_PHASE = "phase-production-build";
@@ -12,12 +10,13 @@ export function isProductionBuildPhase(): boolean {
   return process.env.NEXT_PHASE === BUILD_PHASE;
 }
 
-/** Runtime: 1 conn/process on shared hosting. Build: larger pool for parallel SSG workers. */
+/** Runtime: 1 conn/process on Hostinger prod. Dev uses a higher limit for parallel SSR/API. */
 function connectionLimitForRuntime(): string {
+  if (process.env.NODE_ENV !== "production") return "10";
   const fromEnv = process.env.DATABASE_CONNECTION_LIMIT?.trim();
   if (fromEnv && /^\d+$/.test(fromEnv)) return fromEnv;
   if (isProductionBuildPhase()) return "10";
-  return process.env.NODE_ENV === "production" ? "1" : "5";
+  return "1";
 }
 
 function normalizeDatabaseUrl(raw: string, opts?: { pooled?: boolean }) {
@@ -39,25 +38,36 @@ function normalizeDatabaseUrl(raw: string, opts?: { pooled?: boolean }) {
   }
 }
 
-if (process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = normalizeDatabaseUrl(process.env.DATABASE_URL, { pooled: true });
-}
+/** Resolved pooler URL for Prisma `datasource`. */
+export function resolveDatabaseConnectionString(): string {
+  ensureDatabaseEnvLoaded();
+  const raw = getDatabaseUrlFromEnv();
+  if (!raw) {
+    throw new Error(
+      "DATABASE_URL is missing. Add it to .env.local (pooler host) in the project root."
+    );
+  }
+  const normalized = normalizeDatabaseUrl(raw, { pooled: true });
+  process.env.DATABASE_URL = normalized;
 
-if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
-  const url = process.env.DATABASE_URL;
-  const direct = url.includes("-pooler.") ? url.replace("-pooler.", ".") : url;
-  process.env.DIRECT_URL = normalizeDatabaseUrl(direct, { pooled: false });
+  if (!process.env.DIRECT_URL?.trim()) {
+    const direct = normalized.includes("-pooler.")
+      ? normalized.replace("-pooler.", ".")
+      : normalized;
+    process.env.DIRECT_URL = normalizeDatabaseUrl(direct, { pooled: false });
+  }
+
+  return normalized;
 }
 
 type PrismaGlobal = {
   prisma?: PrismaClient;
   prismaReadyPromise?: Promise<void>;
-  neonPool?: Pool;
+  prismaBootUrl?: string;
 };
 
 const globalForPrisma = globalThis as unknown as PrismaGlobal;
 
-/** Serializes engine init / reconnect so concurrent callers share one connect. */
 let initMutexTail: Promise<void> = Promise.resolve();
 
 function withInitMutex<T>(fn: () => Promise<T>): Promise<T> {
@@ -73,30 +83,33 @@ function prismaLogLevel(): ("error" | "warn")[] | ("error")[] {
   return process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
 }
 
+function resetPrismaGlobals(): void {
+  globalForPrisma.prisma = undefined;
+  globalForPrisma.prismaReadyPromise = undefined;
+  globalForPrisma.prismaBootUrl = undefined;
+}
+
 function createPrismaClient(): PrismaClient {
+  const databaseUrl = resolveDatabaseConnectionString();
   const log = prismaLogLevel();
 
-  const base =
-    isProductionBuildPhase()
-      ? new PrismaClient({ log })
-      : (() => {
-          neonConfig.webSocketConstructor = ws;
-          globalForPrisma.neonPool?.end().catch(() => undefined);
-          const maxPoolConnections = Number(connectionLimitForRuntime());
-          const pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-            max: Number.isFinite(maxPoolConnections) && maxPoolConnections > 0 ? maxPoolConnections : 1,
-          });
-          globalForPrisma.neonPool = pool;
-          const adapter = new PrismaNeon(pool);
-          return new PrismaClient({ adapter, log });
-        })();
-
-  return extendPrismaForPerf(base);
+  return extendPrismaForPerf(
+    new PrismaClient({
+      log,
+      datasources: { db: { url: databaseUrl } },
+    })
+  );
 }
 
 export function getPrisma(): PrismaClient {
+  const databaseUrl = resolveDatabaseConnectionString();
+
+  if (globalForPrisma.prisma && globalForPrisma.prismaBootUrl !== databaseUrl) {
+    resetPrismaGlobals();
+  }
+
   if (!globalForPrisma.prisma) {
+    globalForPrisma.prismaBootUrl = databaseUrl;
     globalForPrisma.prisma = createPrismaClient();
   }
   return globalForPrisma.prisma;
@@ -110,12 +123,10 @@ export const prisma = new Proxy({} as PrismaClient, {
   },
 });
 
-/** Disconnect and create a fresh client (used after engine panic). */
 export async function reinitializePrismaClient(): Promise<PrismaClient> {
   return withInitMutex(async () => {
     const previous = globalForPrisma.prisma;
-    globalForPrisma.prismaReadyPromise = undefined;
-    globalForPrisma.prisma = undefined;
+    resetPrismaGlobals();
 
     if (previous) {
       try {
@@ -125,23 +136,14 @@ export async function reinitializePrismaClient(): Promise<PrismaClient> {
       }
     }
 
-    if (globalForPrisma.neonPool) {
-      try {
-        await globalForPrisma.neonPool.end();
-      } catch {
-        /* ignore */
-      }
-      globalForPrisma.neonPool = undefined;
-    }
-
     const next = createPrismaClient();
+    globalForPrisma.prismaBootUrl = process.env.DATABASE_URL?.trim();
     globalForPrisma.prisma = next;
     await next.$connect();
     return next;
   });
 }
 
-/** One engine boot per process — mutex-serialized for concurrent startup callers. */
 export function prismaReady(): Promise<void> {
   if (globalForPrisma.prismaReadyPromise) {
     return globalForPrisma.prismaReadyPromise;

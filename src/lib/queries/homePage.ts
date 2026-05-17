@@ -1,6 +1,5 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { safeCategoriesFindMany, safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { getBestSellingProducts, getNewArrivalsProduct } from "@/get-api-data/product";
 import { HOME_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/homePageCache";
@@ -61,7 +60,7 @@ async function loadHomePageRawBundle() {
     brandRailRaw,
     categoryTilesRaw,
   ] = await Promise.all([
-    safeSiteMarketingSettingsFindUnique({
+    prisma.site_marketing_settings.findUnique({
       where: { id: SITE_MARKETING_SETTINGS_ID },
       select: {
         highlights_section_eyebrow: true,
@@ -77,7 +76,7 @@ async function loadHomePageRawBundle() {
         hero_overlay_cta_label_color: true,
       },
     }),
-    safeCategoriesFindMany({
+    prisma.categories.findMany({
       orderBy: { name: "asc" },
       take: 8,
       select: { id: true, name: true, slug: true },

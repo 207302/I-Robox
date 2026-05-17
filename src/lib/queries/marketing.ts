@@ -2,7 +2,6 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { FLASH_SALES_TAG, MARKETING_TAG, POPUPS_TAG } from "@/lib/cache/tags";
@@ -10,7 +9,7 @@ import { FLASH_SALES_TAG, MARKETING_TAG, POPUPS_TAG } from "@/lib/cache/tags";
 export const getSiteMarketingSettings = unstable_cache(
   async () => {
     try {
-      return await safeSiteMarketingSettingsFindUnique({
+      return await prisma.site_marketing_settings.findUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
       });
     } catch {
@@ -75,7 +74,7 @@ export const getCouponsForAdmin = unstable_cache(
 export const getSiteMarketingSettingsForHome = unstable_cache(
   async () => {
     try {
-      return await safeSiteMarketingSettingsFindUnique({
+      return await prisma.site_marketing_settings.findUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
         select: {
           highlights_section_eyebrow: true,
@@ -102,7 +101,7 @@ export const getSiteMarketingSettingsForHome = unstable_cache(
 export const getSiteChromeColors = unstable_cache(
   async (): Promise<SiteChromeColors> => {
     try {
-      const row = await safeSiteMarketingSettingsFindUnique({
+      const row = await prisma.site_marketing_settings.findUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
         select: {
           utility_bar_bg_color: true,

@@ -1,6 +1,21 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Dev / `next dev`: env + Prisma init happen on first request, not during instrumentation.
+  if (process.env.NODE_ENV !== "production") return;
+
+  const { ensureDatabaseEnvLoaded, getDatabaseUrlFromEnv, resolveEnvRoot } = await import(
+    "@/lib/loadDatabaseEnv"
+  );
+  ensureDatabaseEnvLoaded();
+
+  if (!getDatabaseUrlFromEnv()) {
+    console.warn(
+      `[instrumentation] DATABASE_URL not set — skip Neon ping (looked in ${resolveEnvRoot()})`
+    );
+    return;
+  }
+
   const { prisma, prismaReady } = await import("@/lib/prisma");
 
   try {

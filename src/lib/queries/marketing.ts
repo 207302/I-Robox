@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 
 export const getSiteMarketingSettings = unstable_cache(
@@ -92,4 +93,29 @@ export const getSiteMarketingSettingsForHome = unstable_cache(
   },
   ["site-marketing-settings-home"],
   { revalidate: 60 }
+);
+
+export const getSiteChromeColors = unstable_cache(
+  async (): Promise<SiteChromeColors> => {
+    try {
+      const row = await prisma.site_marketing_settings.findUnique({
+        where: { id: SITE_MARKETING_SETTINGS_ID },
+        select: {
+          utility_bar_bg_color: true,
+          marquee_bar_bg_color: true,
+          footer_bg_color: true,
+        },
+      });
+      if (!row) return EMPTY_CHROME_COLORS;
+      return {
+        utilityBarBg: row.utility_bar_bg_color,
+        marqueeBarBg: row.marquee_bar_bg_color,
+        footerBg: row.footer_bg_color,
+      };
+    } catch {
+      return EMPTY_CHROME_COLORS;
+    }
+  },
+  ["site-chrome-colors"],
+  { revalidate: 120, tags: ["marketing"] }
 );

@@ -39,7 +39,6 @@ function countActiveShopFilters(q: ShopQueryState): number {
   n += q.brands.length;
   n += q.ageGroups.length;
   n += q.diecastScales.length;
-  n += q.types.length;
   n += q.subtypes.length;
   n += q.collections.length;
   n += q.discounts.length;
@@ -184,18 +183,22 @@ export default function ShopLiveExperience({
     applyShopQuery(pathname, "");
   }, [pathname]);
 
+  const clearSearch = useCallback(() => {
+    setSearchInput("");
+    const nextState: ShopQueryState = { ...query, q: "", page: 1 };
+    applyShopQuery(pathname, buildListingQueryString(nextState));
+  }, [pathname, query]);
+
   const products = listing.items ?? [];
   const totalPages = Math.max(1, listing.totalPages ?? 1);
   const currentPage = listing.page ?? query.page;
   const ageGroups = listing.ageGroups ?? [];
   const diecastScales = listing.diecastScales ?? [];
   const shopBrands = listing.brands ?? [];
-  const productTypes = listing.productTypes ?? [];
   const productSubtypes = listing.productSubtypes ?? [];
   const productCollections = listing.productCollections ?? [];
   const discountBuckets = listing.discountBuckets ?? [];
   const hasCategorySelection = query.categorySlugs.length > 0;
-  const hasTypeSelection = query.types.length > 0;
   const selectedCategoryNames = new Set(
     allCategories
       .filter((cat) => query.categorySlugs.includes(cat.slug))
@@ -325,29 +328,7 @@ export default function ShopLiveExperience({
         </details>
 
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-dark">Product types</summary>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
-            {productTypes.map((t) => (
-              <li key={t.slug}>
-                <label className="flex items-center gap-2 text-sm text-dark-4">
-                  <input
-                    type="checkbox"
-                    name="type"
-                    value={t.slug}
-                    defaultChecked={query.types.includes(t.slug)}
-                  />
-                  {t.name} ({t.count})
-                </label>
-              </li>
-            ))}
-            {!hasCategorySelection ? (
-              <li className="text-xs text-meta-4">Select categories to narrow types.</li>
-            ) : null}
-          </ul>
-        </details>
-
-        <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-dark">Subtypes</summary>
+          <summary className="cursor-pointer text-sm font-semibold text-dark">Sub categories</summary>
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productSubtypes.map((s) => (
               <li key={s.slug}>
@@ -362,8 +343,8 @@ export default function ShopLiveExperience({
                 </label>
               </li>
             ))}
-            {!hasTypeSelection ? (
-              <li className="text-xs text-meta-4">Select type(s) to narrow subtypes.</li>
+            {!hasCategorySelection ? (
+              <li className="text-xs text-meta-4">Select categories to narrow sub categories.</li>
             ) : null}
           </ul>
         </details>
@@ -505,6 +486,21 @@ export default function ShopLiveExperience({
           </aside>
 
           <div className="order-1 min-w-0 flex-1 lg:order-none">
+            {query.q.trim() ? (
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <p className="text-sm text-dark sm:text-base">
+                  Showing results for{" "}
+                  <span className="font-semibold">&ldquo;{query.q}&rdquo;</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="shrink-0 self-start text-sm font-medium text-blue underline-offset-2 hover:underline sm:self-center"
+                >
+                  Clear search
+                </button>
+              </div>
+            ) : null}
             <div className="mb-6 flex items-center justify-between gap-3">
               <h1 className="text-2xl font-semibold text-dark">Shop</h1>
               {searchPending || isLoading ? (

@@ -40,8 +40,7 @@ export type ShopListingData = {
   diecastScales: string[];
   /** Brands (active + in-stock counts; facet excludes current brand filter). */
   brands: { slug: string; name: string; count: number }[];
-  /** Facet rows use active + in-stock counts only. */
-  productTypes: { slug: string; name: string; count: number }[];
+  /** Sub categories (legacy subtype slugs). Facet rows use active + in-stock counts only. */
   productSubtypes: { slug: string; name: string; count: number }[];
   productCollections: { slug: string; name: string; count: number }[];
   /** Fixed discount bucket ids: b10, b25, b50, b100, on_sale */
@@ -106,6 +105,7 @@ async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> 
     Prisma.sql`OR LOWER(p.name) ILIKE ${pattern}`,
     Prisma.sql`OR LOWER(COALESCE(b.name, '')) ILIKE ${pattern}`,
     Prisma.sql`OR LOWER(COALESCE(p.short_description, '')) ILIKE ${pattern}`,
+    Prisma.sql`OR LOWER(COALESCE(st.name, '')) ILIKE ${pattern}`,
   ]);
   const extraClauses =
     extraClauseParts.length > 0 ? Prisma.join(extraClauseParts, " ") : Prisma.sql``;
@@ -115,6 +115,7 @@ async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> 
     FROM products p
     LEFT JOIN brands b ON p.brand_id = b.id
     LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN product_subtypes st ON p.subtype_id = st.id
     WHERE p.is_active = true
       AND (
         LOWER(REPLACE(p.name, ' ', '')) ILIKE ${compactPattern}
@@ -122,11 +123,13 @@ async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> 
         OR LOWER(REPLACE(COALESCE(p.description, ''), ' ', '')) ILIKE ${compactPattern}
         OR LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')) ILIKE ${compactPattern}
         OR LOWER(REPLACE(COALESCE(c.name, ''), ' ', '')) ILIKE ${compactPattern}
+        OR LOWER(REPLACE(COALESCE(st.name, ''), ' ', '')) ILIKE ${compactPattern}
         OR LOWER(p.name) ILIKE ${spacedPattern}
         OR LOWER(COALESCE(p.short_description, '')) ILIKE ${spacedPattern}
         OR LOWER(COALESCE(p.description, '')) ILIKE ${spacedPattern}
         OR LOWER(COALESCE(b.name, '')) ILIKE ${spacedPattern}
         OR LOWER(COALESCE(c.name, '')) ILIKE ${spacedPattern}
+        OR LOWER(COALESCE(st.name, '')) ILIKE ${spacedPattern}
         ${extraClauses}
       )
     LIMIT 50
@@ -470,18 +473,12 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   }
   const availableOnly = (usp.get("available") ?? "").trim() === "true";
 
-  const typeSlugs = [...new Set(usp.getAll("type").map((s) => cleanText(s, 160)).filter(Boolean))];
   const subtypeSlugs = [...new Set(usp.getAll("subtype").map((s) => cleanText(s, 160)).filter(Boolean))];
   const collectionSlugs = [...new Set(usp.getAll("collection").map((s) => cleanText(s, 160)).filter(Boolean))];
   const discountParams = [...new Set(usp.getAll("discount").map((s) => cleanText(s, 32)).filter(Boolean))];
-  for (const typeSlug of typeSlugs) {
-    if (!isUrlSlug(typeSlug)) {
-      return { ok: false, error: "Invalid type filter", status: 400 };
-    }
-  }
   for (const subtypeSlug of subtypeSlugs) {
     if (!isUrlSlug(subtypeSlug)) {
-      return { ok: false, error: "Invalid subtype filter", status: 400 };
+      return { ok: false, error: "Invalid sub category filter", status: 400 };
     }
   }
   for (const collectionSlug of collectionSlugs) {
@@ -520,7 +517,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           ageGroups: [],
           diecastScales: [],
           brands: [],
-          productTypes: [],
           productSubtypes: [],
           productCollections: [],
           discountBuckets: discountBucketsFromCounts(await getCachedGlobalDiscountBuckets()),
@@ -564,7 +560,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           ageGroups: [],
           diecastScales: [],
           brands: [],
-          productTypes: [],
           productSubtypes: [],
           productCollections: [],
           discountBuckets: [],
@@ -576,56 +571,17 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
     selectedCategoryIdSet = idSet;
   }
 
-  if (typeSlugs.length) {
-    const tRows = await prisma.product_types.findMany({
-      where: { is_active: true, OR: typeSlugs.flatMap((s) => slugMatchOrClause(s)) },
-      select: { id: true, category_id: true },
-    });
-    if (tRows.length === 0) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productTypes: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
-    }
-    if (selectedCategoryIdSet && !tRows.some((t) => selectedCategoryIdSet.has(t.category_id))) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productTypes: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
-    }
-    (where as { type_id?: { in: string[] } }).type_id = { in: tRows.map((t) => t.id) };
-  }
-
   if (subtypeSlugs.length) {
+    const subtypeWhere: Prisma.product_subtypesWhereInput = {
+      is_active: true,
+      OR: subtypeSlugs.flatMap((s) => slugMatchOrClause(s)),
+    };
+    if (selectedCategoryIdSet) {
+      subtypeWhere.category_id = { in: [...selectedCategoryIdSet] };
+    }
     const sRows = await prisma.product_subtypes.findMany({
-      where: { is_active: true, OR: subtypeSlugs.flatMap((s) => slugMatchOrClause(s)) },
-      select: { id: true, product_type_id: true },
+      where: subtypeWhere,
+      select: { id: true, category_id: true },
     });
     if (sRows.length === 0) {
       return {
@@ -638,27 +594,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           ageGroups: [],
           diecastScales: [],
           brands: [],
-          productTypes: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
-    }
-    const tIn = (where as { type_id?: { in: string[] } }).type_id?.in ?? [];
-    if (tIn.length && !sRows.every((s) => tIn.includes(s.product_type_id))) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productTypes: [],
           productSubtypes: [],
           productCollections: [],
           discountBuckets: [],
@@ -685,7 +620,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           ageGroups: [],
           diecastScales: [],
           brands: [],
-          productTypes: [],
           productSubtypes: [],
           productCollections: [],
           discountBuckets: [],
@@ -711,7 +645,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
           ageGroups: [],
           diecastScales: [],
           brands: [],
-          productTypes: [],
           productSubtypes: [],
           productCollections: [],
           discountBuckets: [],
@@ -742,17 +675,8 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
             {}),
         }
       : wNoBrand;
-  const wNoType: Prisma.productsWhereInput = { ...fw };
-  const typeIdInWhere = (where as { type_id?: { in?: string[] } }).type_id?.in ?? [];
-  const subtypeIdsInWhere = (where as { subtype_id?: { in?: string[] } }).subtype_id?.in ?? [];
-  let resolvedTypeIdsForSubtypes = [...typeIdInWhere];
-  if (resolvedTypeIdsForSubtypes.length === 0 && subtypeIdsInWhere.length > 0) {
-    const sMeta = await prisma.product_subtypes.findMany({
-      where: { id: { in: subtypeIdsInWhere } },
-      select: { product_type_id: true },
-    });
-    resolvedTypeIdsForSubtypes = [...new Set(sMeta.map((s) => s.product_type_id))];
-  }
+  const wNoSubtype: Prisma.productsWhereInput = { ...fw };
+  delete (wNoSubtype as { subtype_id?: unknown }).subtype_id;
 
   const orderBy: Prisma.productsOrderByWithRelationInput =
     sortPrice === "price_asc"
@@ -767,14 +691,13 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
     brandSlugs.length > 0 ||
     ageGroups.length > 0 ||
     diecastNorms.length > 0 ||
-    typeSlugs.length > 0 ||
     subtypeSlugs.length > 0 ||
     collectionSlugs.length > 0 ||
     minP !== null ||
     maxP !== null ||
     availableOnly;
 
-  const [ageGroupsRaw, typeGroups, subGroups, colGroups, brandIdGroups, diecastScalesCached, discountBucketCounts] =
+  const [ageGroupsRaw, subGroups, colGroups, brandIdGroups, diecastScalesCached, discountBucketCounts] =
     await Promise.all([
       prisma.products.findMany({
         where: { ...wNoAge, age_group: { not: null } },
@@ -783,24 +706,13 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         orderBy: { age_group: "asc" },
       }),
       prisma.products.groupBy({
-        by: ["type_id"],
-        where: { ...wNoType, type_id: { not: null } } as never,
+        by: ["subtype_id"],
+        where: { ...wNoSubtype, subtype_id: { not: null } } as never,
         _count: { _all: true },
       }),
-      resolvedTypeIdsForSubtypes.length > 0
-        ? prisma.products.groupBy({
-            by: ["subtype_id"],
-            where: {
-              ...wNoType,
-              type_id: { in: resolvedTypeIdsForSubtypes },
-              subtype_id: { not: null },
-            } as never,
-            _count: { _all: true },
-          })
-        : Promise.resolve([] as { subtype_id: string; _count: { _all: number } }[]),
       prisma.products.groupBy({
         by: ["collection_id"],
-        where: { ...wNoType, collection_id: { not: null } } as never,
+        where: { ...wNoSubtype, collection_id: { not: null } } as never,
         _count: { _all: true },
       }),
       prisma.products.groupBy({
@@ -816,27 +728,17 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         : getCachedGlobalDiscountBuckets(),
     ]);
 
-  const typeIdList = typeGroups
-    .map((g) => g.type_id)
-    .filter((v): v is string => v !== null);
-  const typeRows = typeIdList.length
-    ? await prisma.product_types.findMany({
-        where: { id: { in: typeIdList }, is_active: true },
-        select: { id: true, name: true, slug: true },
-        orderBy: { name: "asc" },
-      })
-    : [];
-  const tCount = new Map(typeGroups.map((g) => [g.type_id, g._count._all] as const));
-  const productTypes: { slug: string; name: string; count: number }[] = typeRows.map((r) => ({
-    slug: r.slug,
-    name: r.name,
-    count: tCount.get(r.id) ?? 0,
-  }));
-
   const subIdList = subGroups.map((g) => g.subtype_id).filter((v): v is string => v !== null);
+  const subRowsWhere: Prisma.product_subtypesWhereInput = {
+    id: { in: subIdList },
+    is_active: true,
+  };
+  if (selectedCategoryIdSet) {
+    subRowsWhere.category_id = { in: [...selectedCategoryIdSet] };
+  }
   const subRows = subIdList.length
     ? await prisma.product_subtypes.findMany({
-        where: { id: { in: subIdList } },
+        where: subRowsWhere,
         select: { id: true, name: true, slug: true },
         orderBy: { name: "asc" },
       })
@@ -1011,7 +913,6 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
         });
       })(),
       brands: brandsForUi,
-      productTypes,
       productSubtypes,
       productCollections,
       discountBuckets,

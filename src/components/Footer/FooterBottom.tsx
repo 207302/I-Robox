@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
+import { chromeBgStyle } from "@/lib/marketing/chromeColors";
 
 type PaymentIcon = {
   id: number;
@@ -52,11 +53,12 @@ const paymentsData: PaymentIcon[] = [
   },
 ];
 
-export default function FooterBottom() {
+export default function FooterBottom({ backgroundColor }: { backgroundColor?: string | null }) {
   const year = new Date().getFullYear();
+  const bottomStyle = chromeBgStyle(backgroundColor);
 
   return (
-    <div className="py-5 xl:py-7.5 bg-gray-1">
+    <div className={`py-5 xl:py-7.5 ${bottomStyle ? "" : "bg-gray-1"}`} style={bottomStyle}>
       <div className="px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div>

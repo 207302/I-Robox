@@ -112,7 +112,6 @@ export async function POST(req: NextRequest) {
     const diecast_scale_id = cleanOptionalText(body.diecast_scale_id, 64);
     const category_id = cleanOptionalText(body.category_id, 64);
     const brand_id = cleanOptionalText(body.brand_id, 64);
-    const type_id_in = cleanOptionalText(body.type_id, 64);
     const subtype_id_in = cleanOptionalText(body.subtype_id, 64);
     const collection_id_in = cleanOptionalText(body.collection_id, 64);
     let hsn_code: string | null = null;
@@ -152,7 +151,6 @@ export async function POST(req: NextRequest) {
       (category_id && !isUuid(category_id)) ||
       (brand_id && !isUuid(brand_id)) ||
       (diecast_scale_id && !isUuid(diecast_scale_id)) ||
-      (type_id_in && !isUuid(type_id_in)) ||
       (subtype_id_in && !isUuid(subtype_id_in)) ||
       (collection_id_in && !isUuid(collection_id_in))
     ) {
@@ -162,7 +160,6 @@ export async function POST(req: NextRequest) {
     try {
       const tax = await resolveProductTaxonomyForSave({
         category_id: category_id ?? null,
-        type_id: type_id_in ?? null,
         subtype_id: subtype_id_in ?? null,
         collection_id: collection_id_in ?? null,
       });

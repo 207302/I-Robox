@@ -28,6 +28,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       where: { id },
       select: {
         id: true,
+        category_id: true,
         product_type_id: true,
         name: true,
         slug: true,
@@ -58,8 +59,13 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body as Record<string, unknown>;
   
-    const data: { name?: string; slug?: string; is_active?: boolean; sort_order?: number; product_type_id?: string } =
-      {};
+    const data: {
+      name?: string;
+      slug?: string;
+      is_active?: boolean;
+      sort_order?: number;
+      category_id?: string;
+    } = {};
   
     if (body.name !== undefined) {
       const name = cleanText(String(body.name), 120);
@@ -83,12 +89,12 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
       if (!Number.isFinite(n)) return NextResponse.json({ error: "Invalid sort_order" }, { status: 400 });
       data.sort_order = n;
     }
-    if (body.product_type_id !== undefined) {
-      const tid = String(body.product_type_id);
-      if (!isUuid(tid)) return NextResponse.json({ error: "Invalid product_type_id" }, { status: 400 });
-      const t = await prisma.product_types.findUnique({ where: { id: tid } });
-      if (!t) return NextResponse.json({ error: "Product type not found" }, { status: 400 });
-      data.product_type_id = tid;
+    if (body.category_id !== undefined) {
+      const cid = String(body.category_id);
+      if (!isUuid(cid)) return NextResponse.json({ error: "Invalid category_id" }, { status: 400 });
+      const cat = await prisma.categories.findUnique({ where: { id: cid }, select: { id: true } });
+      if (!cat) return NextResponse.json({ error: "Category not found" }, { status: 400 });
+      data.category_id = cid;
     }
   
     if (Object.keys(data).length === 0) {
@@ -100,6 +106,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
       data,
       select: {
         id: true,
+        category_id: true,
         product_type_id: true,
         name: true,
         slug: true,

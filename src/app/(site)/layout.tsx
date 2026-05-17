@@ -16,8 +16,14 @@ export default async function SiteLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { utilityAnnouncement, marqueeAnnouncements, headerNav, storeContact, freeShippingThresholdInr } =
-    await getSiteLayoutShell();
+  const {
+    utilityAnnouncement,
+    marqueeAnnouncements,
+    headerNav,
+    storeContact,
+    freeShippingThresholdInr,
+    chromeColors,
+  } = await getSiteLayoutShell();
 
   return (
     <div>
@@ -35,6 +41,7 @@ export default async function SiteLayout({
               marqueeAnnouncements={marqueeAnnouncements}
               headerNav={headerNav}
               freeShippingThresholdInr={freeShippingThresholdInr}
+              chromeColors={chromeColors}
             />
           </Suspense>
           <Breadcrumb />
@@ -44,7 +51,7 @@ export default async function SiteLayout({
 
         <ScrollToTop />
         <WhatsAppFloatingDeferred phone={storeContact.contactPhone} />
-        <Footer storeContact={storeContact} />
+        <Footer storeContact={storeContact} chromeColors={chromeColors} />
       </>
     </div>
   );

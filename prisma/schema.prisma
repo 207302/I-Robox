@@ -132,6 +132,8 @@ model categories {
   homepage_highlights homepage_highlights[]
   homepage_category_tiles homepage_category_tiles[]
   product_types     product_types[]
+  /// Sub categories (legacy table product_subtypes).
+  product_subtypes  product_subtypes[]
 
   @@index([parent_id], map: "idx_categories_parent_id")
 }
@@ -154,19 +156,22 @@ model product_types {
   @@index([is_active], map: "idx_product_types_is_active")
 }
 
-/// Subtype of a product type. Slug is globally unique.
+/// Sub category (legacy table product_subtypes). Slug is globally unique; links to category.
 model product_subtypes {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  product_type_id String   @db.Uuid
-  name            String   @db.VarChar(120)
-  slug            String   @unique @db.VarChar(160)
-  is_active       Boolean  @default(true)
-  sort_order      Int      @default(0)
-  created_at      DateTime @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime @default(now()) @db.Timestamptz(6)
-  product_types   product_types @relation(fields: [product_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id     String         @db.Uuid
+  product_type_id String?        @db.Uuid
+  name            String         @db.VarChar(120)
+  slug            String         @unique @db.VarChar(160)
+  is_active       Boolean        @default(true)
+  sort_order      Int            @default(0)
+  created_at      DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime       @default(now()) @db.Timestamptz(6)
+  categories      categories     @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product_types   product_types? @relation(fields: [product_type_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   products        products[]
 
+  @@index([category_id], map: "idx_product_subtypes_category_id")
   @@index([product_type_id], map: "idx_product_subtypes_type_id")
   @@index([is_active], map: "idx_product_subtypes_is_active")
 }
@@ -815,5 +820,11 @@ model site_marketing_settings {
   social_twitter_url      String?  @db.VarChar(500)
   social_instagram_url    String?  @db.VarChar(500)
   social_linkedin_url     String?  @db.VarChar(500)
+  /// Top utility announcement bar background (e.g. #0c1220).
+  utility_bar_bg_color    String?  @db.VarChar(20)
+  /// Marquee / promo bar background (e.g. #c41e3a).
+  marquee_bar_bg_color    String?  @db.VarChar(20)
+  /// Footer and footer bottom strip background (e.g. #f9fafb).
+  footer_bg_color         String?  @db.VarChar(20)
   updated_at              DateTime @default(now()) @db.Timestamptz(6)
 }

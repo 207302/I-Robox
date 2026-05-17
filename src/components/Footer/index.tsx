@@ -5,6 +5,7 @@ import {
   LinkedInIcon,
   TwitterIcon,
 } from "@/assets/icons/social";
+import { chromeBgStyle, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import type { StoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
 import { phoneToTelHref } from "@/lib/marketing/storeContactDisplay";
 import Link from "next/link";
@@ -42,9 +43,19 @@ function SocialLink({
   );
 }
 
-export default function Footer({ storeContact }: { storeContact: StoreContactDisplay }) {
+export default function Footer({
+  storeContact,
+  chromeColors,
+}: {
+  storeContact: StoreContactDisplay;
+  chromeColors?: SiteChromeColors;
+}) {
+  const footerBgStyle = chromeBgStyle(chromeColors?.footerBg);
   return (
-    <footer className="overflow-hidden border-t border-gray-3">
+    <footer
+      className={`overflow-hidden border-t border-gray-3 ${footerBgStyle ? "" : "bg-white"}`}
+      style={footerBgStyle}
+    >
       <div className="px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         {/* <!-- footer menu start --> */}
         <div className="flex flex-wrap xl:flex-nowrap gap-10 xl:gap-19 xl:justify-between pt-17.5 xl:pt-22.5 pb-10 xl:pb-20">
@@ -138,7 +149,7 @@ export default function Footer({ storeContact }: { storeContact: StoreContactDis
         {/* <!-- footer menu end --> */}
       </div>
 
-      <FooterBottom />
+      <FooterBottom backgroundColor={chromeColors?.footerBg} />
     </footer>
   );
 }

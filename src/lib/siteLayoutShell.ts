@@ -4,6 +4,8 @@ import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHeaderNavData } from "@/lib/nav/headerNav";
 import { getStoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
 import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
+import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
+import { getSiteChromeColors } from "@/lib/queries/marketing";
 import { withPrismaRetry } from "@/lib/prismaRetry";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
 
@@ -17,6 +19,7 @@ export type SiteLayoutShell = {
   headerNav: Awaited<ReturnType<typeof getHeaderNavData>>;
   storeContact: Awaited<ReturnType<typeof getStoreContactDisplay>>;
   freeShippingThresholdInr: Awaited<ReturnType<typeof getFreeShippingThresholdInr>>;
+  chromeColors: SiteChromeColors;
 };
 
 const EMPTY_SHELL: SiteLayoutShell = {
@@ -34,6 +37,7 @@ const EMPTY_SHELL: SiteLayoutShell = {
     socialLinkedInUrl: "",
   },
   freeShippingThresholdInr: 2000,
+  chromeColors: EMPTY_CHROME_COLORS,
 };
 
 async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
@@ -49,10 +53,11 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
   const marqueeRows = activeAnnouncements.filter((e) => e.placement === "MARQUEE");
   const utilityPrimary = utilityRows[0];
 
-  const [headerNav, storeContact, freeShippingThresholdInr] = await Promise.all([
+  const [headerNav, storeContact, freeShippingThresholdInr, chromeColors] = await Promise.all([
     getHeaderNavData(),
     getStoreContactDisplay(),
     getFreeShippingThresholdInr(),
+    getSiteChromeColors(),
   ]);
 
   return {
@@ -70,6 +75,7 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
     headerNav,
     storeContact,
     freeShippingThresholdInr,
+    chromeColors,
   };
   }).catch((err) => {
     console.error("[siteLayoutShell] database unavailable:", err);

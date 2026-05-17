@@ -203,13 +203,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
     const bodyAny = body as {
       category_id?: unknown;
-      type_id?: unknown;
       subtype_id?: unknown;
       collection_id?: unknown;
     };
     const hasTaxOrCat =
       bodyAny.category_id !== undefined ||
-      bodyAny.type_id !== undefined ||
       bodyAny.subtype_id !== undefined ||
       bodyAny.collection_id !== undefined;
     if (hasTaxOrCat) {
@@ -231,12 +229,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         if (!c.ok) return bad();
         nextCategory = c.value;
       }
-      let nextType = current.type_id;
-      if (bodyAny.type_id !== undefined) {
-        const t = uuidOrNull(bodyAny.type_id);
-        if (!t.ok) return bad();
-        nextType = t.value;
-      }
       let nextSubtype = current.subtype_id;
       if (bodyAny.subtype_id !== undefined) {
         const s = uuidOrNull(bodyAny.subtype_id);
@@ -251,7 +243,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
       const resolved = await resolveProductTaxonomyForSave({
         category_id: nextCategory,
-        type_id: nextType,
         subtype_id: nextSubtype,
         collection_id: nextCollection,
       });

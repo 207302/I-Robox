@@ -22,6 +22,7 @@ import toast from "react-hot-toast";
 import { useDebounce } from "@/hooks/useDebounce";
 import SiteSearchPreloader from "@/components/Common/SiteSearchPreloader";
 import { setSearchProgress, startSearchProgress } from "@/lib/shop/searchProgress";
+import { chromeBgStyle, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SHOP_QUERY_EVENT, applyShopQuery } from "@/lib/shop/shopQuery";
 
 export type SiteHeaderData = {
@@ -49,6 +50,7 @@ type IProps = {
   headerNav: HeaderNavData;
   /** Minimum cart subtotal for free shipping; null = feature disabled. */
   freeShippingThresholdInr?: number | null;
+  chromeColors?: SiteChromeColors;
 };
 
 type MeResponse = {
@@ -67,7 +69,10 @@ const MainHeader = ({
   marqueeAnnouncements,
   headerNav,
   freeShippingThresholdInr = null,
+  chromeColors,
 }: IProps) => {
+  const utilityBarStyle = chromeBgStyle(chromeColors?.utilityBarBg);
+  const marqueeBarStyle = chromeBgStyle(chromeColors?.marqueeBarBg);
   const menuData = useMemo(() => buildHeaderMenuData(headerNav), [headerNav]);
   const pathname = usePathname();
   const router = useRouter();
@@ -248,7 +253,11 @@ const MainHeader = ({
           }`}
       >
         {/* Announcement bar */}
-        <div className="bg-[#0c1220] py-2.5 border-b border-white/[0.08]" suppressHydrationWarning>
+        <div
+          className={`py-2.5 border-b border-white/[0.08] ${utilityBarStyle ? "" : "bg-[#0c1220]"}`}
+          style={utilityBarStyle}
+          suppressHydrationWarning
+        >
           <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
             <div className="flex items-center justify-between gap-3" suppressHydrationWarning>
               <p className="text-xs sm:text-sm font-medium text-white">
@@ -294,7 +303,11 @@ const MainHeader = ({
         </div>
 
         {/* Running promo banner — min height avoids CLS when DB-driven copy length changes */}
-        <div className="flex min-h-[2.75rem] flex-col justify-center overflow-hidden border-b border-blue-dark bg-blue" suppressHydrationWarning>
+        <div
+          className={`flex min-h-[2.75rem] flex-col justify-center overflow-hidden border-b border-blue-dark ${marqueeBarStyle ? "" : "bg-blue"}`}
+          style={marqueeBarStyle}
+          suppressHydrationWarning
+        >
           <div className="relative" suppressHydrationWarning>
             {(() => {
               const items =

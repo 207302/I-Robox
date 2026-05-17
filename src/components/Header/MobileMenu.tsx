@@ -90,12 +90,13 @@ const MobileMenu = ({
 
       {/* Offcanvas Menu */}
       <div
-        className={`fixed top-0 left-0 h-full w-[300px] max-w-full bg-white z-50 shadow-xl transform transition-transform duration-300 ease-in-out mobile-menu-container ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
+        className={`mobile-menu-container fixed top-0 left-0 z-50 h-full w-[min(300px,100vw)] max-w-full overflow-hidden bg-white shadow-xl transition-[transform,visibility] duration-300 ease-in-out ${
+          isOpen ? "visible translate-x-0" : "invisible pointer-events-none -translate-x-full"
         }`}
+        aria-hidden={!isOpen}
         suppressHydrationWarning
       >
-        <div className="flex flex-col h-full" suppressHydrationWarning>
+        <div className="flex h-full min-w-0 flex-col overflow-hidden" suppressHydrationWarning>
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-3" suppressHydrationWarning>
             <div suppressHydrationWarning>
@@ -125,22 +126,31 @@ const MobileMenu = ({
           <form
             data-shop-search-ui
             onSubmit={onSearchSubmit}
-            className="relative border-b border-gray-3 px-4 py-3"
+            className="box-border w-full min-w-0 shrink-0 border-b border-gray-3 px-4 py-3"
           >
-            <input
-              ref={searchInputRef}
-              type="search"
-              name="q"
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder="Search products…"
-              autoComplete="off"
-              aria-label="Search products"
-              className="min-h-[40px] w-full rounded-lg border border-gray-3 bg-white py-2 pl-3 pr-9 text-sm text-dark outline-none focus:border-blue"
-            />
-            <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-meta-4">
-              <SearchIcon />
-            </span>
+            <div className="flex h-10 w-full max-w-full items-center overflow-hidden rounded-lg border border-gray-3 bg-white focus-within:border-blue">
+              <input
+                ref={searchInputRef}
+                type="text"
+                name="q"
+                role="searchbox"
+                inputMode="search"
+                value={searchQuery}
+                onChange={(e) => onSearchQueryChange(e.target.value)}
+                placeholder="Search products…"
+                autoComplete="off"
+                enterKeyHint="search"
+                aria-label="Search products"
+                className="min-w-0 flex-1 border-0 bg-transparent py-2 pl-3 pr-1 text-sm text-dark outline-none"
+              />
+              <button
+                type="submit"
+                className="mr-2.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-meta-4 transition hover:text-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue"
+                aria-label="Search"
+              >
+                <SearchIcon className="h-5 w-5 shrink-0" />
+              </button>
+            </div>
           </form>
 
           {/* Menu Items */}

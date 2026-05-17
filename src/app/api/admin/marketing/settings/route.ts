@@ -175,6 +175,15 @@ export async function PATCH(req: NextRequest) {
     if (body.social_linkedin_url !== undefined) {
       data.social_linkedin_url = cleanOptionalText(body.social_linkedin_url, 500);
     }
+    if (body.utility_bar_bg_color !== undefined) {
+      data.utility_bar_bg_color = cleanOptionalHexColor(body.utility_bar_bg_color);
+    }
+    if (body.marquee_bar_bg_color !== undefined) {
+      data.marquee_bar_bg_color = cleanOptionalHexColor(body.marquee_bar_bg_color);
+    }
+    if (body.footer_bg_color !== undefined) {
+      data.footer_bg_color = cleanOptionalHexColor(body.footer_bg_color);
+    }
   
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "No recognized fields to update" }, { status: 400 });
@@ -218,6 +227,9 @@ export async function PATCH(req: NextRequest) {
       social_twitter_url: null,
       social_instagram_url: null,
       social_linkedin_url: null,
+      utility_bar_bg_color: null,
+      marquee_bar_bg_color: null,
+      footer_bg_color: null,
     };
   
     try {

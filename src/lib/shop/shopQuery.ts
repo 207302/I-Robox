@@ -6,7 +6,6 @@ export type ShopQueryState = {
   brands: string[];
   ageGroups: string[];
   diecastScales: string[];
-  types: string[];
   subtypes: string[];
   collections: string[];
   discounts: string[];
@@ -28,7 +27,6 @@ export function parseShopQueryString(queryString: string): ShopQueryState {
     brands: pickMulti("brand"),
     ageGroups: pickMulti("ageGroup"),
     diecastScales: pickMulti("diecastScale"),
-    types: pickMulti("type"),
     subtypes: pickMulti("subtype"),
     collections: pickMulti("collection"),
     discounts: pickMulti("discount"),
@@ -47,7 +45,6 @@ export function buildListingQueryString(state: ShopQueryState): string {
   for (const b of state.brands) usp.append("brand", b);
   for (const a of state.ageGroups) usp.append("ageGroup", a);
   for (const d of state.diecastScales) usp.append("diecastScale", d);
-  for (const t of state.types) usp.append("type", t);
   for (const s of state.subtypes) usp.append("subtype", s);
   for (const c of state.collections) usp.append("collection", c);
   for (const d of state.discounts) usp.append("discount", d);

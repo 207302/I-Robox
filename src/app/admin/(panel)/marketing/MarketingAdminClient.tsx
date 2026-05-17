@@ -45,6 +45,9 @@ type SiteSettingsRow = {
   social_twitter_url?: string | null;
   social_instagram_url?: string | null;
   social_linkedin_url?: string | null;
+  utility_bar_bg_color?: string | null;
+  marquee_bar_bg_color?: string | null;
+  footer_bg_color?: string | null;
 };
 
 type QuickLinkPageAdminKey = "privacy" | "terms" | "returns" | "faq" | "contact";
@@ -88,14 +91,16 @@ function normalizeHexForPicker(value: string) {
   return "#ffffff";
 }
 
-function HeroOverlayColorField({
+function HexColorField({
   label,
   value,
   onChange,
+  placeholder = "#ffffff",
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
+  placeholder?: string;
 }) {
   const pickerValue = value.trim() ? normalizeHexForPicker(value) : "#ffffff";
   return (
@@ -113,7 +118,7 @@ function HeroOverlayColorField({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="#ffffff"
+          placeholder={placeholder}
           className="min-w-[7rem] flex-1 rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm font-mono"
         />
         {value.trim() ? (
@@ -195,6 +200,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [heroOverlayCtaLabelColor, setHeroOverlayCtaLabelColor] = useState(
     st0?.hero_overlay_cta_label_color ?? ""
   );
+  const [utilityBarBgColor, setUtilityBarBgColor] = useState(st0?.utility_bar_bg_color ?? "");
+  const [marqueeBarBgColor, setMarqueeBarBgColor] = useState(st0?.marquee_bar_bg_color ?? "");
+  const [footerBgColor, setFooterBgColor] = useState(st0?.footer_bg_color ?? "");
+  const [chromeColorsSaving, setChromeColorsSaving] = useState(false);
   const [quickLinkPages, setQuickLinkPages] = useState<
     Record<QuickLinkPageAdminKey, { title: string; subtitle: string; content: string }>
   >({
@@ -423,7 +432,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
               />
               <div className="mt-2">
-                <HeroOverlayColorField
+                <HexColorField
                   label="Eyebrow color"
                   value={heroOverlayEyebrowColor}
                   onChange={setHeroOverlayEyebrowColor}
@@ -438,7 +447,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
               />
               <div className="mt-2">
-                <HeroOverlayColorField
+                <HexColorField
                   label="Heading color"
                   value={heroOverlayHeadingColor}
                   onChange={setHeroOverlayHeadingColor}
@@ -454,7 +463,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
               />
               <div className="mt-2">
-                <HeroOverlayColorField
+                <HexColorField
                   label="Subheading color"
                   value={heroOverlaySubheadingColor}
                   onChange={setHeroOverlaySubheadingColor}
@@ -470,7 +479,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                   className="mt-1 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
                 />
                 <div className="mt-2">
-                  <HeroOverlayColorField
+                  <HexColorField
                     label="CTA label color"
                     value={heroOverlayCtaLabelColor}
                     onChange={setHeroOverlayCtaLabelColor}
@@ -1176,10 +1185,72 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
       ) : null}
 
       {tab === "announcements" ? (
+        <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-2xl">
+          <h2 className="text-lg font-semibold">Bar &amp; footer colors</h2>
+          <p className="text-sm text-meta-3">
+            Customize background colors for the top utility strip, scrolling marquee, and footer.
+            Leave empty to use the theme defaults.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-1">
+            <HexColorField
+              label="Utility bar background"
+              value={utilityBarBgColor}
+              onChange={setUtilityBarBgColor}
+              placeholder="#0c1220"
+            />
+            <HexColorField
+              label="Marquee bar background"
+              value={marqueeBarBgColor}
+              onChange={setMarqueeBarBgColor}
+              placeholder="#c41e3a"
+            />
+            <HexColorField
+              label="Footer background"
+              value={footerBgColor}
+              onChange={setFooterBgColor}
+              placeholder="#f9fafb"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={chromeColorsSaving}
+            className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            onClick={async () => {
+              try {
+                setChromeColorsSaving(true);
+                const row = await j<SiteSettingsRow>(
+                  await fetch("/api/admin/marketing/settings", {
+                    method: "PATCH",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                      utility_bar_bg_color: utilityBarBgColor.trim() || null,
+                      marquee_bar_bg_color: marqueeBarBgColor.trim() || null,
+                      footer_bg_color: footerBgColor.trim() || null,
+                    }),
+                  })
+                );
+                setUtilityBarBgColor(row.utility_bar_bg_color ?? "");
+                setMarqueeBarBgColor(row.marquee_bar_bg_color ?? "");
+                setFooterBgColor(row.footer_bg_color ?? "");
+                toast.success("Bar & footer colors saved");
+                router.refresh();
+              } catch (err: unknown) {
+                toast.error(err instanceof Error ? err.message : "Failed");
+              } finally {
+                setChromeColorsSaving(false);
+              }
+            }}
+          >
+            {chromeColorsSaving ? "Saving…" : "Save colors"}
+          </button>
+        </section>
+      ) : null}
+
+      {tab === "announcements" ? (
         <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
           <h2 className="text-lg font-semibold">Announcement bar</h2>
           <p className="text-sm text-meta-3">
-            UTILITY = top gray strip (left of welcome). MARQUEE = scrolling row below.
+            UTILITY = top strip (welcome / sign in). MARQUEE = scrolling row below.
           </p>
           <ul className="divide-y divide-gray-3 text-sm">
             {announcements.map((row: any) => (

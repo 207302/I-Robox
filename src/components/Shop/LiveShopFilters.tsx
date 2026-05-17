@@ -130,7 +130,7 @@ export default function LiveShopFilters({ formId, queryString }: Props) {
           selectedCategoryCount > 0 &&
           field instanceof HTMLInputElement &&
           field.type === "checkbox" &&
-          (k === "brand" || k === "type" || k === "subtype" || k === "collection")
+          (k === "brand" || k === "subtype" || k === "collection")
         ) {
           const count = optionCountFromLabel(field);
           if (count === 0) continue;

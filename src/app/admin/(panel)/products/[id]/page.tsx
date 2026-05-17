@@ -49,8 +49,7 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<Option[]>([]);
   const [brands, setBrands] = useState<Option[]>([]);
   const [diecastScales, setDiecastScales] = useState<Option[]>([]);
-  const [productTypes, setProductTypes] = useState<Option[]>([]);
-  const [productSubtypes, setProductSubtypes] = useState<Option[]>([]);
+  const [productSubcategories, setProductSubcategories] = useState<Option[]>([]);
   const [collections, setCollections] = useState<Option[]>([]);
   const [newVariantColor, setNewVariantColor] = useState("");
   const selectedCategory = categories.find((c) => c.id === form?.category_id);
@@ -120,38 +119,22 @@ export default function EditProductPage() {
   useEffect(() => {
     const catId = form?.category_id as string | undefined;
     if (!catId) {
-      setProductTypes([]);
+      setProductSubcategories([]);
       return;
     }
     (async () => {
       try {
-        const res = await fetch(`/api/admin/product-types?category_id=${catId}`);
+        const res = await fetch(`/api/admin/product-subtypes?category_id=${catId}`, {
+          cache: "no-store",
+        });
         const data = await res.json();
-        if (res.ok) setProductTypes(Array.isArray(data) ? data : []);
-        else setProductTypes([]);
+        if (res.ok) setProductSubcategories(Array.isArray(data) ? data : []);
+        else setProductSubcategories([]);
       } catch {
-        setProductTypes([]);
+        setProductSubcategories([]);
       }
     })();
   }, [form?.category_id]);
-
-  useEffect(() => {
-    const tid = form?.type_id as string | undefined;
-    if (!tid) {
-      setProductSubtypes([]);
-      return;
-    }
-    (async () => {
-      try {
-        const res = await fetch(`/api/admin/product-subtypes?type_id=${tid}`);
-        const data = await res.json();
-        if (res.ok) setProductSubtypes(Array.isArray(data) ? data : []);
-        else setProductSubtypes([]);
-      } catch {
-        setProductSubtypes([]);
-      }
-    })();
-  }, [form?.type_id]);
 
   async function save() {
     setLoading(true);
@@ -175,7 +158,6 @@ export default function EditProductPage() {
           low_stock_threshold: Number(form.low_stock_threshold),
           diecast_scale_id: form.diecast_scale_id || null,
           category_id: form.category_id || null,
-          type_id: form.type_id || null,
           subtype_id: form.subtype_id || null,
           collection_id: form.collection_id || null,
         }),
@@ -649,7 +631,6 @@ export default function EditProductPage() {
               setForm((f: any) => ({
                 ...f,
                 category_id: val,
-                type_id: "",
                 subtype_id: "",
                 diecast_scale_id: allowScale ? f.diecast_scale_id : "",
               }));
@@ -663,65 +644,37 @@ export default function EditProductPage() {
             }
             onDeleted={(id) => {
               setCategories((prev) => prev.filter((x) => x.id !== id));
-              setProductTypes([]);
-              setProductSubtypes([]);
-              setForm((f: any) => ({ ...f, category_id: "", type_id: "", subtype_id: "" }));
+              setProductSubcategories([]);
+              setForm((f: any) => ({ ...f, category_id: "", subtype_id: "" }));
             }}
             createEndpoint="/api/admin/categories"
             deleteEndpointBase="/api/admin/categories"
           />
 
           <SelectWithCreate
-            label="Product type"
-            value={form.type_id ?? ""}
-            onChange={(val) => setForm((f: any) => ({ ...f, type_id: val, subtype_id: "" }))}
-            options={productTypes}
+            label="Sub category"
+            value={form.subtype_id ?? ""}
+            onChange={(val) => setForm((f: any) => ({ ...f, subtype_id: val }))}
+            options={productSubcategories}
             onCreated={(opt) =>
-              setProductTypes((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
+              setProductSubcategories((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
             }
             onUpdated={(opt) =>
-              setProductTypes((prev) =>
+              setProductSubcategories((prev) =>
                 prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
               )
             }
             onDeleted={(id) => {
-              setProductTypes((prev) => prev.filter((x) => x.id !== id));
-              setProductSubtypes([]);
-              setForm((f: any) => ({ ...f, type_id: "", subtype_id: "" }));
+              setProductSubcategories((prev) => prev.filter((x) => x.id !== id));
+              setForm((f: any) => ({ ...f, subtype_id: "" }));
             }}
-            createEndpoint="/api/admin/product-types"
-            deleteEndpointBase="/api/admin/product-types"
+            createEndpoint="/api/admin/product-subtypes"
+            deleteEndpointBase="/api/admin/product-subtypes"
             placeholder={form.category_id ? "— None —" : "Select a category first"}
             createBody={form.category_id ? { category_id: form.category_id } : undefined}
             disableCreate={!form.category_id}
             disableCreateReason="Select a category first"
             disableSelect={!form.category_id}
-          />
-
-          <SelectWithCreate
-            label="Subtype"
-            value={form.subtype_id ?? ""}
-            onChange={(val) => setForm((f: any) => ({ ...f, subtype_id: val }))}
-            options={productSubtypes}
-            onCreated={(opt) =>
-              setProductSubtypes((prev) => [...prev, opt].sort((a, b) => a.name.localeCompare(b.name)))
-            }
-            onUpdated={(opt) =>
-              setProductSubtypes((prev) =>
-                prev.map((x) => (x.id === opt.id ? opt : x)).sort((a, b) => a.name.localeCompare(b.name))
-              )
-            }
-            onDeleted={(id) => {
-              setProductSubtypes((prev) => prev.filter((x) => x.id !== id));
-              setForm((f: any) => ({ ...f, subtype_id: "" }));
-            }}
-            createEndpoint="/api/admin/product-subtypes"
-            deleteEndpointBase="/api/admin/product-subtypes"
-            placeholder={form.type_id ? "— None —" : "Select a type first"}
-            createBody={form.type_id ? { product_type_id: form.type_id } : undefined}
-            disableCreate={!form.type_id}
-            disableCreateReason="Select a product type first"
-            disableSelect={!form.type_id}
           />
 
           <SelectWithCreate

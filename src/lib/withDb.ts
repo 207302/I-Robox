@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
-import { prismaReady, reinitializePrismaClient } from "@/lib/prisma";
+import { isProductionBuildPhase, prismaReady, reinitializePrismaClient } from "@/lib/prisma";
 
-const DB_TIMEOUT_MS = 8_000;
+const DB_TIMEOUT_MS = isProductionBuildPhase() ? 3_000 : 8_000;
 const UNREACHABLE_RETRY_MS = 2_000;
 
 class DbTimeoutError extends Error {

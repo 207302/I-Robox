@@ -11,6 +11,8 @@ for (const name of [".env.local", ".env"]) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** SSG pages (PDPs, ISR shells) — Neon cold queries can exceed 60s default. */
+  staticPageGenerationTimeout: Number(process.env.STATIC_PAGE_GENERATION_TIMEOUT ?? 180),
   reactStrictMode: false,
   compress: true,
   poweredByHeader: false,
@@ -43,7 +45,8 @@ const nextConfig = {
   },
   experimental: {
     workerThreads: false,
-    cpus: 2,
+    /** Fewer SSG workers = less Neon connection churn during `next build`. Override with STATIC_GENERATION_CPUS=2 */
+    cpus: Number(process.env.STATIC_GENERATION_CPUS ?? 1),
     optimizeCss: true,
     optimizePackageImports: [
       "lucide-react",

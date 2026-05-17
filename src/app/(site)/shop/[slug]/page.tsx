@@ -19,7 +19,7 @@ export const revalidate = 300;
 /** Uncached slugs render on first request, then enter the 300s ISR cache. */
 export const dynamicParams = true;
 
-/** Build: top ~40 PDPs only (see `productStaticParams.ts`). Runtime ISR covers the catalog. */
+/** Build: top 10 PDPs only (see `productStaticParams.ts`). Runtime ISR covers the catalog. */
 export async function generateStaticParams() {
   return getProductSlugsForStaticGeneration();
 }

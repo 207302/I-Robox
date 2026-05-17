@@ -1,42 +1,11 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
+import { deriveDirectUrlFromPooled, normalizeDatabaseUrl } from "@/lib/databaseUrl";
 import { ensureDatabaseEnvLoaded, getDatabaseUrlFromEnv } from "@/lib/loadDatabaseEnv";
 import { extendPrismaForPerf } from "@/lib/observability/prisma";
 
-const BUILD_PHASE = "phase-production-build";
-
-export function isProductionBuildPhase(): boolean {
-  return process.env.NEXT_PHASE === BUILD_PHASE;
-}
-
-/** Runtime: 1 conn/process on Hostinger prod. Dev uses a higher limit for parallel SSR/API. */
-function connectionLimitForRuntime(): string {
-  if (process.env.NODE_ENV !== "production") return "10";
-  const fromEnv = process.env.DATABASE_CONNECTION_LIMIT?.trim();
-  if (fromEnv && /^\d+$/.test(fromEnv)) return fromEnv;
-  if (isProductionBuildPhase()) return "10";
-  return "1";
-}
-
-function normalizeDatabaseUrl(raw: string, opts?: { pooled?: boolean }) {
-  const building = isProductionBuildPhase();
-  try {
-    const u = new URL(raw);
-    if (!u.searchParams.has("sslmode")) {
-      u.searchParams.set("sslmode", "require");
-    }
-    u.searchParams.set("connect_timeout", building ? "30" : "10");
-    u.searchParams.set("connection_limit", connectionLimitForRuntime());
-    u.searchParams.set("pool_timeout", building ? "60" : "20");
-    if (opts?.pooled && u.hostname.includes("-pooler.") && !u.searchParams.has("pgbouncer")) {
-      u.searchParams.set("pgbouncer", "true");
-    }
-    return u.toString();
-  } catch {
-    return raw;
-  }
-}
+export { isProductionBuildPhase } from "@/lib/databaseUrl";
 
 /** Resolved pooler URL for Prisma `datasource`. */
 export function resolveDatabaseConnectionString(): string {
@@ -51,10 +20,7 @@ export function resolveDatabaseConnectionString(): string {
   process.env.DATABASE_URL = normalized;
 
   if (!process.env.DIRECT_URL?.trim()) {
-    const direct = normalized.includes("-pooler.")
-      ? normalized.replace("-pooler.", ".")
-      : normalized;
-    process.env.DIRECT_URL = normalizeDatabaseUrl(direct, { pooled: false });
+    process.env.DIRECT_URL = deriveDirectUrlFromPooled(normalized);
   }
 
   return normalized;

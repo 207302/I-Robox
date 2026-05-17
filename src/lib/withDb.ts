@@ -1,11 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { isProductionBuildPhase, prismaReady, reinitializePrismaClient } from "@/lib/prisma";
 
-const DB_TIMEOUT_MS = isProductionBuildPhase()
-  ? 3_000
-  : process.env.NODE_ENV === "production"
-    ? 8_000
-    : 30_000;
+/** Build SSG can hit cold Neon (30–45s). Runtime prod allows serverless wake-up. */
+function dbTimeoutMs(): number {
+  if (isProductionBuildPhase()) return 60_000;
+  if (process.env.NODE_ENV !== "production") return 30_000;
+  return 12_000;
+}
+
 const UNREACHABLE_RETRY_MS = 2_000;
 
 class DbTimeoutError extends Error {
@@ -52,24 +54,30 @@ async function runWithTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promi
   }
 }
 
+function shouldUseTimeout(): boolean {
+  return process.env.NODE_ENV === "production" && !isProductionBuildPhase();
+}
+
 /**
- * Runs a Prisma call with an 8s timeout, one retry on engine panic (reinit client),
- * one retry after 2s on unreachable DB, and graceful fallback on timeout.
+ * Runs a Prisma call with timeout (prod runtime only), retry on panic/unreachable, fallback on timeout.
+ * Build + dev: no timeout — SSG and local parallel queries must finish.
  */
 export async function withDb<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  const timeoutMs = dbTimeoutMs();
+
   const execute = async (): Promise<T> => {
     await prismaReady();
-    if (process.env.NODE_ENV !== "production") {
+    if (!shouldUseTimeout()) {
       return fn();
     }
-    return runWithTimeout(fn, DB_TIMEOUT_MS);
+    return runWithTimeout(fn, timeoutMs);
   };
 
   try {
     return await execute();
   } catch (error) {
     if (isDbTimeout(error)) {
-      console.error("[withDb] timed out after", DB_TIMEOUT_MS, "ms");
+      console.error("[withDb] timed out after", timeoutMs, "ms");
       return fallback;
     }
 

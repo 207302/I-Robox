@@ -4,22 +4,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 
-/**
- * Max PDPs pre-rendered at build. All other slugs use ISR on first request (`dynamicParams`).
- * Override: `STATIC_PDP_BUILD_LIMIT=0` skips build prerender entirely.
- */
-export const STATIC_PDP_BUILD_LIMIT = 40;
-
-const ABSOLUTE_MAX = 50;
-
-function resolveBuildLimit(): number {
-  const raw = process.env.STATIC_PDP_BUILD_LIMIT?.trim();
-  if (raw === "0") return 0;
-  if (raw && /^\d+$/.test(raw)) {
-    return Math.min(ABSOLUTE_MAX, Math.max(1, parseInt(raw, 10)));
-  }
-  return STATIC_PDP_BUILD_LIMIT;
-}
+/** Max PDPs pre-rendered at build. All other slugs use ISR on first request (`dynamicParams`). */
+export const STATIC_PDP_BUILD_LIMIT = 10;
 
 function addSlugs(target: Set<string>, slugs: string[], cap: number) {
   for (const slug of slugs) {
@@ -110,20 +96,20 @@ async function recentProductSlugs(take: number, exclude: Set<string>): Promise<s
  * Runtime: `revalidate = 300` + `getProductBySlug` cache + `dynamicParams` for all other PDPs.
  */
 export async function getProductSlugsForStaticGeneration(): Promise<{ slug: string }[]> {
-  const cap = resolveBuildLimit();
-  if (cap === 0) {
-    console.info("[productStaticParams] build prerender skipped (STATIC_PDP_BUILD_LIMIT=0)");
-    return [];
-  }
+  const cap = STATIC_PDP_BUILD_LIMIT;
 
   try {
     const now = new Date();
     const slugs = new Set<string>();
 
-    // Sequential queries — gentle on Neon during `generateStaticParams` (one connection).
-    addSlugs(slugs, await bestSellerSlugs(20), cap);
-    if (slugs.size < cap) addSlugs(slugs, await highlightProductSlugs(now, 20), cap);
-    if (slugs.size < cap) addSlugs(slugs, await flashSaleSlugs(now, 10), cap);
+    const [best, highlights, flash] = await Promise.all([
+      bestSellerSlugs(20),
+      highlightProductSlugs(now, 20),
+      flashSaleSlugs(now, 10),
+    ]);
+    addSlugs(slugs, best, cap);
+    if (slugs.size < cap) addSlugs(slugs, highlights, cap);
+    if (slugs.size < cap) addSlugs(slugs, flash, cap);
     if (slugs.size < cap) {
       addSlugs(slugs, await recentProductSlugs(cap - slugs.size, slugs), cap);
     }

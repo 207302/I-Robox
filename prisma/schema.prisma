@@ -4,6 +4,9 @@ generator client {
   binaryTargets   = ["native", "debian-openssl-1.1.x"]
 }
 
+// DATABASE_URL  → Neon *pooler* host + `pgbouncer=true` (app / Prisma Client at runtime & build)
+// DIRECT_URL    → non-pooler host (migrations, `prisma migrate`, advisory locks)
+// src/lib/prisma.ts normalizes both URLs before connecting.
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")

@@ -1,7 +1,13 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const { prisma } = await import("@/lib/prisma");
+  const { prisma, prismaReady } = await import("@/lib/prisma");
+
+  try {
+    await prismaReady();
+  } catch (err) {
+    console.error("[instrumentation] Prisma warm connect failed:", err);
+  }
 
   let disconnecting = false;
   const disconnect = async () => {
@@ -14,7 +20,6 @@ export async function register() {
     }
   };
 
-  // Do NOT use beforeExit — on shared hosts it fires during normal traffic and drops pooled connections.
   process.once("SIGINT", () => void disconnect());
   process.once("SIGTERM", () => void disconnect());
 }

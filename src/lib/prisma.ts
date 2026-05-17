@@ -1,10 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 
-/** Shared hosting: keep pool tiny (1–3 per Node process). Override via DATABASE_CONNECTION_LIMIT. */
+/** Shared hosting: keep pool tiny (1 per Node process). Override via DATABASE_CONNECTION_LIMIT. */
 function connectionLimitForRuntime(): string {
   const fromEnv = process.env.DATABASE_CONNECTION_LIMIT?.trim();
   if (fromEnv && /^\d+$/.test(fromEnv)) return fromEnv;
-  return process.env.NODE_ENV === "production" ? "2" : "5";
+  return process.env.NODE_ENV === "production" ? "1" : "5";
 }
 
 function normalizeDatabaseUrl(raw: string, opts?: { pooled?: boolean }) {
@@ -35,7 +35,10 @@ if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
   process.env.DIRECT_URL = normalizeDatabaseUrl(direct, { pooled: false });
 }
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+  prismaConnect?: Promise<void>;
+};
 
 export const prisma =
   globalForPrisma.prisma ??
@@ -43,7 +46,17 @@ export const prisma =
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
-// Always reuse one client per Node process (critical on shared hosting with tight process limits).
 globalForPrisma.prisma = prisma;
+
+/** One engine boot per process — avoids "library already starting" / timer panics on cold start. */
+export function prismaReady(): Promise<void> {
+  if (!globalForPrisma.prismaConnect) {
+    globalForPrisma.prismaConnect = prisma.$connect().catch((err) => {
+      globalForPrisma.prismaConnect = undefined;
+      throw err;
+    });
+  }
+  return globalForPrisma.prismaConnect;
+}
 
 export default prisma;

@@ -5,6 +5,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, readJsonBody } from "@/lib/validation/input";
 import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductCatalog } from "@/lib/cache/revalidate";
 
 function isAllowed(roles: string[]) {
   return (
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true },
     });
     if (existing) {
+      revalidateProductCatalog();
       return NextResponse.json({ id: existing.id, name: existing.name }, { status: 200 });
     }
   
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
       data: { ratio, name: ratio },
       select: { id: true, name: true },
     });
+    revalidateProductCatalog();
     return NextResponse.json(row, { status: 201 });
   
   });}

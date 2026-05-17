@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
 import { formatPrice } from "@/utils/formatePrice";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
+import { useSession } from "@/hooks/useSession";
+import { usePublicMarketing } from "@/hooks/usePublicMarketing";
 
 declare global {
   interface Window {
@@ -17,6 +19,8 @@ declare global {
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { user, isLoading: sessionLoading } = useSession();
+  const { data: marketingData } = usePublicMarketing();
   const { cartDetails, totalPrice, clearCart } = useCart();
   const items = useMemo(() => Object.values(cartDetails ?? {}), [cartDetails]);
 
@@ -49,30 +53,11 @@ export default function CheckoutPage() {
   const previewTotal = Math.max(0, previewSubtotal - previewDiscount) + deliveryCharge;
 
   useEffect(() => {
-    fetch("/api/public/marketing")
-      .then((r) => r.json())
-      .then((d) => {
-        if (typeof d?.freeShippingThresholdInr === "number" || d?.freeShippingThresholdInr === null) {
-          setFreeShippingThresholdInr(d.freeShippingThresholdInr);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.user?.id) {
-          const userEmail = typeof d?.user?.email === "string" ? d.user.email.trim() : "";
-          setSignedInLabel(userEmail || "your account");
-          if (userEmail) {
-            setAddress((a) => (a.email.trim() ? a : { ...a, email: userEmail }));
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
+    const threshold = marketingData?.freeShippingThresholdInr;
+    if (typeof threshold === "number" || threshold === null) {
+      setFreeShippingThresholdInr(threshold);
+    }
+  }, [marketingData?.freeShippingThresholdInr]);
 
   useEffect(() => {
     setCouponBreakdown(null);
@@ -98,6 +83,15 @@ export default function CheckoutPage() {
     postal_code: "",
     country: "India",
   });
+
+  useEffect(() => {
+    if (sessionLoading || !user?.id) return;
+    const userEmail = user.email?.trim() ?? "";
+    setSignedInLabel(userEmail || "your account");
+    if (userEmail) {
+      setAddress((a) => (a.email.trim() ? a : { ...a, email: userEmail }));
+    }
+  }, [sessionLoading, user]);
 
   async function ensureRazorpayScript() {
     if (typeof window === "undefined") return false;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
 
 export default function LogoutButton() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function LogoutButton() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to log out");
 
-      window.dispatchEvent(new Event("irobox-auth-changed"));
+      window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       toast.success("Signed out");
       router.push("/login");
       router.refresh();

@@ -4,6 +4,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateShopTaxonomy } from "@/lib/cache/revalidate";
 
 function isAllowed(roles: string[]) {
   return (
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true, name: true, slug: true, is_active: true, sort_order: true },
     });
+    revalidateShopTaxonomy();
     return NextResponse.json(row, { status: 201 });
   
   });}

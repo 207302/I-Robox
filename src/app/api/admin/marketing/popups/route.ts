@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, normalizeCode, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidatePopups } from "@/lib/cache/revalidate";
 
 const FREQUENCIES = ["ONCE_PER_SESSION", "ONCE_PER_DEVICE", "EVERY_VISIT"] as const;
 const AUDIENCES = ["ALL", "GUESTS_ONLY", "LOGGED_IN_ONLY"] as const;
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
   
+    revalidatePopups();
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
   
   });}

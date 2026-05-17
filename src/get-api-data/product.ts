@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { Prisma } from "@prisma/client";
+import { PRODUCT_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/constants";
+import { ORDERS_TAG, PRODUCT_CATALOG_TAG, productSlugTag } from "@/lib/cache/tags";
+import { onCacheMiss } from "@/lib/observability/cache";
 
 const pickDefaultImage = (product: {
   product_images?: { url: string; sort_order: number }[];
@@ -16,7 +19,7 @@ const getInventoryQuantity = (inventory: { available_quantity: number }[] = []) 
 
 // get new arrival products (homepage)
 export const getNewArrivalsProduct = unstable_cache(
-  async () => {
+  onCacheMiss("new-arrivals-products", async () => {
     const products = await prisma.products.findMany({
       orderBy: { updated_at: "desc" },
       select: {
@@ -76,8 +79,9 @@ export const getNewArrivalsProduct = unstable_cache(
       })),
       reviews: 0,
     }));
-  },
-  ['products'], { tags: ['products'] }
+  }),
+  ["new-arrivals-products"],
+  { revalidate: 300, tags: [PRODUCT_CATALOG_TAG] }
 );
 
 const bestSellerProductSelect = {
@@ -143,7 +147,7 @@ const mapProductToHomeCard = (item: BestSellerProductRow) => ({
 
 // get best selling products (by total quantity on payment-succeeded orders)
 export const getBestSellingProducts = unstable_cache(
-  async () => {
+  onCacheMiss("best-selling-products", async () => {
     /**
      * Rank by summed `order_items.quantity` for orders that have actually captured
      * payment successfully. This avoids relying on `orders.status` alone, which can
@@ -193,13 +197,14 @@ export const getBestSellingProducts = unstable_cache(
       .slice(0, 6);
 
     return ordered.map(mapProductToHomeCard);
-  },
+  }),
   ["best-selling-products", "v2"],
-  { tags: ["products", "orders"] }
+  { revalidate: 300, tags: [PRODUCT_CATALOG_TAG, ORDERS_TAG] }
 );
 
-// GET PRODUCT BY SLUG
-export const getProductBySlug = async (slug: string) => {
+export type ProductBySlug = NonNullable<Awaited<ReturnType<typeof loadProductBySlug>>>;
+
+async function loadProductBySlug(slug: string) {
   const product = await prisma.products.findUnique({
     where: { slug },
     select: {
@@ -287,4 +292,22 @@ export const getProductBySlug = async (slug: string) => {
     additionalInformation: [],
     customAttributes: [],
   };
+}
+
+/**
+ * Cached PDP loader — dedupes `generateMetadata` + page within one request;
+ * revalidates every 5 minutes or via `revalidateTag` after admin edits.
+ */
+export function getProductBySlug(slug: string): Promise<ProductBySlug | null> {
+  const normalized = slug.trim();
+  if (!normalized) return Promise.resolve(null);
+
+  return unstable_cache(
+    onCacheMiss(`product-by-slug:${normalized}`, () => loadProductBySlug(normalized)),
+    ["product-by-slug", normalized],
+    {
+      revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS,
+      tags: [PRODUCT_CATALOG_TAG, productSlugTag(normalized)],
+    }
+  )();
 }

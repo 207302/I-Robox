@@ -5,6 +5,8 @@ import { PreviewSliderProvider } from "../context/PreviewSliderContext";
 import CartProvider from "@/components/Providers/CartProvider";
 import CartHydration from "@/components/Providers/CartHydration";
 import CartServerSync from "@/components/Providers/CartServerSync";
+import { SessionProvider } from "@/components/Providers/SessionProvider";
+import { PublicMarketingProvider } from "@/components/Providers/PublicMarketingProvider";
 import dynamic from "next/dynamic";
 
 const MarketingSiteEffects = dynamic(
@@ -23,19 +25,23 @@ const PreviewSliderModal = dynamic(() => import("@/components/Common/PreviewSlid
 const Providers = ({ children }: { children: React.ReactNode }) => {
   return (
     <ReduxProvider>
-      <CartHydration />
-      <CartServerSync />
-      <CartProvider>
-        <ModalProvider>
-          <PreviewSliderProvider>
-            <MarketingSiteEffects />
-            {children}
-            <QuickViewModal />
-            <CartSidebarModal />
-            <PreviewSliderModal />
-          </PreviewSliderProvider>
-        </ModalProvider>
-      </CartProvider>
+      <SessionProvider>
+        <PublicMarketingProvider>
+          <CartHydration />
+          <CartServerSync />
+          <CartProvider>
+            <ModalProvider>
+              <PreviewSliderProvider>
+                <MarketingSiteEffects />
+                {children}
+                <QuickViewModal />
+                <CartSidebarModal />
+                <PreviewSliderModal />
+              </PreviewSliderProvider>
+            </ModalProvider>
+          </CartProvider>
+        </PublicMarketingProvider>
+      </SessionProvider>
     </ReduxProvider>
   );
 };

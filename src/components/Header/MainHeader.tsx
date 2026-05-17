@@ -24,6 +24,8 @@ import SiteSearchPreloader from "@/components/Common/SiteSearchPreloader";
 import { setSearchProgress, startSearchProgress } from "@/lib/shop/searchProgress";
 import { chromeBgStyle, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SHOP_QUERY_EVENT, applyShopQuery } from "@/lib/shop/shopQuery";
+import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
+import { useSession } from "@/hooks/useSession";
 
 export type SiteHeaderData = {
   headerLogo?: string | null;
@@ -53,16 +55,6 @@ type IProps = {
   chromeColors?: SiteChromeColors;
 };
 
-type MeResponse = {
-  user: {
-    id: string;
-    email: string | null;
-    phone?: string | null;
-    name?: string | null;
-    roles: string[];
-  } | null;
-};
-
 const MainHeader = ({
   headerData,
   utilityAnnouncement,
@@ -84,7 +76,7 @@ const MainHeader = ({
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 350);
   const [searchPreloaderOpen, setSearchPreloaderOpen] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
+  const { displayName: userName } = useSession();
   const [accountOpen, setAccountOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const { handleCartClick, cartCount } = useCart();
@@ -133,39 +125,6 @@ const MainHeader = ({
     window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, []);
-
-  async function loadMe(signal?: AbortSignal) {
-    const res = await fetch("/api/auth/me", { cache: "no-store", signal });
-    const data = (await res.json().catch(() => null)) as MeResponse | null;
-    const rawName = data?.user?.name?.trim();
-    const fromEmail = data?.user?.email?.split("@")[0]?.trim();
-    const fromPhone = data?.user?.phone?.trim();
-    setUserName(rawName || fromEmail || fromPhone || null);
-  }
-
-  // Read current customer session for greeting text.
-  // Re-check on route changes and auth-change events (login/logout/verify).
-  useEffect(() => {
-    const controller = new AbortController();
-    const run = async () => {
-      try {
-        await loadMe(controller.signal);
-      } catch {
-        setUserName(null);
-      }
-    };
-    run();
-
-    const handleAuthChange = () => {
-      void run();
-    };
-    window.addEventListener("irobox-auth-changed", handleAuthChange);
-
-    return () => {
-      controller.abort();
-      window.removeEventListener("irobox-auth-changed", handleAuthChange);
-    };
-  }, [pathname]);
 
   // Keep header search in sync with /shop?q=… (client URL updates + back/forward)
   useEffect(() => {
@@ -237,9 +196,8 @@ const MainHeader = ({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to log out");
-      setUserName(null);
       setAccountOpen(false);
-      window.dispatchEvent(new Event("irobox-auth-changed"));
+      window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       toast.success("Signed out");
     } catch (err: any) {
       toast.error(err?.message || "Could not log out");

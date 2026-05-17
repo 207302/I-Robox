@@ -6,12 +6,22 @@ import DemoProductGallery from "./DemoProductGallery";
 import VariantSelector from "./VariantSelector";
 import { getProductBySlug } from "@/get-api-data/product";
 import { formatPrice } from "@/utils/formatePrice";
-import ReviewForm from "@/components/Shop/ReviewForm";
 import ProductActions from "@/components/Shop/ProductActions";
 import ReviewStar from "@/components/Shop/ReviewStar";
-import { getSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import ProductReviewComposer from "@/components/Shop/ProductReviewComposer";
+import { getApprovedReviewsForProduct } from "@/lib/queries/productReviews";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
+import { PRODUCT_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/constants";
+import { getProductSlugsForStaticGeneration } from "@/lib/shop/productStaticParams";
+
+/** ISR: cached product + reviews; no `cookies()` — enables static/ISR shell. */
+export const revalidate = PRODUCT_PAGE_REVALIDATE_SECONDS;
+
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return getProductSlugsForStaticGeneration();
+}
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
@@ -35,13 +45,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const session = await getSession();
-  const approvedReviews = await prisma.reviews.findMany({
-    where: { product_id: product.id, is_approved: true },
-    orderBy: { created_at: "desc" },
-    select: { id: true, rating: true, title: true, comment: true, created_at: true, is_verified_purchase: true },
-    take: 10,
-  });
+  const approvedReviews = await getApprovedReviewsForProduct(product.id);
 
   const sortedProductLevelImages = (product.product_images ?? [])
     .filter((i) => i.product_variant_id == null)
@@ -180,16 +184,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 </div>
               )}
 
-              {session ? (
-                <>
-                  <h3 className="mt-8 text-base font-semibold text-dark">Write a review</h3>
-                  <ReviewForm productId={product.id} />
-                </>
-              ) : (
-                <p className="mt-6 text-sm text-meta-3">
-                  Please <Link className="text-blue hover:underline" href="/login">sign in</Link> to write a review.
-                </p>
-              )}
+              <ProductReviewComposer productId={product.id} />
             </div>
           </div>
         </div>

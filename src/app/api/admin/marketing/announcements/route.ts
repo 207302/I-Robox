@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateAnnouncements } from "@/lib/cache/revalidate";
 
 const PLACEMENTS = ["UTILITY", "MARQUEE"] as const;
 type Placement = (typeof PLACEMENTS)[number];
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
   
+    revalidateAnnouncements();
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
   
   });}

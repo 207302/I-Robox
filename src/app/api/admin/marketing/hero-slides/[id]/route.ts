@@ -7,6 +7,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateHomePage } from "@/lib/cache/homePageCache";
 
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -83,7 +84,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         ...(body.active_until !== undefined ? { active_until: active_until ?? null } : {}),
       },
     });
-  
+    revalidateHomePage();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -117,6 +118,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (derivedPublicId?.startsWith("irobox/homepage-hero/")) {
       await cloudinary.uploader.destroy(derivedPublicId).catch(() => null);
     }
+    revalidateHomePage();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

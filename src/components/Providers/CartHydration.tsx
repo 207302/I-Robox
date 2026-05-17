@@ -4,51 +4,32 @@ import { useDispatch } from "react-redux";
 import { loadCartFromStorage as loadCartFromStorageAction } from "@/redux/features/cart-slice";
 import { loadCartFromStorage, setStorageScope } from "@/lib/cartStorage";
 import { getWishlistStorageKey, setWishlistItems } from "@/redux/features/wishlist-slice";
+import { useSession } from "@/hooks/useSession";
 
 /**
- * CartHydration component loads cart from localStorage after initial render
- * This prevents SSR hydration mismatches
+ * Loads cart from localStorage after session scope is known (guest vs user id).
  */
 export default function CartHydration() {
-    const dispatch = useDispatch();
+  const dispatch = useDispatch();
+  const { user, isLoading } = useSession();
 
-    useEffect(() => {
-        const hydrateByScope = async () => {
-            let scope = "guest";
-            try {
-                const res = await fetch("/api/auth/me", { cache: "no-store" });
-                const data = await res.json().catch(() => null);
-                const userId = data?.user?.id as string | undefined;
-                scope = userId || "guest";
-            } catch {
-                scope = "guest";
-            }
+  useEffect(() => {
+    if (isLoading) return;
 
-            setStorageScope(scope);
+    const scope = user?.id ?? "guest";
+    setStorageScope(scope);
 
-            const savedCart = loadCartFromStorage();
-            dispatch(loadCartFromStorageAction(savedCart));
+    const savedCart = loadCartFromStorage();
+    dispatch(loadCartFromStorageAction(savedCart));
 
-            try {
-                const raw = localStorage.getItem(getWishlistStorageKey());
-                const wishlist = raw ? JSON.parse(raw) : [];
-                dispatch(setWishlistItems(Array.isArray(wishlist) ? wishlist : []));
-            } catch {
-                dispatch(setWishlistItems([]));
-            }
-        };
+    try {
+      const raw = localStorage.getItem(getWishlistStorageKey());
+      const wishlist = raw ? JSON.parse(raw) : [];
+      dispatch(setWishlistItems(Array.isArray(wishlist) ? wishlist : []));
+    } catch {
+      dispatch(setWishlistItems([]));
+    }
+  }, [dispatch, isLoading, user?.id]);
 
-        void hydrateByScope();
-
-        const handleAuthChange = () => {
-            void hydrateByScope();
-        };
-        window.addEventListener("irobox-auth-changed", handleAuthChange);
-
-        return () => {
-            window.removeEventListener("irobox-auth-changed", handleAuthChange);
-        };
-    }, [dispatch]);
-
-    return null; // This component doesn't render anything
+  return null;
 }

@@ -4,6 +4,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateShopTaxonomy } from "@/lib/cache/revalidate";
 
 function isAllowed(roles: string[]) {
   return (
@@ -80,6 +81,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
       data,
       select: { id: true, name: true, slug: true, is_active: true, sort_order: true },
     });
+    revalidateShopTaxonomy();
     return NextResponse.json(row);
   
   });}
@@ -94,6 +96,7 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     try {
       await prisma.product_collections.delete({ where: { id } });
+      revalidateShopTaxonomy();
       return NextResponse.json({ ok: true });
     } catch (e) {
       console.error("[product-collections DELETE]", e);

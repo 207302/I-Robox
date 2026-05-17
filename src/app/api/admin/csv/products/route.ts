@@ -9,6 +9,7 @@ import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { upsertProductLevelInventory } from "@/lib/inventory/productLevelInventory";
 import { ensureDiecastScaleId, ratioFromImportText } from "@/lib/products/ensureDiecastScale";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 
 function parseNonNegInt(value: unknown, defaultVal: number): number {
   if (value === undefined || value === null) return defaultVal;
@@ -157,6 +158,9 @@ export async function POST(req: NextRequest) {
     await syncLowStockAlertsByProductIds(touchedProductIds).catch((err) => {
       console.error("[admin csv products POST] low stock alert sync failed", err);
     });
+
+    revalidateProductCatalog();
+    revalidateSitemap();
   
     return NextResponse.json({ ok: true, count }, { status: 200 });
   

@@ -9,6 +9,7 @@ import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { v2 as cloudinary } from "cloudinary";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 
 function parseShippingPerUnitIn(body: Record<string, unknown>): number | { error: string } | undefined {
   if (body.shipping_per_unit === undefined) return undefined;
@@ -136,6 +137,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const existingProduct = await prisma.products.findUnique({
+      where: { id },
+      select: { slug: true },
+    });
+    if (!existingProduct) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
@@ -333,7 +340,14 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         console.error("[admin products PUT] low stock alert sync failed", err);
       });
     }
-  
+
+    const nextSlug =
+      typeof data.slug === "string" ? data.slug : existingProduct.slug;
+    revalidateProductCatalog({
+      slug: nextSlug,
+      previousSlug: existingProduct.slug,
+    });
+    revalidateSitemap();
     return NextResponse.json({ ok: true, id: updatedId }, { status: 200 });
   
   });}
@@ -355,6 +369,14 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const productBeforeDelete = await prisma.products.findUnique({
+      where: { id },
+      select: { slug: true },
+    });
+    if (!productBeforeDelete) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   
     const imageRows = await prisma.product_images.findMany({
       where: { product_id: id },
@@ -419,7 +441,9 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (publicIds.length > 0) {
       cloudinary.api.delete_resources(publicIds, { resource_type: "image" }).catch(() => {});
     }
-  
+
+    revalidateProductCatalog({ slug: productBeforeDelete.slug });
+    revalidateSitemap();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

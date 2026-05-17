@@ -7,6 +7,7 @@ import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody 
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -221,6 +222,9 @@ export async function POST(req: NextRequest) {
       await syncLowStockAlertsByProductIds([created.id]).catch((err) => {
         console.error("[admin products POST] low stock alert sync failed", err);
       });
+
+      revalidateProductCatalog({ slug });
+      revalidateSitemap();
   
       return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
     } catch (err: any) {

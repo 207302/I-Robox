@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { isUuid, readJsonBody } from "@/lib/validation/input";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateInventoryCatalog } from "@/lib/cache/revalidate";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runApiRoute(async () => {
@@ -72,7 +73,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     await syncLowStockAlertsByProductIds([updated.product_id]).catch((err) => {
       console.error("[admin inventory PUT] low stock alert sync failed", err);
     });
-  
+    revalidateInventoryCatalog({ productId: updated.product_id });
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

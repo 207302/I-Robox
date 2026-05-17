@@ -1,8 +1,7 @@
-import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
-import { getCategoriesForHome } from "@/lib/queries/catalog";
-import { getSiteMarketingSettingsForHome } from "@/lib/queries/marketing";
-import { getBestSellingProducts, getNewArrivalsProduct } from "@/get-api-data/product";
+import { getHomePageData } from "@/lib/queries/homePage";
+import { HOME_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/homePageCache";
+import { withPagePerf } from "@/lib/observability/route";
 import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import Home, {
   type HomeBrandRailItem,
@@ -11,11 +10,10 @@ import Home, {
   type HomeProductCard,
 } from "@/components/Home";
 import type { HeroSlide } from "@/components/Home/HeroBannerCarousel";
-import { withPrismaRetry } from "@/lib/prismaRetry";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
-/** ISR: fresh CMS within ~60s without blocking every request on full SSR. */
-export const revalidate = 60;
+/** ISR: one cached bundle per window; aligns with `getHomePageData` revalidate. */
+export const revalidate = HOME_PAGE_REVALIDATE_SECONDS;
 
 const FALLBACK_HIGHLIGHT_IMAGE =
   "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";
@@ -29,68 +27,19 @@ const pickCardImage = (images: { url: string; sort_order: number }[] | undefined
     : FALLBACK_PRODUCT_IMAGE;
 
 export default async function HomePage() {
+  return withPagePerf("page:/", async () => {
   const now = new Date();
 
-  const highlightsPromise = prisma.homepage_highlights
-    .findMany({
-      orderBy: { sort_order: "asc" },
-      include: {
-        categories: { select: { slug: true, name: true } },
-        brands: { select: { slug: true, name: true } },
-        products: {
-          select: {
-            slug: true,
-            name: true,
-            product_images: { orderBy: { sort_order: "asc" }, take: 1, select: { url: true } },
-          },
-        },
-      },
-    })
-    .catch(() =>
-      prisma.homepage_highlights.findMany({
-        orderBy: { sort_order: "asc" },
-        include: {
-          categories: { select: { slug: true, name: true } },
-          products: {
-            select: {
-              slug: true,
-              name: true,
-              product_images: { orderBy: { sort_order: "asc" }, take: 1, select: { url: true } },
-            },
-          },
-        },
-      })
-    );
-
-  // Wave 1 — critical shell (settings + categories; marketing settings cached)
-  const [siteMarketingSettings, categoriesRaw] = await withPrismaRetry(() =>
-    Promise.all([getSiteMarketingSettingsForHome(), getCategoriesForHome()])
-  );
-
-  // Wave 2 — product rails (content)
-  const [newArrivalsRaw, bestSellersRaw] = await withPrismaRetry(() =>
-    Promise.all([getNewArrivalsProduct(), getBestSellingProducts()])
-  );
-
-  // Wave 3 — homepage CMS blocks (hero, highlights, tiles)
-  const [slidesRaw, highlightsRaw, brandRailRaw, categoryTilesRaw] = await withPrismaRetry(() =>
-    Promise.all([
-      prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }).catch(() => []),
-      highlightsPromise,
-      prisma.homepage_brand_rail
-        .findMany({
-          orderBy: { sort_order: "asc" },
-          include: { brands: { select: { slug: true, name: true } } },
-        })
-        .catch(() => []),
-      prisma.homepage_category_tiles
-        .findMany({
-          orderBy: { sort_order: "asc" },
-          include: { categories: { select: { id: true, name: true, slug: true } } },
-        })
-        .catch(() => []),
-    ])
-  );
+  const {
+    siteMarketingSettings,
+    categoriesRaw,
+    newArrivalsRaw,
+    bestSellersRaw,
+    slidesRaw,
+    highlightsRaw,
+    brandRailRaw,
+    categoryTilesRaw,
+  } = await getHomePageData();
 
   const highlightsSectionEyebrow =
     siteMarketingSettings?.highlights_section_eyebrow?.trim() || "Highlights";
@@ -128,7 +77,7 @@ export default async function HomePage() {
       if (h.kind === "CATEGORY" && h.categories) {
         if (!href) href = `/shop?category=${encodeURIComponent(h.categories.slug)}`;
         if (!image) image = FALLBACK_HIGHLIGHT_IMAGE;
-      } else if (h.kind === "BRAND" && h.brands) {
+      } else if (h.kind === "BRAND" && "brands" in h && h.brands) {
         if (!href) href = `/shop?brand=${encodeURIComponent(h.brands.slug)}`;
         if (!image) image = FALLBACK_HIGHLIGHT_IMAGE;
       } else if (h.kind === "PRODUCT" && h.products) {
@@ -227,4 +176,5 @@ export default async function HomePage() {
       />
     </>
   );
+  });
 }

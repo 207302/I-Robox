@@ -4,6 +4,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { v2 as cloudinary } from "cloudinary";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductById } from "@/lib/cache/productCache";
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       },
       select: { id: true, url: true, alt_text: true, sort_order: true, product_variant_id: true },
     });
+    await revalidateProductById(id);
     return NextResponse.json(image, { status: 201 });
   
   });}
@@ -123,6 +125,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         })
       )
     );
+    await revalidateProductById(productId);
     return NextResponse.json({ ok: true });
   
   });}
@@ -158,6 +161,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (pid) {
       cloudinary.uploader.destroy(pid, { resource_type: "image" }).catch(() => {});
     }
+    await revalidateProductById(productId);
     return NextResponse.json({ ok: true });
   
   });}

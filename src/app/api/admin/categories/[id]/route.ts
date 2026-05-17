@@ -4,6 +4,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateCategoryCatalog } from "@/lib/cache/productCache";
 
 function isAllowed(roles: string[]) {
   return (
@@ -50,6 +51,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
       data: { name, slug: finalSlug },
       select: { id: true, name: true, slug: true },
     });
+    revalidateCategoryCatalog();
     return NextResponse.json(row);
   
   });}
@@ -70,6 +72,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   
     try {
       await prisma.categories.delete({ where: { id } });
+      revalidateCategoryCatalog();
       return NextResponse.json({ ok: true });
     } catch (e: any) {
       if (e?.code === "P2003") {

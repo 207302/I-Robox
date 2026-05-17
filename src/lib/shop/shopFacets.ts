@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG } from "@/lib/cache/tags";
 
 export type DiscountBucketCounts = {
   on_sale: number;
@@ -28,7 +29,7 @@ export const getCachedDiecastScales = unstable_cache(
     return rows.map((r) => r.ratio).filter(Boolean);
   },
   ["shop-facets-diecast-scales"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG] }
 );
 
 /**
@@ -93,7 +94,7 @@ export const getCachedGlobalDiscountBuckets = unstable_cache(
     }
   },
   ["shop-facets-discount-buckets"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG] }
 );
 
 /** Filtered bucket counts for a subset of product ids (single SQL aggregate). */

@@ -15,6 +15,7 @@ import {
 } from "@/lib/validation/input";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateMarketingSite } from "@/lib/cache/homePageCache";
 
 export async function GET() {
   return runApiRoute(async () => {
@@ -247,6 +248,7 @@ export async function PATCH(req: NextRequest) {
         create: { ...baseCreate, ...data },
         update: data,
       });
+      revalidateMarketingSite();
       return NextResponse.json(updated, { status: 200 });
     } catch (error: unknown) {
       console.error("[admin/marketing/settings] PATCH failed:", error);

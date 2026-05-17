@@ -6,6 +6,10 @@ import LiveShopFilters from "@/components/Shop/LiveShopFilters";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import {
+  SHOP_LISTING_FACETS_PARAM,
+  listingFilterFingerprint,
+} from "@/lib/shop/shopListingParams";
+import {
   SHOP_QUERY_EVENT,
   applyShopQuery,
   buildListingQueryString,
@@ -75,9 +79,11 @@ export default function ShopLiveExperience({
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const skipFetchRef = useRef(true);
+  const filterFingerprintRef = useRef(listingFilterFingerprint(initialQueryString));
 
   const query = parseShopQueryString(queryString);
   const activeFilterCount = useMemo(() => countActiveShopFilters(query), [query]);
+  /** 350ms debounce — one listing request per pause; aborts superseded fetches. */
   const debouncedSearchInput = useDebounce(searchInput, 350);
   const effectiveQueryString = useMemo(() => {
     const parsed = parseShopQueryString(queryString);
@@ -93,15 +99,42 @@ export default function ShopLiveExperience({
     const trackProgress = isSearchProgressPending();
     if (trackProgress) setSearchProgress(55);
     try {
-      const res = await fetch(qs ? `/api/products?${qs}` : "/api/products", {
+      const params = new URLSearchParams(qs);
+      const fingerprint = listingFilterFingerprint(qs);
+      const paginationOnly =
+        fingerprint === filterFingerprintRef.current && params.has("page");
+      if (paginationOnly) {
+        params.set(SHOP_LISTING_FACETS_PARAM, "0");
+      } else {
+        filterFingerprintRef.current = fingerprint;
+      }
+      const fetchQs = params.toString();
+      const res = await fetch(fetchQs ? `/api/products?${fetchQs}` : "/api/products", {
         signal: controller.signal,
-        cache: "no-store",
+        cache: "default",
       });
       if (trackProgress) setSearchProgress(82);
       const data = (await res.json()) as ShopListingData & { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to load products");
       if (!controller.signal.aborted) {
-        setListing(data);
+        setListing((prev) => {
+          if (!paginationOnly) return data;
+          return {
+            ...data,
+            ageGroups: data.ageGroups.length ? data.ageGroups : prev.ageGroups,
+            diecastScales: data.diecastScales.length ? data.diecastScales : prev.diecastScales,
+            brands: data.brands.length ? data.brands : prev.brands,
+            productSubtypes: data.productSubtypes.length
+              ? data.productSubtypes
+              : prev.productSubtypes,
+            productCollections: data.productCollections.length
+              ? data.productCollections
+              : prev.productCollections,
+            discountBuckets: data.discountBuckets.length
+              ? data.discountBuckets
+              : prev.discountBuckets,
+          };
+        });
         if (trackProgress) completeSearchProgress();
       }
     } catch (err) {

@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import ws from "ws";
+import { extendPrismaForPerf } from "@/lib/observability/prisma";
 
 const BUILD_PHASE = "phase-production-build";
 
@@ -73,16 +74,23 @@ function prismaLogLevel(): ("error" | "warn")[] | ("error")[] {
 function createPrismaClient(): PrismaClient {
   const log = prismaLogLevel();
 
-  if (isProductionBuildPhase()) {
-    return new PrismaClient({ log });
-  }
+  const base =
+    isProductionBuildPhase()
+      ? new PrismaClient({ log })
+      : (() => {
+          neonConfig.webSocketConstructor = ws;
+          globalForPrisma.neonPool?.end().catch(() => undefined);
+          const maxPoolConnections = Number(connectionLimitForRuntime());
+          const pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            max: Number.isFinite(maxPoolConnections) && maxPoolConnections > 0 ? maxPoolConnections : 1,
+          });
+          globalForPrisma.neonPool = pool;
+          const adapter = new PrismaNeon(pool);
+          return new PrismaClient({ adapter, log });
+        })();
 
-  neonConfig.webSocketConstructor = ws;
-  globalForPrisma.neonPool?.end().catch(() => undefined);
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  globalForPrisma.neonPool = pool;
-  const adapter = new PrismaNeon(pool);
-  return new PrismaClient({ adapter, log });
+  return extendPrismaForPerf(base);
 }
 
 export function getPrisma(): PrismaClient {

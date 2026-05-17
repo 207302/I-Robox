@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateAnnouncements } from "@/lib/cache/revalidate";
 
 const PLACEMENTS = ["UTILITY", "MARQUEE"] as const;
 type Placement = (typeof PLACEMENTS)[number];
@@ -70,6 +71,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   
     await prisma.announcement_entries.update({ where: { id }, data });
+    revalidateAnnouncements();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -92,6 +94,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
     await prisma.announcement_entries.delete({ where: { id } });
+    revalidateAnnouncements();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

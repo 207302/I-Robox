@@ -12,6 +12,10 @@ import {
 import { normalizeCode } from "@/lib/validation/input";
 import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { privateResponseCacheHeaders } from "@/lib/api/httpCache";
+
+/** Popup audience depends on session cookie — private browser cache only. */
+const PUBLIC_MARKETING_CACHE_SECONDS = 60;
 
 export async function GET() {
   return runApiRoute(async () => {
@@ -63,23 +67,26 @@ export async function GET() {
     });
     const popup = matched[0] ?? null;
   
-    return NextResponse.json({
-      popup: popup
-        ? {
-            id: popup.id,
-            title: popup.title,
-            body: popup.body,
-            image_url: popup.image_url,
-            cta_label: popup.cta_label,
-            cta_url: popup.cta_url,
-            delay_ms: popup.delay_ms,
-            auto_close_ms: popup.auto_close_ms,
-            frequency: popup.frequency,
-            suggested_coupon_code: popup.suggested_coupon_code,
-          }
-        : null,
-      firstVisitCouponCode,
-      freeShippingThresholdInr,
-    });
-  
-  });}
+    return NextResponse.json(
+      {
+        popup: popup
+          ? {
+              id: popup.id,
+              title: popup.title,
+              body: popup.body,
+              image_url: popup.image_url,
+              cta_label: popup.cta_label,
+              cta_url: popup.cta_url,
+              delay_ms: popup.delay_ms,
+              auto_close_ms: popup.auto_close_ms,
+              frequency: popup.frequency,
+              suggested_coupon_code: popup.suggested_coupon_code,
+            }
+          : null,
+        firstVisitCouponCode,
+        freeShippingThresholdInr,
+      },
+      { headers: privateResponseCacheHeaders(PUBLIC_MARKETING_CACHE_SECONDS) }
+    );
+  }, { name: "GET /api/public/marketing" });
+}

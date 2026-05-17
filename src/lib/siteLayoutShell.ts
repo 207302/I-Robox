@@ -7,6 +7,8 @@ import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { getSiteChromeColors } from "@/lib/queries/marketing";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
+import { ANNOUNCEMENTS_TAG, MARKETING_TAG } from "@/lib/cache/homePageCache";
+import { CATEGORIES_TAG, HEADER_NAV_TAG } from "@/lib/cache/tags";
 
 export type SiteLayoutShell = {
   utilityAnnouncement: {
@@ -92,5 +94,5 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
 
 export const getSiteLayoutShell = unstable_cache(loadSiteLayoutShell, ["site-layout-shell"], {
   revalidate: 3600,
-  tags: ["marketing", "announcements", "header-nav", "categories"],
+  tags: [MARKETING_TAG, ANNOUNCEMENTS_TAG, HEADER_NAV_TAG, CATEGORIES_TAG],
 });

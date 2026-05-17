@@ -7,6 +7,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateHomePage } from "@/lib/cache/homePageCache";
 
 const HIGHLIGHT_KINDS = ["FEATURED", "TRENDING", "CATEGORY", "PRODUCT", "BRAND", "CUSTOM"] as const;
 type HighlightKind = (typeof HIGHLIGHT_KINDS)[number];
@@ -112,6 +113,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   
     await prisma.homepage_highlights.update({ where: { id }, data });
+    revalidateHomePage();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -144,6 +146,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (derivedPublicId?.startsWith("irobox/homepage-highlights/")) {
       await cloudinary.uploader.destroy(derivedPublicId).catch(() => null);
     }
+    revalidateHomePage();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

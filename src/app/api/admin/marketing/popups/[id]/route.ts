@@ -7,6 +7,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, isUuid, normalizeCode, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidatePopups } from "@/lib/cache/revalidate";
 
 const FREQUENCIES = ["ONCE_PER_SESSION", "ONCE_PER_DEVICE", "EVERY_VISIT"] as const;
 type Frequency = (typeof FREQUENCIES)[number];
@@ -125,6 +126,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   
     await prisma.marketing_popups.update({ where: { id }, data });
+    revalidatePopups();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -153,6 +155,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
     await prisma.marketing_popups.delete({ where: { id } });
+    revalidatePopups();
     const derivedPublicId = cloudinaryPublicIdFromUrl(row.image_url);
     if (derivedPublicId?.startsWith("irobox/marketing-popups/")) {
       await cloudinary.uploader.destroy(derivedPublicId).catch(() => null);

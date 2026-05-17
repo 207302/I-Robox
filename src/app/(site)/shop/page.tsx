@@ -6,6 +6,7 @@ import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { getShopListing } from "@/lib/shop/shopListing";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import { buildListingQueryString } from "@/lib/shop/shopQuery";
+import { withPagePerf } from "@/lib/observability/route";
 
 export const metadata = {
   title: "Shop | i-Robox",
@@ -71,6 +72,7 @@ const EMPTY_LISTING: ShopListingData = {
 };
 
 export default async function ShopPage({ searchParams }: Props) {
+  return withPagePerf("page:/shop", async () => {
   const sp = await searchParams;
   const initialQueryString = searchParamsToQueryString(sp);
   const listingParams = new URLSearchParams(initialQueryString);
@@ -101,4 +103,5 @@ export default async function ShopPage({ searchParams }: Props) {
       />
     </>
   );
+  });
 }

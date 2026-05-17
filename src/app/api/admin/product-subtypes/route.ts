@@ -9,6 +9,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, readJsonBody } from "@/lib/validation/input";
 
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateShopTaxonomy } from "@/lib/cache/revalidate";
 
 import {
 
@@ -186,6 +187,7 @@ export async function POST(req: NextRequest) {
 
     });
 
+    revalidateShopTaxonomy();
     return NextResponse.json(row, { status: 201 });
 
   });

@@ -1,16 +1,26 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { safeCategoriesFindMany } from "@/lib/db/safeReads";
 import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 import { cleanText, hasSuspiciousInput, isUrlSlug } from "@/lib/validation/input";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
-  computeDiscountBucketsForProductIds,
   discountBucketsFromCounts,
-  getCachedDiecastScales,
   getCachedGlobalDiscountBuckets,
   paginateDiscountFilteredProductIds,
 } from "@/lib/shop/shopFacets";
+import { categoryIdsForFilterSlugs, slugMatchOrClause } from "@/lib/shop/categoryTree";
+import {
+  loadListingFacets,
+  resolveBrandIdsForSlugs,
+  type FacetCacheParams,
+} from "@/lib/shop/shopListingFacets";
+import {
+  createShopListingProfile,
+  finishShopListingProfile,
+  profiledQuery,
+} from "@/lib/shop/shopListingProfile";
+import { resolveSearchProductIds } from "@/lib/shop/shopListingSearch";
+import type { ShopListingRequestOptions } from "@/lib/shop/shopListingParams";
 
 export type ShopListingItem = {
   id: string;
@@ -37,14 +47,10 @@ export type ShopListingData = {
   total: number;
   totalPages: number;
   ageGroups: string[];
-  /** Distinct `1:n` scales in the catalog for filter UI */
   diecastScales: string[];
-  /** Brands (active + in-stock counts; facet excludes current brand filter). */
   brands: { slug: string; name: string; count: number }[];
-  /** Sub categories (legacy subtype slugs). Facet rows use active + in-stock counts only. */
   productSubtypes: { slug: string; name: string; count: number }[];
   productCollections: { slug: string; name: string; count: number }[];
-  /** Fixed discount bucket ids: b10, b25, b50, b100, on_sale */
   discountBuckets: { id: string; label: string; count: number }[];
   items: ShopListingItem[];
 };
@@ -52,6 +58,26 @@ export type ShopListingData = {
 function toInt(value: string | null, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : fallback;
+}
+
+function emptyListingData(
+  page: number,
+  pageSize: number,
+  discountBuckets: ShopListingData["discountBuckets"] = []
+): ShopListingData {
+  return {
+    page,
+    pageSize,
+    total: 0,
+    totalPages: 1,
+    ageGroups: [],
+    diecastScales: [],
+    brands: [],
+    productSubtypes: [],
+    productCollections: [],
+    discountBuckets,
+    items: [],
+  };
 }
 
 /** For facet counts: same filters, drop taxonomy dims, require active + in stock. */
@@ -65,188 +91,6 @@ function facetWhereFrom(base: Record<string, unknown>): Prisma.productsWhereInpu
     is_active: true,
     inventory: { some: { available_quantity: { gt: 0 } } },
   };
-}
-
-function normalizeSearchTerm(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function escapeIlikePattern(value: string): string {
-  return value.replace(/[%_\\]/g, "\\$&");
-}
-
-function getSearchVariants(raw: string): string[] {
-  const trimmed = raw.trim();
-  const noSpaces = trimmed.replace(/\s+/g, "");
-  const withSpaces = trimmed.replace(/([a-z])([A-Z])/g, "$1 $2");
-  const spaced = noSpaces.replace(/([a-z]{2,})([a-z])/g, (_, a, b) => `${a} ${b}`);
-
-  return [...new Set([trimmed, noSpaces, withSpaces, spaced])].filter(Boolean);
-}
-
-/** Step 2: space-stripped + spaced ILIKE on product, brand, category (and descriptions). */
-async function resolveNormalizedIlikeSearchIds(rawQ: string): Promise<string[]> {
-  const compact = normalizeSearchTerm(rawQ);
-  const spaced = rawQ.toLowerCase().trim();
-  if (!compact && !spaced) return [];
-
-  const compactPattern = `%${escapeIlikePattern(compact)}%`;
-  const spacedPattern = `%${escapeIlikePattern(spaced)}%`;
-
-  const extraSpacedPatterns = getSearchVariants(rawQ)
-    .map((v) => v.toLowerCase().trim())
-    .filter((v) => v.length > 0 && v !== spaced && v !== compact)
-    .slice(0, 4)
-    .map((v) => `%${escapeIlikePattern(v)}%`);
-
-  const extraClauseParts = extraSpacedPatterns.flatMap((pattern) => [
-    Prisma.sql`OR LOWER(p.name) ILIKE ${pattern}`,
-    Prisma.sql`OR LOWER(COALESCE(b.name, '')) ILIKE ${pattern}`,
-    Prisma.sql`OR LOWER(COALESCE(p.short_description, '')) ILIKE ${pattern}`,
-    Prisma.sql`OR LOWER(COALESCE(st.name, '')) ILIKE ${pattern}`,
-  ]);
-  const extraClauses =
-    extraClauseParts.length > 0 ? Prisma.join(extraClauseParts, " ") : Prisma.sql``;
-
-  const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-    SELECT DISTINCT p.id
-    FROM products p
-    LEFT JOIN brands b ON p.brand_id = b.id
-    LEFT JOIN categories c ON p.category_id = c.id
-    LEFT JOIN product_subtypes st ON p.subtype_id = st.id
-    WHERE p.is_active = true
-      AND (
-        LOWER(REPLACE(p.name, ' ', '')) ILIKE ${compactPattern}
-        OR LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')) ILIKE ${compactPattern}
-        OR LOWER(REPLACE(COALESCE(p.description, ''), ' ', '')) ILIKE ${compactPattern}
-        OR LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')) ILIKE ${compactPattern}
-        OR LOWER(REPLACE(COALESCE(c.name, ''), ' ', '')) ILIKE ${compactPattern}
-        OR LOWER(REPLACE(COALESCE(st.name, ''), ' ', '')) ILIKE ${compactPattern}
-        OR LOWER(p.name) ILIKE ${spacedPattern}
-        OR LOWER(COALESCE(p.short_description, '')) ILIKE ${spacedPattern}
-        OR LOWER(COALESCE(p.description, '')) ILIKE ${spacedPattern}
-        OR LOWER(COALESCE(b.name, '')) ILIKE ${spacedPattern}
-        OR LOWER(COALESCE(c.name, '')) ILIKE ${spacedPattern}
-        OR LOWER(COALESCE(st.name, '')) ILIKE ${spacedPattern}
-        ${extraClauses}
-      )
-    LIMIT 50
-  `);
-  return rows.map((r) => r.id);
-}
-
-/** Step 1: search_vector full-text (GIN index). */
-async function resolveFtsSearchIds(rawQ: string): Promise<string[]> {
-  const variants = getSearchVariants(rawQ).filter((v) => /[a-z0-9]/i.test(v));
-  const ids: string[] = [];
-  const seen = new Set<string>();
-
-  for (const term of variants.slice(0, 5)) {
-    try {
-      const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-        SELECT p.id
-        FROM products p
-        WHERE p.is_active = true
-          AND p.search_vector @@ plainto_tsquery('english', ${term})
-        ORDER BY ts_rank(p.search_vector, plainto_tsquery('english', ${term})) DESC
-        LIMIT 50
-      `);
-      for (const row of rows) {
-        if (!seen.has(row.id)) {
-          seen.add(row.id);
-          ids.push(row.id);
-          if (ids.length >= 50) return ids;
-        }
-      }
-    } catch {
-      // plainto_tsquery can fail on odd tokens; try next variant
-    }
-  }
-  return ids;
-}
-
-/** Step 3: pg_trgm typo tolerance (fuzzy fallback, max 50). */
-async function resolveTrigramSearchIds(rawQ: string): Promise<string[]> {
-  const compact = normalizeSearchTerm(rawQ);
-  if (compact.length < 3) return [];
-
-  const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-    SELECT p.id
-    FROM products p
-    LEFT JOIN brands b ON p.brand_id = b.id
-    WHERE p.is_active = true
-      AND (
-        similarity(LOWER(REPLACE(p.name, ' ', '')), ${compact}) > 0.3
-        OR similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}) > 0.3
-        OR similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact}) > 0.3
-      )
-    ORDER BY GREATEST(
-      similarity(LOWER(REPLACE(p.name, ' ', '')), ${compact}),
-      similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}),
-      similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact})
-    ) DESC
-    LIMIT 50
-  `);
-  return rows.map((r) => r.id);
-}
-
-/** Step 4: SKU exact match (product or variant). */
-async function resolveSkuSearchIds(term: string): Promise<string[]> {
-  const skuRows = await prisma.products.findMany({
-    where: {
-      is_active: true,
-      OR: [
-        { sku: { equals: term, mode: "insensitive" } },
-        { product_variants: { some: { sku: { equals: term, mode: "insensitive" } } } },
-      ],
-    },
-    select: { id: true },
-    take: 200,
-  });
-  return skuRows.map((r) => r.id);
-}
-
-/**
- * Search waterfall — first non-empty result wins:
- * 1. search_vector FTS (GIN)
- * 2. Normalized ILIKE (hotwheels ↔ Hot Wheels)
- * 3. Trigram similarity (typos, LIMIT 50)
- * 4. SKU exact
- */
-async function resolveSearchProductIds(searchTerm: string): Promise<string[]> {
-  const rawQ = searchTerm.trim();
-  if (!rawQ) return [];
-
-  try {
-    const fts = await resolveFtsSearchIds(rawQ);
-    if (fts.length > 0) return fts;
-  } catch (err) {
-    console.error("[shopListing] full-text search failed", err);
-  }
-
-  try {
-    const normalized = await resolveNormalizedIlikeSearchIds(rawQ);
-    if (normalized.length > 0) return normalized;
-  } catch (err) {
-    console.error("[shopListing] normalized ILIKE search failed", err);
-  }
-
-  try {
-    const trgm = await resolveTrigramSearchIds(rawQ);
-    if (trgm.length > 0) return trgm;
-  } catch (err) {
-    console.error("[shopListing] trigram search failed", err);
-  }
-
-  try {
-    return await resolveSkuSearchIds(rawQ);
-  } catch (err) {
-    console.error("[shopListing] SKU search failed", err);
-    return [];
-  }
 }
 
 /**
@@ -299,78 +143,11 @@ function effectiveRetailPriceWhere(
   };
 }
 
-/** Plural/singular and case variants so e.g. diecast-car still matches diecast-cars rows. */
-function slugMatchOrClause(slug: string) {
-  const s = slug.trim();
-  const lower = s.toLowerCase();
-  const variants = new Set<string>([s, lower]);
-  if (!lower.endsWith("s")) variants.add(`${lower}s`);
-  if (lower.endsWith("s") && lower.length > 2) variants.add(lower.slice(0, -1));
-  return [...variants].map((v) => ({ slug: { equals: v, mode: "insensitive" as const } }));
-}
-
-/** All category ids in the subtree rooted at rootId (includes root). */
-async function collectDescendantCategoryIds(rootId: string): Promise<string[]> {
-  const all = await safeCategoriesFindMany({
-    select: { id: true, parent_id: true },
-  });
-  const childrenByParent = new Map<string | null, string[]>();
-  for (const c of all) {
-    if (!childrenByParent.has(c.parent_id)) childrenByParent.set(c.parent_id, []);
-    childrenByParent.get(c.parent_id)!.push(c.id);
-  }
-  const out = new Set<string>([rootId]);
-  const queue = [rootId];
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const kid of childrenByParent.get(id) ?? []) {
-      if (!out.has(kid)) {
-        out.add(kid);
-        queue.push(kid);
-      }
-    }
-  }
-  return [...out];
-}
-
-async function categoryIdsForFilter(slug: string): Promise<string[] | null> {
-  let roots = await safeCategoriesFindMany({
-    where: { OR: slugMatchOrClause(slug) },
-    select: { id: true },
-  });
-  // e.g. highlight URL uses "diecast-car" but DB slug is "die-cast-cars" (no variant overlap)
-  if (roots.length === 0) {
-    const firstSegment = slug.split("-").filter(Boolean)[0] ?? "";
-    if (firstSegment.length >= 3) {
-      roots = await safeCategoriesFindMany({
-        where: { slug: { contains: firstSegment, mode: "insensitive" } },
-        select: { id: true },
-        take: 25,
-      });
-    }
-  }
-  if (roots.length === 0) return null;
-  const idSet = new Set<string>();
-  for (const r of roots) {
-    for (const id of await collectDescendantCategoryIds(r.id)) idSet.add(id);
-  }
-  return [...idSet];
-}
-
-async function brandIdForFilter(slug: string): Promise<string | null> {
-  const row = await prisma.brands.findFirst({
-    where: { OR: slugMatchOrClause(slug) },
-    select: { id: true },
-  });
-  return row?.id ?? null;
-}
-
 function mapProductsToItems(
   products: {
     id: string;
     name: string;
     short_description: string | null;
-    description: string | null;
     base_price: { toString(): string } | number;
     discounted_price: { toString(): string } | number | null;
     age_group: string | null;
@@ -404,7 +181,7 @@ function mapProductsToItems(
       title: p.name,
       image,
       shortDescription: p.short_description ?? "",
-      description: p.description ?? "",
+      description: "",
       ageGroup: p.age_group ?? null,
       diecastScale: p.diecast_scales?.ratio ?? null,
       price: basePrice,
@@ -434,7 +211,23 @@ export type ShopListingResult =
  * Shared shop listing (used by GET /api/products and the Shop server page).
  * Avoids internal HTTP fetches so localhost always uses the same DB as Prisma.
  */
-export async function getShopListing(usp: URLSearchParams): Promise<ShopListingResult> {
+const emptyFacetsBundle = {
+  ageGroups: [] as string[],
+  diecastScales: [] as string[],
+  brands: [] as { slug: string; name: string; count: number }[],
+  productSubtypes: [] as { slug: string; name: string; count: number }[],
+  productCollections: [] as { slug: string; name: string; count: number }[],
+  discountBuckets: [] as { id: string; label: string; count: number }[],
+};
+
+export async function getShopListing(
+  usp: URLSearchParams,
+  requestOptions?: Partial<ShopListingRequestOptions>
+): Promise<ShopListingResult> {
+  const includeFacets = requestOptions?.includeFacets !== false;
+  const profile = createShopListingProfile();
+  const startedAt = profile.startedAt;
+
   const q = cleanText(usp.get("q") ?? "", 200);
   const categorySlugs = [
     ...new Set(usp.getAll("category").map((s) => cleanText(s, 160)).filter(Boolean)),
@@ -446,20 +239,24 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   const maxPrice = usp.get("maxPrice");
 
   if (q && hasSuspiciousInput(q)) {
+    finishShopListingProfile(profile, { ok: false, reason: "invalid_q" });
     return { ok: false, error: "Invalid search query", status: 400 };
   }
   for (const cat of categorySlugs) {
     if (!isUrlSlug(cat)) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_category" });
       return { ok: false, error: "Invalid category filter", status: 400 };
     }
   }
   for (const brand of brandSlugs) {
     if (!isUrlSlug(brand)) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_brand" });
       return { ok: false, error: "Invalid brand filter", status: 400 };
     }
   }
   for (const ageGroup of ageGroups) {
     if (ageGroup && hasSuspiciousInput(ageGroup)) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_age" });
       return { ok: false, error: "Invalid age group filter", status: 400 };
     }
   }
@@ -467,9 +264,11 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   const minP = minPrice !== null && minPrice !== "" ? Number(minPrice) : null;
   const maxP = maxPrice !== null && maxPrice !== "" ? Number(maxPrice) : null;
   if ((minP !== null && !Number.isFinite(minP)) || (maxP !== null && !Number.isFinite(maxP))) {
+    finishShopListingProfile(profile, { ok: false, reason: "invalid_price" });
     return { ok: false, error: "Invalid price filter", status: 400 };
   }
   if ((minP !== null && minP < 0) || (maxP !== null && maxP < 0)) {
+    finishShopListingProfile(profile, { ok: false, reason: "invalid_price" });
     return { ok: false, error: "Invalid price filter", status: 400 };
   }
   const availableOnly = (usp.get("available") ?? "").trim() === "true";
@@ -479,16 +278,19 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   const discountParams = [...new Set(usp.getAll("discount").map((s) => cleanText(s, 32)).filter(Boolean))];
   for (const subtypeSlug of subtypeSlugs) {
     if (!isUrlSlug(subtypeSlug)) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_subtype" });
       return { ok: false, error: "Invalid sub category filter", status: 400 };
     }
   }
   for (const collectionSlug of collectionSlugs) {
     if (!isUrlSlug(collectionSlug)) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_collection" });
       return { ok: false, error: "Invalid collection filter", status: 400 };
     }
   }
   for (const discountParam of discountParams) {
     if (!/^(b10|b25|b50|b100|on_sale)$/.test(discountParam)) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_discount" });
       return { ok: false, error: "Invalid discount filter", status: 400 };
     }
   }
@@ -497,6 +299,7 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   const sortPrice =
     sortRaw === "price_asc" || sortRaw === "price_desc" ? sortRaw : null;
   if (sortRaw && !sortPrice) {
+    finishShopListingProfile(profile, { ok: false, reason: "invalid_sort" });
     return { ok: false, error: "Invalid sort", status: 400 };
   }
 
@@ -506,24 +309,14 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
 
   const where: Record<string, unknown> = { is_active: true };
   if (q) {
-    const searchIds = await resolveSearchProductIds(q);
+    const searchIds = await resolveSearchProductIds(q, profile);
     if (searchIds.length === 0) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: discountBucketsFromCounts(await getCachedGlobalDiscountBuckets()),
-          items: [],
-        },
-      };
+      const globalBuckets = await profiledQuery(profile, "facets.globalDiscountEmptySearch", () =>
+        getCachedGlobalDiscountBuckets()
+      );
+      const data = emptyListingData(page, pageSize, discountBucketsFromCounts(globalBuckets));
+      finishShopListingProfile(profile, { ok: true, total: 0, empty: "search" });
+      return { ok: true, data };
     }
     where.id = { in: searchIds };
   }
@@ -531,7 +324,10 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   const diecastNorms: string[] = [];
   for (const raw of diecastScaleRawList) {
     const n = normalizeDiecastScale(raw);
-    if (!n) return { ok: false, error: "Invalid diecast scale filter", status: 400 };
+    if (!n) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_diecast" });
+      return { ok: false, error: "Invalid diecast scale filter", status: 400 };
+    }
     diecastNorms.push(n);
   }
   if (diecastNorms.length) where.diecast_scales = { is: { ratio: { in: diecastNorms } } };
@@ -543,117 +339,71 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
 
   let selectedCategoryIdSet: Set<string> | null = null;
   if (categorySlugs.length > 0) {
-    const idSet = new Set<string>();
-    for (const slug of categorySlugs) {
-      const categoryIds = await categoryIdsForFilter(slug);
-      if (categoryIds) {
-        for (const id of categoryIds) idSet.add(id);
-      }
-    }
+    const idSet = await profiledQuery(profile, "categories.resolveSlugs", () =>
+      categoryIdsForFilterSlugs(categorySlugs)
+    );
     if (idSet.size === 0) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
+      const data = emptyListingData(page, pageSize);
+      finishShopListingProfile(profile, { ok: true, total: 0, empty: "category" });
+      return { ok: true, data };
     }
     where.category_id = { in: [...idSet] };
     selectedCategoryIdSet = idSet;
   }
 
-  if (subtypeSlugs.length) {
-    const subtypeWhere: Prisma.product_subtypesWhereInput = {
-      is_active: true,
-      OR: subtypeSlugs.flatMap((s) => slugMatchOrClause(s)),
-    };
-    if (selectedCategoryIdSet) {
-      subtypeWhere.category_id = { in: [...selectedCategoryIdSet] };
-    }
-    const sRows = await prisma.product_subtypes.findMany({
-      where: subtypeWhere,
-      select: { id: true, category_id: true },
-    });
+  const taxonomyResolves = await Promise.all([
+    subtypeSlugs.length
+      ? profiledQuery(profile, "taxonomy.subtypes", () => {
+          const subtypeWhere: Prisma.product_subtypesWhereInput = {
+            is_active: true,
+            OR: subtypeSlugs.flatMap((s) => slugMatchOrClause(s)),
+          };
+          if (selectedCategoryIdSet) {
+            subtypeWhere.category_id = { in: [...selectedCategoryIdSet] };
+          }
+          return prisma.product_subtypes.findMany({
+            where: subtypeWhere,
+            select: { id: true },
+          });
+        })
+      : Promise.resolve(null),
+    collectionSlugs.length
+      ? profiledQuery(profile, "taxonomy.collections", () =>
+          prisma.product_collections.findMany({
+            where: { is_active: true, OR: collectionSlugs.flatMap((s) => slugMatchOrClause(s)) },
+            select: { id: true },
+          })
+        )
+      : Promise.resolve(null),
+    brandSlugs.length
+      ? resolveBrandIdsForSlugs(brandSlugs, profile)
+      : Promise.resolve(null),
+  ]);
+
+  const [sRows, cRows, brandIds] = taxonomyResolves;
+  if (sRows !== null) {
     if (sRows.length === 0) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
+      const data = emptyListingData(page, pageSize);
+      finishShopListingProfile(profile, { ok: true, total: 0, empty: "subtype" });
+      return { ok: true, data };
     }
     (where as { subtype_id?: { in: string[] } }).subtype_id = { in: sRows.map((s) => s.id) };
   }
-
-  if (collectionSlugs.length) {
-    const cRows = await prisma.product_collections.findMany({
-      where: { is_active: true, OR: collectionSlugs.flatMap((s) => slugMatchOrClause(s)) },
-      select: { id: true },
-    });
+  if (cRows !== null) {
     if (cRows.length === 0) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
+      const data = emptyListingData(page, pageSize);
+      finishShopListingProfile(profile, { ok: true, total: 0, empty: "collection" });
+      return { ok: true, data };
     }
     (where as { collection_id?: { in: string[] } }).collection_id = { in: cRows.map((c) => c.id) };
   }
-
-  if (brandSlugs.length) {
-    const ids = (
-      await Promise.all(brandSlugs.map((brand) => brandIdForFilter(brand)))
-    ).filter((x): x is string => Boolean(x));
-    if (ids.length === 0) {
-      return {
-        ok: true,
-        data: {
-          page,
-          pageSize,
-          total: 0,
-          totalPages: 1,
-          ageGroups: [],
-          diecastScales: [],
-          brands: [],
-          productSubtypes: [],
-          productCollections: [],
-          discountBuckets: [],
-          items: [],
-        },
-      };
+  if (brandIds !== null) {
+    if (brandIds.length === 0) {
+      const data = emptyListingData(page, pageSize);
+      finishShopListingProfile(profile, { ok: true, total: 0, empty: "brand" });
+      return { ok: true, data };
     }
-    where.brand_id = { in: ids };
+    where.brand_id = { in: brandIds };
   }
 
   if (availableOnly) {
@@ -698,97 +448,38 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
     maxP !== null ||
     availableOnly;
 
-  const [ageGroupsRaw, subGroups, colGroups, brandIdGroups, diecastScalesCached, discountBucketCounts] =
-    await Promise.all([
-      prisma.products.findMany({
-        where: { ...wNoAge, age_group: { not: null } },
-        distinct: ["age_group"],
-        select: { age_group: true },
-        orderBy: { age_group: "asc" },
-      }),
-      prisma.products.groupBy({
-        by: ["subtype_id"],
-        where: { ...wNoSubtype, subtype_id: { not: null } } as never,
-        _count: { _all: true },
-      }),
-      prisma.products.groupBy({
-        by: ["collection_id"],
-        where: { ...wNoSubtype, collection_id: { not: null } } as never,
-        _count: { _all: true },
-      }),
-      prisma.products.groupBy({
-        by: ["brand_id"],
-        where: { ...brandFacetWhere, brand_id: { not: null } } as never,
-        _count: { _all: true },
-      }),
-      getCachedDiecastScales(),
-      hasHeavyFilters
-        ? prisma.products
-            .findMany({ where: fw, select: { id: true } })
-            .then((rows) => computeDiscountBucketsForProductIds(rows.map((r) => r.id)))
-        : getCachedGlobalDiscountBuckets(),
-    ]);
-
-  const subIdList = subGroups.map((g) => g.subtype_id).filter((v): v is string => v !== null);
-  const subRowsWhere: Prisma.product_subtypesWhereInput = {
-    id: { in: subIdList },
-    is_active: true,
+  const facetCacheParams: FacetCacheParams = {
+    q,
+    categorySlugs,
+    brandSlugs,
+    ageGroups,
+    diecastNorms,
+    subtypeSlugs,
+    collectionSlugs,
+    minP,
+    maxP,
+    availableOnly,
   };
-  if (selectedCategoryIdSet) {
-    subRowsWhere.category_id = { in: [...selectedCategoryIdSet] };
-  }
-  const subRows = subIdList.length
-    ? await prisma.product_subtypes.findMany({
-        where: subRowsWhere,
-        select: { id: true, name: true, slug: true },
-        orderBy: { name: "asc" },
-      })
-    : [];
-  const sCount = new Map(subGroups.map((g) => [g.subtype_id, g._count._all] as const));
-  const productSubtypes: { slug: string; name: string; count: number }[] = subRows.map((r) => ({
-    slug: r.slug,
-    name: r.name,
-    count: sCount.get(r.id) ?? 0,
-  }));
 
-  const colIdList = colGroups.map((g) => g.collection_id).filter((v): v is string => v !== null);
-  const colRows = colIdList.length
-    ? await prisma.product_collections.findMany({
-        where: { id: { in: colIdList } },
-        select: { id: true, name: true, slug: true },
-        orderBy: { name: "asc" },
+  const facets = includeFacets
+    ? await loadListingFacets(facetCacheParams, {
+        profile,
+        fw,
+        wNoAge,
+        wNoBrand,
+        wNoSubtype,
+        brandFacetWhere,
+        selectedCategoryIdSet,
+        diecastNorms,
+        hasHeavyFilters,
+        brandSlugsForUi: brandSlugs,
       })
-    : [];
-  const cCount = new Map(colGroups.map((g) => [g.collection_id, g._count._all] as const));
-  const productCollections: { slug: string; name: string; count: number }[] = colRows.map((r) => ({
-    slug: r.slug,
-    name: r.name,
-    count: cCount.get(r.id) ?? 0,
-  }));
-
-  const discountBuckets = discountBucketsFromCounts(discountBucketCounts);
-
-  const brandIdsFromGroups = brandIdGroups.map((g) => g.brand_id).filter((v): v is string => v !== null);
-  const brandsIfAny = brandIdsFromGroups.length
-    ? await prisma.brands.findMany({
-        where: { id: { in: brandIdsFromGroups } },
-        select: { id: true, slug: true, name: true },
-        orderBy: { name: "asc" },
-      })
-    : [];
-  const bCount = new Map(brandIdGroups.map((g) => [g.brand_id, g._count._all] as const));
-  const brandsWithCounts: { slug: string; name: string; count: number }[] = brandsIfAny.map((b) => ({
-    slug: b.slug,
-    name: b.name,
-    count: bCount.get(b.id) ?? 0,
-  }));
-  const brandsRaw = brandsWithCounts;
+    : emptyFacetsBundle;
 
   const listingSelect = {
     id: true,
     name: true,
     short_description: true,
-    description: true,
     base_price: true,
     discounted_price: true,
     age_group: true,
@@ -815,58 +506,73 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   let products: any[];
 
   if (discountParams.length > 0) {
-    const candidateRows = await prisma.products.findMany({
-      where: where as never,
-      select: { id: true },
-    });
+    const candidateRows = await profiledQuery(profile, "listing.discountCandidates", () =>
+      prisma.products.findMany({
+        where: where as never,
+        select: { id: true },
+      })
+    );
     const candidateIds = candidateRows.map((r) => r.id);
     const sortPriceKey =
       sortPrice === "price_asc" ? "price_asc" : sortPrice === "price_desc" ? "price_desc" : null;
-    const { ids: pageIds, total: discountTotal } = await paginateDiscountFilteredProductIds({
-      candidateIds,
-      discountKeys: discountParams,
-      skip,
-      take: pageSize,
-      sortPrice: sortPriceKey,
-    });
+    const { ids: pageIds, total: discountTotal } = await profiledQuery(
+      profile,
+      "listing.discountPaginate",
+      () =>
+        paginateDiscountFilteredProductIds({
+          candidateIds,
+          discountKeys: discountParams,
+          skip,
+          take: pageSize,
+          sortPrice: sortPriceKey,
+        })
+    );
     total = discountTotal;
     if (pageIds.length === 0) {
       products = [];
     } else {
-      const reordered = await prisma.products.findMany({
-        where: { id: { in: pageIds } },
-        select: listingSelect,
-      });
+      const reordered = await profiledQuery(profile, "listing.discountPage", () =>
+        prisma.products.findMany({
+          where: { id: { in: pageIds } },
+          select: listingSelect,
+        })
+      );
       const order = new Map(pageIds.map((id, i) => [id, i] as const));
       reordered.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
       products = reordered;
     }
   } else {
     const [c, prows] = await Promise.all([
-      prisma.products.count({ where: where as never }),
-      prisma.products.findMany({
-        where: where as never,
-        orderBy,
-        skip,
-        take: pageSize,
-        select: listingSelect,
-      }),
+      profiledQuery(profile, "listing.count", () =>
+        prisma.products.count({ where: where as never })
+      ),
+      profiledQuery(profile, "listing.page", () =>
+        prisma.products.findMany({
+          where: where as never,
+          orderBy,
+          skip,
+          take: pageSize,
+          select: listingSelect,
+        })
+      ),
     ]);
     total = c;
     products = prows;
   }
 
   const productIds = products.map((p) => p.id);
-  const flashRows = await prisma.flash_sale_products.findMany({
-    where: { product_id: { in: productIds }, is_active: true },
-    select: {
-      product_id: true,
-      sale_price: true,
-      is_active: true,
-      active_from: true,
-      active_until: true,
-    },
-  });
+  const flashRows = await profiledQuery(profile, "listing.flashSales", () =>
+    prisma.flash_sale_products.findMany({
+      where: { product_id: { in: productIds }, is_active: true },
+      select: {
+        product_id: true,
+        sale_price: true,
+        is_active: true,
+        active_from: true,
+        active_until: true,
+      },
+    })
+  );
   const flashMap = new Map<string, number>();
   for (const row of flashRows) {
     if (isActiveInWindow(row.is_active, row.active_from, row.active_until, now)) {
@@ -875,48 +581,31 @@ export async function getShopListing(usp: URLSearchParams): Promise<ShopListingR
   }
 
   const finalItems = mapProductsToItems(products, flashMap);
-  const finalTotal = total;
 
-  let brandsForUi = brandsRaw.map((b) => ({
-    slug: b.slug,
-    name: b.name,
-    count: b.count,
-  }));
-  for (const brandFilter of brandSlugs) {
-    const lower = brandFilter.toLowerCase();
-    if (!brandsForUi.some((b) => b.slug.toLowerCase() === lower)) {
-      const row = await prisma.brands.findFirst({
-        where: { OR: slugMatchOrClause(brandFilter) },
-        select: { slug: true, name: true },
-      });
-      if (row) {
-        brandsForUi = [...brandsForUi, { ...row, count: 0 }].sort((a, b) => a.name.localeCompare(b.name));
-      }
-    }
-  }
+  finishShopListingProfile(profile, {
+    ok: true,
+    total,
+    page,
+    pageSize,
+    hasSearch: Boolean(q),
+    categoryCount: categorySlugs.length,
+    discountFilter: discountParams.length > 0,
+    elapsedMs: Date.now() - startedAt,
+  });
 
   return {
     ok: true,
     data: {
       page,
       pageSize,
-      total: finalTotal,
-      totalPages: Math.max(1, Math.ceil(finalTotal / pageSize)),
-      ageGroups: ageGroupsRaw
-        .map((x) => x.age_group)
-        .filter((v): v is string => typeof v === "string" && v.trim().length > 0),
-      diecastScales: (() => {
-        const merged = [...new Set([...diecastNorms, ...diecastScalesCached])];
-        return merged.sort((a, b) => {
-          const na = parseInt(a.replace(/^1:/i, ""), 10);
-          const nb = parseInt(b.replace(/^1:/i, ""), 10);
-          return (Number.isFinite(na) ? na : 0) - (Number.isFinite(nb) ? nb : 0);
-        });
-      })(),
-      brands: brandsForUi,
-      productSubtypes,
-      productCollections,
-      discountBuckets,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      ageGroups: facets.ageGroups,
+      diecastScales: facets.diecastScales,
+      brands: facets.brands,
+      productSubtypes: facets.productSubtypes,
+      productCollections: facets.productCollections,
+      discountBuckets: facets.discountBuckets,
       items: finalItems,
     },
   };

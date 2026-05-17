@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+import { FLASH_SALES_TAG, MARKETING_TAG, POPUPS_TAG } from "@/lib/cache/tags";
 
 export const getSiteMarketingSettings = unstable_cache(
   async () => {
@@ -15,7 +16,7 @@ export const getSiteMarketingSettings = unstable_cache(
     }
   },
   ["site-marketing-settings"],
-  { revalidate: 3600, tags: ["marketing"] }
+  { revalidate: 3600, tags: [MARKETING_TAG] }
 );
 
 export const getMarketingPopups = unstable_cache(
@@ -29,7 +30,7 @@ export const getMarketingPopups = unstable_cache(
     }
   },
   ["marketing-popups"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: [POPUPS_TAG] }
 );
 
 export const getFlashSaleProducts = unstable_cache(
@@ -44,7 +45,7 @@ export const getFlashSaleProducts = unstable_cache(
     }
   },
   ["flash-sale-products"],
-  { revalidate: 30 }
+  { revalidate: 30, tags: [FLASH_SALES_TAG] }
 );
 
 export const getCouponsForAdmin = unstable_cache(
@@ -93,7 +94,7 @@ export const getSiteMarketingSettingsForHome = unstable_cache(
     }
   },
   ["site-marketing-settings-home"],
-  { revalidate: 3600, tags: ["marketing"] }
+  { revalidate: 3600, tags: [MARKETING_TAG] }
 );
 
 export const getSiteChromeColors = unstable_cache(
@@ -122,5 +123,5 @@ export const getSiteChromeColors = unstable_cache(
     }
   },
   ["site-chrome-colors"],
-  { revalidate: 3600, tags: ["marketing"] }
+  { revalidate: 3600, tags: [MARKETING_TAG] }
 );

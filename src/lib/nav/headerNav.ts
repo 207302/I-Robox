@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { safeCategoriesFindMany } from "@/lib/db/safeReads";
+import { BRANDS_TAG, CATEGORIES_TAG, HEADER_NAV_TAG } from "@/lib/cache/tags";
 
 /** Slug + display name for header dropdowns (categories, brands). */
 export type HeaderNavItem = { slug: string; name: string };
@@ -25,7 +26,7 @@ const getCachedNavCategories = unstable_cache(
     }
   },
   ["nav-categories-all"],
-  { revalidate: BUILD_QUERY_CACHE_SECONDS, tags: ["categories", "header-nav"] }
+  { revalidate: BUILD_QUERY_CACHE_SECONDS, tags: [CATEGORIES_TAG, HEADER_NAV_TAG] }
 );
 
 const getCachedNavBrands = unstable_cache(
@@ -40,7 +41,7 @@ const getCachedNavBrands = unstable_cache(
     }
   },
   ["nav-brands-all"],
-  { revalidate: BUILD_QUERY_CACHE_SECONDS, tags: ["brands", "header-nav"] }
+  { revalidate: BUILD_QUERY_CACHE_SECONDS, tags: [BRANDS_TAG, HEADER_NAV_TAG] }
 );
 
 /**

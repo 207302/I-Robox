@@ -5,6 +5,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductById } from "@/lib/cache/productCache";
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       return variant;
     });
   
+    await revalidateProductById(productId);
     return NextResponse.json(created, { status: 201 });
   
   });}
@@ -130,6 +132,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       }
     });
   
+    await revalidateProductById(productId);
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -177,7 +180,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       });
       await tx.product_variants.update({ where: { id: variantId }, data: { is_default: true } });
     });
-  
+
+    await revalidateProductById(productId);
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

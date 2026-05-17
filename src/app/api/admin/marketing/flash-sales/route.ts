@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateFlashSales } from "@/lib/cache/revalidate";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
         },
         include: { products: { select: { id: true, name: true, slug: true } } },
       });
+      await revalidateFlashSales({ productId: product_id });
       return NextResponse.json(
         { ok: true, id: updated.id, updated: true, item: { ...updated, sale_price: Number(updated.sale_price) } },
         { status: 200 }
@@ -104,6 +106,7 @@ export async function POST(req: NextRequest) {
       },
       include: { products: { select: { id: true, name: true, slug: true } } },
     });
+    await revalidateFlashSales({ productId: product_id });
     return NextResponse.json(
       { ok: true, id: created.id, created: true, item: { ...created, sale_price: Number(created.sale_price) } },
       { status: 201 }

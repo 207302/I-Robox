@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateFlashSales } from "@/lib/cache/revalidate";
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runApiRoute(async () => {
@@ -70,6 +71,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   
     await prisma.flash_sale_products.update({ where: { id }, data });
+    await revalidateFlashSales({ productId: current.product_id });
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -91,7 +93,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
+    const row = await prisma.flash_sale_products.findUnique({
+      where: { id },
+      select: { product_id: true },
+    });
     await prisma.flash_sale_products.delete({ where: { id } });
+    if (row?.product_id) await revalidateFlashSales({ productId: row.product_id });
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

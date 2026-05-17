@@ -6,6 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateHomePage } from "@/lib/cache/homePageCache";
 
 export async function GET() {
   return runApiRoute(async () => {
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
   
+    revalidateHomePage();
     return NextResponse.json({ ok: true, id: created.id }, { status: 201 });
   
   });}

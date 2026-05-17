@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { validateCommonEmailProvider } from "@/lib/validateEmai";
 import PasswordInput from "@/components/Auth/PasswordInput";
+import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -107,10 +108,10 @@ export default function LoginClient() {
           return;
         }
         toast.success("Account created!");
-        window.dispatchEvent(new Event("irobox-auth-changed"));
+        window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       } else {
         toast.success("Welcome back!");
-        window.dispatchEvent(new Event("irobox-auth-changed"));
+        window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       }
       router.push("/");
       router.refresh();
@@ -194,7 +195,7 @@ export default function LoginClient() {
       setPendingUserId(null);
       setOtp("");
       setDevOtpHint(null);
-      window.dispatchEvent(new Event("irobox-auth-changed"));
+      window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       router.push("/");
       router.refresh();
     } catch (err: unknown) {

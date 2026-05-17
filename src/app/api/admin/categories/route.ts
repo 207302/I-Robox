@@ -5,6 +5,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateCategoryCatalog } from "@/lib/cache/productCache";
 
 function isAllowed(roles: string[]) {
   return (
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
       data: { name, slug: finalSlug },
       select: { id: true, name: true, slug: true },
     });
+    revalidateCategoryCatalog();
     return NextResponse.json(category, { status: 201 });
   
   });}

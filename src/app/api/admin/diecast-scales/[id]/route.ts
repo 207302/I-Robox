@@ -5,6 +5,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { normalizeDiecastScale } from "@/lib/products/diecastScales";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { revalidateProductCatalog } from "@/lib/cache/revalidate";
 
 function isAllowed(roles: string[]) {
   return (
@@ -58,6 +59,7 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
       data: { ratio, name: ratio },
       select: { id: true, name: true },
     });
+    revalidateProductCatalog();
     return NextResponse.json(row);
   
   });}
@@ -78,6 +80,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   
     try {
       await prisma.diecast_scales.delete({ where: { id } });
+      revalidateProductCatalog();
       return NextResponse.json({ ok: true });
     } catch (e: any) {
       if (e?.code === "P2003") {

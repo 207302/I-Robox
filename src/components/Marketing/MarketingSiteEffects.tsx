@@ -3,22 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePublicMarketing } from "@/hooks/usePublicMarketing";
+import type { MarketingPopupPayload } from "@/lib/marketing/publicMarketingTypes";
 
 const RETURNING_KEY = "irobox_returning_visitor";
 const PREFILL_COUPON_KEY = "irobox_prefill_coupon";
-
-type PopupPayload = {
-  id: string;
-  title: string;
-  body: string;
-  image_url: string | null;
-  cta_label: string | null;
-  cta_url: string | null;
-  delay_ms: number;
-  auto_close_ms: number;
-  frequency: string;
-  suggested_coupon_code: string | null;
-};
 
 function storageKeyForPopup(popupId: string, frequency: string) {
   if (frequency === "ONCE_PER_DEVICE") return `irobox_popup_device_${popupId}`;
@@ -26,64 +15,43 @@ function storageKeyForPopup(popupId: string, frequency: string) {
 }
 
 export default function MarketingSiteEffects() {
-  const [popup, setPopup] = useState<PopupPayload | null>(null);
+  const { data, isLoading } = usePublicMarketing();
+  const [popup, setPopup] = useState<MarketingPopupPayload | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    let openTimer: ReturnType<typeof window.setTimeout> | null = null;
-    const win = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
+    if (isLoading || !data) return;
 
-    const run = () => {
-      if (cancelled) return;
-      void fetch("/api/public/marketing", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data: { popup?: PopupPayload | null; firstVisitCouponCode?: string | null }) => {
-          if (typeof window === "undefined" || cancelled) return;
-
-          const wasReturning = localStorage.getItem(RETURNING_KEY);
-          if (!wasReturning) {
-            if (data?.firstVisitCouponCode) {
-              sessionStorage.setItem(PREFILL_COUPON_KEY, data.firstVisitCouponCode);
-            }
-            localStorage.setItem(RETURNING_KEY, "1");
-          }
-
-          const p = data?.popup;
-          if (!p) return;
-          const key = storageKeyForPopup(p.id, p.frequency);
-          const store = p.frequency === "ONCE_PER_DEVICE" ? localStorage : sessionStorage;
-          if (p.frequency !== "EVERY_VISIT" && store.getItem(key)) return;
-          setPopup(p);
-          const delay = Math.max(0, Number(p.delay_ms) || 0);
-          openTimer = window.setTimeout(() => {
-            setOpen(true);
-            if (p.frequency !== "EVERY_VISIT") store.setItem(key, "1");
-          }, delay);
-        })
-        .catch(() => {});
-    };
-
-    let idleId: number | undefined;
-    let fallbackId: ReturnType<typeof window.setTimeout> | undefined;
-    if (typeof win.requestIdleCallback === "function") {
-      idleId = win.requestIdleCallback(run, { timeout: 3500 });
-    } else {
-      fallbackId = window.setTimeout(run, 800);
+    const wasReturning = localStorage.getItem(RETURNING_KEY);
+    if (!wasReturning) {
+      if (data.firstVisitCouponCode) {
+        sessionStorage.setItem(PREFILL_COUPON_KEY, data.firstVisitCouponCode);
+      }
+      localStorage.setItem(RETURNING_KEY, "1");
     }
 
-    return () => {
-      cancelled = true;
-      if (openTimer) window.clearTimeout(openTimer);
-      if (idleId != null && typeof win.cancelIdleCallback === "function") {
-        win.cancelIdleCallback(idleId);
-      }
-      if (fallbackId) window.clearTimeout(fallbackId);
-    };
-  }, []);
+    const p = data.popup;
+    if (!p) {
+      setPopup(null);
+      return;
+    }
+
+    const key = storageKeyForPopup(p.id, p.frequency);
+    const store = p.frequency === "ONCE_PER_DEVICE" ? localStorage : sessionStorage;
+    if (p.frequency !== "EVERY_VISIT" && store.getItem(key)) {
+      setPopup(null);
+      return;
+    }
+
+    setPopup(p);
+    const delay = Math.max(0, Number(p.delay_ms) || 0);
+    const openTimer = window.setTimeout(() => {
+      setOpen(true);
+      if (p.frequency !== "EVERY_VISIT") store.setItem(key, "1");
+    }, delay);
+
+    return () => window.clearTimeout(openTimer);
+  }, [data, isLoading]);
 
   useEffect(() => {
     if (!open || !popup) return;

@@ -5,7 +5,9 @@ function isTransientConnectionError(error: unknown) {
     return error.code === "P1001" || error.code === "P1002" || error.code === "P1017";
   }
   const msg = error instanceof Error ? error.message : String(error);
-  return /Can't reach database server|Connection timed out|ECONNREFUSED|ETIMEDOUT/i.test(msg);
+  return /Can't reach database server|Connection timed out|ECONNREFUSED|ETIMEDOUT|PostgreSQL connection|kind: Closed|Connection closed|Connection terminated/i.test(
+    msg
+  );
 }
 
 /** Retry Neon cold starts / brief network blips (common on free tier after idle). */

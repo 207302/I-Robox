@@ -132,7 +132,10 @@ export default function ShopLiveExperience({
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const skipFetchRef = useRef(true);
+  const fetchGenRef = useRef(0);
+  const inflightQsRef = useRef<string | null>(null);
+  const shellLoadStartedRef = useRef(false);
+  const skipListingKeyFetchRef = useRef(true);
   const filterFingerprintRef = useRef(
     listingFilterFingerprint(queryStringFromWindow(initialQueryString))
   );
@@ -192,13 +195,23 @@ export default function ShopLiveExperience({
   const debouncedFilterFpExclQ = useDebounce(filterFingerprintExcludingSearch(queryString), 300);
   const fetchQsRef = useRef(effectiveQueryString);
   fetchQsRef.current = effectiveQueryString;
+  const listingFetchKey = useMemo(
+    () =>
+      `${debouncedFilterFpExclQ}|${debouncedSearchInput}|${query.page}|${urlQueryString}`,
+    [debouncedFilterFpExclQ, debouncedSearchInput, query.page, urlQueryString]
+  );
   const searchPending = searchInput !== debouncedSearchInput;
   const gridBusy = searchPending || isLoading;
 
   const fetchListing = useCallback(async (qs: string) => {
+    if (inflightQsRef.current === qs && abortRef.current && !abortRef.current.signal.aborted) {
+      return;
+    }
     abortRef.current?.abort();
+    const gen = ++fetchGenRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
+    inflightQsRef.current = qs;
     setIsLoading(true);
     const trackProgress = isSearchProgressPending();
     if (trackProgress) setSearchProgress(55);
@@ -247,8 +260,9 @@ export default function ShopLiveExperience({
       console.error("[shop] listing fetch failed", err);
       if (trackProgress) completeSearchProgress();
     } finally {
-      if (!controller.signal.aborted) {
+      if (gen === fetchGenRef.current) {
         setIsLoading(false);
+        inflightQsRef.current = null;
       }
     }
   }, [prefetchAdjacentPages]);
@@ -263,7 +277,6 @@ export default function ShopLiveExperience({
       const next = detail?.queryString ?? "";
       startTransition(() => setQueryString(next));
       if (isSearchProgressPending()) {
-        skipFetchRef.current = false;
         void fetchListing(next);
       }
     };
@@ -316,28 +329,21 @@ export default function ShopLiveExperience({
     }
   }, [queryString]);
 
+  /** Empty ISR shell must load products on mount even if filter debounce / Strict Mode races. */
   useEffect(() => {
-    const shellEmpty = initialListing.items.length === 0;
-
-    if (skipFetchRef.current) {
-      skipFetchRef.current = false;
-      if (!shellEmpty && effectiveQueryString === initialQueryString) return;
-    }
-
-    // Header search flow has its own fetch path; do not block the empty /shop shell.
-    if (!shellEmpty && isSearchProgressPending()) return;
-
+    if (initialListing.items.length > 0 || shellLoadStartedRef.current) return;
+    shellLoadStartedRef.current = true;
     void fetchListing(fetchQsRef.current);
-  }, [
-    debouncedFilterFpExclQ,
-    debouncedSearchInput,
-    query.page,
-    urlQueryString,
-    fetchListing,
-    initialQueryString,
-    initialListing.items.length,
-    effectiveQueryString,
-  ]);
+  }, [fetchListing, initialListing.items.length]);
+
+  useEffect(() => {
+    if (skipListingKeyFetchRef.current) {
+      skipListingKeyFetchRef.current = false;
+      if (initialListing.items.length === 0) return;
+    }
+    if (initialListing.items.length > 0 && isSearchProgressPending()) return;
+    void fetchListing(fetchQsRef.current);
+  }, [listingFetchKey, fetchListing, initialListing.items.length]);
 
   useEffect(() => {
     if (prevPageScrollRef.current === query.page) return;

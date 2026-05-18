@@ -9,14 +9,14 @@ export type ShopListingRequestOptions = {
   includeFacets: boolean;
 };
 
-/** Stable key for `unstable_cache` (sorted multi-values). Returns null when search `q` is set. */
-export function buildListingCacheKey(usp: URLSearchParams, includeFacets: boolean): string | null {
+/** Stable key for listing-only `unstable_cache` (sorted multi-values). Returns null when search `q` is set. */
+export function buildListingCacheKey(usp: URLSearchParams): string | null {
   if (usp.get("q")?.trim()) return null;
   const normalized = normalizeListingSearchParams(usp);
   normalized.delete(SHOP_LISTING_FACETS_PARAM);
   const qs = normalized.toString();
-  if (!qs && includeFacets) return "default";
-  return JSON.stringify({ qs, facets: includeFacets ? 1 : 0 });
+  if (!qs) return "default";
+  return qs;
 }
 
 /** Canonical query string for DB (sorted keys/values, strips `facets`). */

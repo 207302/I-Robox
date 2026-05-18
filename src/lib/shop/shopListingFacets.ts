@@ -12,6 +12,9 @@ import { slugMatchOrClause, slugVariants } from "@/lib/shop/categoryTree";
 import { profiledQuery, type ShopListingProfile } from "@/lib/shop/shopListingProfile";
 import { onCacheMiss } from "@/lib/observability/cache";
 
+/** Per-filter facet bundle cache TTL (GET /api/products facet layer). */
+export const SHOP_LISTING_FACETS_REVALIDATE_SECONDS = 600;
+
 export type ListingFacetBrand = { slug: string; name: string; count: number };
 export type ListingFacetRow = { slug: string; name: string; count: number };
 
@@ -52,7 +55,7 @@ export function buildFacetCacheKey(p: FacetCacheParams): string | null {
   });
 }
 
-type FacetLoadContext = {
+export type FacetLoadContext = {
   profile: ShopListingProfile;
   fw: Prisma.productsWhereInput;
   wNoAge: Prisma.productsWhereInput;
@@ -235,7 +238,7 @@ export async function loadListingFacets(
     onCacheMiss(`shop-listing-facets:${key}`, () => loadListingFacetsInternal(ctx)),
     ["shop-listing-facets", key],
     {
-      revalidate: 60,
+      revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS,
       tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG],
     }
   )();

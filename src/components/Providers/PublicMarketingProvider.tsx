@@ -73,10 +73,10 @@ export function PublicMarketingProvider({
 
   useEffect(() => {
     mountedRef.current = true;
-
     if (hasCustomerAuthCookie()) {
       void refresh({ bustCache: true });
     }
+
 
     const onAuthChanged = () => {
       void refresh({ bustCache: true });

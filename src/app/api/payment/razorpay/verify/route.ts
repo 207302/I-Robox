@@ -14,7 +14,8 @@ import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 export async function POST(req: NextRequest) {
-  return runApiRoute(async () => {
+  return runApiRoute(
+    async () => {
     try {
       assertSameOrigin(req);
       await rateLimit(`rzp_verify:${req.ip ?? "unknown"}`, 2);
@@ -224,5 +225,7 @@ export async function POST(req: NextRequest) {
       const message = msg || "Could not verify payment";
       return NextResponse.json({ error: message }, { status: 400 });
     }
-  
-  });}
+  },
+    { name: "POST /api/payment/razorpay/verify", timeoutMs: 25_000 }
+  );
+}

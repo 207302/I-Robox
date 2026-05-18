@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
         currency: "INR",
         receipt: `chk_${Date.now()}`,
         payment_capture: true,
+        notes: {
+          customer_email: ctx.address.email.slice(0, 255),
+          customer_phone: ctx.address.phone.slice(0, 255),
+        },
       });
   
       return NextResponse.json(
@@ -96,5 +100,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ error: message || "Could not initiate payment" }, { status: 400 });
     }
-  
-  });}
+  },
+    { name: "POST /api/payment/razorpay/order", timeoutMs: 25_000 }
+  );
+}

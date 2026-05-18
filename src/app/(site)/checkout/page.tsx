@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
 import { formatPrice } from "@/utils/formatePrice";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
+import { toRazorpayPrefillContact } from "@/lib/marketing/contactPhoneUtils";
 import { useSession } from "@/hooks/useSession";
 import { usePublicMarketing } from "@/hooks/usePublicMarketing";
 
@@ -135,6 +136,14 @@ export default function CheckoutPage() {
       const checkoutSeal =
         typeof createData?.checkoutSeal === "string" ? createData.checkoutSeal : "";
 
+      const prefillEmail = address.email.trim();
+      const prefillContact = toRazorpayPrefillContact(address.phone);
+      const prefillName = address.full_name.trim();
+      const prefill: Record<string, string> = {};
+      if (prefillName) prefill.name = prefillName;
+      if (prefillEmail) prefill.email = prefillEmail;
+      if (prefillContact) prefill.contact = prefillContact;
+
       const rz = new window.Razorpay({
         key: createData.keyId,
         amount: createData.amount,
@@ -142,6 +151,7 @@ export default function CheckoutPage() {
         order_id: createData.razorpayOrderId,
         name: "i-Robox",
         description: "Order payment",
+        ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
         handler: async (response: any) => {
           try {
             const verifyRes = await fetch("/api/payment/razorpay/verify", {

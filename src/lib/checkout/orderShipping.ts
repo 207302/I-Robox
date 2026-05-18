@@ -1,9 +1,6 @@
 /** Cart subtotal before discount — free shipping when at or above this (if threshold is enabled). */
 export const DEFAULT_FREE_SHIPPING_THRESHOLD_INR = 2000;
 
-/** Used when no product sets `shipping_per_unit` and subtotal is below the free threshold. */
-export const DEFAULT_SHIPPING_FALLBACK_INR = 99;
-
 /**
  * DB/admin value → threshold used at checkout.
  * - null/undefined in DB → default ₹2000
@@ -33,7 +30,5 @@ export function orderShippingInrFromLines(args: {
   if (threshold != null && args.subtotalBeforeDiscount >= threshold) return 0;
 
   const raw = args.lines.reduce((s, li) => s + li.quantity * Math.max(0, li.shippingPerUnit), 0);
-  const rounded = Math.round(raw * 100) / 100;
-  if (rounded > 0) return rounded;
-  return DEFAULT_SHIPPING_FALLBACK_INR;
+  return Math.round(raw * 100) / 100;
 }

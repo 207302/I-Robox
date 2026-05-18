@@ -68,16 +68,23 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                   </button>
 
                   <div
-                    className={`absolute left-0 border border-gray-2 top-full bg-white shadow-lg rounded-lg p-2 z-50 transform transition-all duration-200 ${hasGrouped || scrollLongFlat ? "min-w-[260px] max-w-sm max-h-[min(70vh,520px)] overflow-y-auto" : "min-w-[220px]"
-                      } ${activeDropdown === i
+                    className={`absolute left-0 top-full z-50 pt-2 transform transition-all duration-200 ${
+                      activeDropdown === i
                         ? "opacity-100 translate-y-0 visible"
                         : "opacity-0 translate-y-2 invisible"
-                      }`}
+                    }`}
                     suppressHydrationWarning
                   >
+                    <div
+                      className={`border border-gray-2 bg-white shadow-lg rounded-lg p-2 ${
+                        hasGrouped || scrollLongFlat
+                          ? "min-w-[260px] max-w-sm max-h-[min(70vh,520px)] overflow-y-auto"
+                          : "min-w-[220px]"
+                      }`}
+                    >
                     {menuItem.submenu?.map((subItem, j) => (
                       <Link
-                        key={subItem.path ?? subItem.title}
+                        key={`${subItem.path ?? subItem.title}-${j}`}
                         href={subItem.path || "#"}
                         className={`block px-4 py-2 text-sm font-medium rounded-lg hover:text-blue hover:bg-gray-2 ${pathBaseActive(pathname, subItem.path) ? "text-blue" : "text-dark"}`}
                       >
@@ -103,6 +110,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                         ))}
                       </div>
                     ))}
+                    </div>
                   </div>
                 </>
               ) : (

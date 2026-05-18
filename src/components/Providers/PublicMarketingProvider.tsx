@@ -78,6 +78,7 @@ export function PublicMarketingProvider({
     }
 
 
+
     const onAuthChanged = () => {
       void refresh({ bustCache: true });
     };

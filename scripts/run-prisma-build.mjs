@@ -79,3 +79,19 @@ if (!process.env.NODE_ENV || !/^(production|development|test)$/.test(process.env
 }
 
 run("npx", ["next", "build"]);
+
+const siteBase =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+  process.env.SITE_URL?.replace(/\/$/, "") ||
+  process.env.NEXTAUTH_URL?.replace(/\/$/, "");
+if (siteBase) {
+  try {
+    const res = await fetch(`${siteBase}/api/products`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    console.log(`[build] shop listing pre-warm: HTTP ${res.status}`);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn("[build] shop listing pre-warm skipped:", message);
+  }
+}

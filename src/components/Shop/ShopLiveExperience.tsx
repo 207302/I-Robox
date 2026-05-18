@@ -8,6 +8,7 @@ import type { ShopListingData } from "@/lib/shop/shopListing";
 import {
   SHOP_LISTING_FACETS_PARAM,
   listingFilterFingerprint,
+  listingFilterFingerprintFromState,
 } from "@/lib/shop/shopListingParams";
 import {
   SHOP_QUERY_EVENT,
@@ -23,7 +24,7 @@ import {
   isSearchProgressPending,
   setSearchProgress,
 } from "@/lib/shop/searchProgress";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   startTransition,
   useCallback,
@@ -70,14 +71,61 @@ function queryStringFromWindow(fallback: string): string {
   return qs || fallback;
 }
 
+function filterFingerprintExcludingSearch(queryString: string): string {
+  const state = parseShopQueryString(queryString);
+  return listingFilterFingerprintFromState({ ...state, q: "" });
+}
+
+function prefetchProductsApi(queryString: string, opts?: { facetsOnly?: boolean }) {
+  const params = new URLSearchParams(queryString);
+  if (opts?.facetsOnly) params.set(SHOP_LISTING_FACETS_PARAM, "0");
+  const qs = params.toString();
+  void fetch(qs ? `/api/products?${qs}` : "/api/products", { cache: "default" });
+}
+
+function buildToggledFilterQueryString(
+  baseQueryString: string,
+  searchQ: string,
+  fieldName: string,
+  value: string
+): string | null {
+  const state = parseShopQueryString(baseQueryString);
+  if (state.q.trim()) return null;
+
+  const next: ShopQueryState = { ...state, q: searchQ, page: 1 };
+  const listKey = {
+    category: "categorySlugs",
+    brand: "brands",
+    ageGroup: "ageGroups",
+    diecastScale: "diecastScales",
+    subtype: "subtypes",
+    collection: "collections",
+    discount: "discounts",
+  } as const;
+  const key = listKey[fieldName as keyof typeof listKey];
+  if (!key) return null;
+
+  const arr = [...next[key]];
+  const idx = arr.indexOf(value);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(value);
+  next[key] = arr as never;
+
+  return buildListingQueryString(next);
+}
+
 export default function ShopLiveExperience({
   initialListing,
   initialQueryString,
   allCategories,
 }: Props) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlQueryString = searchParams.toString();
   const [listing, setListing] = useState(initialListing);
-  const [queryString, setQueryString] = useState(() => queryStringFromWindow(initialQueryString));
+  const [queryString, setQueryString] = useState(() =>
+    queryStringFromWindow(initialQueryString || urlQueryString)
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [searchInput, setSearchInput] = useState(() =>
     parseShopQueryString(queryStringFromWindow(initialQueryString)).q
@@ -88,6 +136,50 @@ export default function ShopLiveExperience({
   const filterFingerprintRef = useRef(
     listingFilterFingerprint(queryStringFromWindow(initialQueryString))
   );
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const prefetchHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetchedUrlsRef = useRef<Set<string>>(new Set());
+  const prevPageScrollRef = useRef(parseShopQueryString(queryStringFromWindow(initialQueryString)).page);
+
+  const cancelHoverPrefetch = useCallback(() => {
+    if (prefetchHoverTimerRef.current) {
+      clearTimeout(prefetchHoverTimerRef.current);
+      prefetchHoverTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleHoverPrefetch = useCallback(
+    (qs: string | null) => {
+      cancelHoverPrefetch();
+      if (!qs) return;
+      prefetchHoverTimerRef.current = setTimeout(() => {
+        if (prefetchedUrlsRef.current.has(qs)) return;
+        prefetchedUrlsRef.current.add(qs);
+        prefetchProductsApi(qs);
+      }, 200);
+    },
+    [cancelHoverPrefetch]
+  );
+
+  const prefetchAdjacentPages = useCallback((data: ShopListingData, qs: string) => {
+    const state = parseShopQueryString(qs);
+    const totalPages = Math.max(1, data.totalPages ?? 1);
+    const current = data.page ?? state.page;
+    if (current > 1) {
+      const prevQs = buildListingQueryString({ ...state, page: current - 1 });
+      if (!prefetchedUrlsRef.current.has(prevQs)) {
+        prefetchedUrlsRef.current.add(prevQs);
+        prefetchProductsApi(prevQs, { facetsOnly: true });
+      }
+    }
+    if (current < totalPages) {
+      const nextQs = buildListingQueryString({ ...state, page: current + 1 });
+      if (!prefetchedUrlsRef.current.has(nextQs)) {
+        prefetchedUrlsRef.current.add(nextQs);
+        prefetchProductsApi(nextQs, { facetsOnly: true });
+      }
+    }
+  }, []);
 
   const query = parseShopQueryString(queryString);
   const activeFilterCount = useMemo(() => countActiveShopFilters(query), [query]);
@@ -97,7 +189,11 @@ export default function ShopLiveExperience({
     const parsed = parseShopQueryString(queryString);
     return buildListingQueryString({ ...parsed, q: debouncedSearchInput });
   }, [queryString, debouncedSearchInput]);
+  const debouncedFilterFpExclQ = useDebounce(filterFingerprintExcludingSearch(queryString), 300);
+  const fetchQsRef = useRef(effectiveQueryString);
+  fetchQsRef.current = effectiveQueryString;
   const searchPending = searchInput !== debouncedSearchInput;
+  const gridBusy = searchPending || isLoading;
 
   const fetchListing = useCallback(async (qs: string) => {
     abortRef.current?.abort();
@@ -144,6 +240,7 @@ export default function ShopLiveExperience({
           };
         });
         if (trackProgress) completeSearchProgress();
+        prefetchAdjacentPages(data, qs);
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
@@ -154,7 +251,11 @@ export default function ShopLiveExperience({
         setIsLoading(false);
       }
     }
-  }, []);
+  }, [prefetchAdjacentPages]);
+
+  useEffect(() => {
+    return () => cancelHoverPrefetch();
+  }, [cancelHoverPrefetch]);
 
   useEffect(() => {
     const onQuery = (event: Event) => {
@@ -178,6 +279,12 @@ export default function ShopLiveExperience({
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  /** Next.js <Link> shop URLs (header, homepage tiles) update the URL without popstate or SHOP_QUERY_EVENT. */
+  useEffect(() => {
+    if (urlQueryString === queryString) return;
+    startTransition(() => setQueryString(urlQueryString));
+  }, [urlQueryString, queryString]);
 
   useEffect(() => {
     const q = parseShopQueryString(queryString).q;
@@ -203,14 +310,40 @@ export default function ShopLiveExperience({
   }, []);
 
   useEffect(() => {
+    const q = parseShopQueryString(queryString).q.trim();
+    if (!q && isSearchProgressPending()) {
+      completeSearchProgress();
+    }
+  }, [queryString]);
+
+  useEffect(() => {
+    const shellEmpty = initialListing.items.length === 0;
+
     if (skipFetchRef.current) {
       skipFetchRef.current = false;
-      const hasSeededListing = initialListing.items.length > 0;
-      if (hasSeededListing && effectiveQueryString === initialQueryString) return;
+      if (!shellEmpty && effectiveQueryString === initialQueryString) return;
     }
-    if (isSearchProgressPending()) return;
-    void fetchListing(effectiveQueryString);
-  }, [effectiveQueryString, fetchListing, initialQueryString, initialListing.items.length]);
+
+    // Header search flow has its own fetch path; do not block the empty /shop shell.
+    if (!shellEmpty && isSearchProgressPending()) return;
+
+    void fetchListing(fetchQsRef.current);
+  }, [
+    debouncedFilterFpExclQ,
+    debouncedSearchInput,
+    query.page,
+    urlQueryString,
+    fetchListing,
+    initialQueryString,
+    initialListing.items.length,
+    effectiveQueryString,
+  ]);
+
+  useEffect(() => {
+    if (prevPageScrollRef.current === query.page) return;
+    prevPageScrollRef.current = query.page;
+    gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [query.page]);
 
   const goToPage = useCallback(
     (page: number) => {
@@ -277,6 +410,19 @@ export default function ShopLiveExperience({
     [products]
   );
 
+  const filterHoverHandlers = useCallback(
+    (fieldName: string, value: string, isChecked: boolean) => ({
+      onMouseEnter: () => {
+        if (isChecked) return;
+        scheduleHoverPrefetch(
+          buildToggledFilterQueryString(queryString, debouncedSearchInput, fieldName, value)
+        );
+      },
+      onMouseLeave: cancelHoverPrefetch,
+    }),
+    [queryString, debouncedSearchInput, scheduleHoverPrefetch, cancelHoverPrefetch]
+  );
+
   const renderFilters = (formId: string, expandSections = false) => {
     const sectionProps = expandSections ? ({ open: true } as const) : {};
 
@@ -312,7 +458,10 @@ export default function ShopLiveExperience({
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {ageGroups.map((group) => (
               <li key={group}>
-                <label className="flex items-center gap-2 text-sm text-dark-4">
+                <label
+                  className="flex items-center gap-2 text-sm text-dark-4"
+                  {...filterHoverHandlers("ageGroup", group, query.ageGroups.includes(group))}
+                >
                   <input
                     type="checkbox"
                     name="ageGroup"
@@ -332,7 +481,14 @@ export default function ShopLiveExperience({
             {allCategories.length > 0 ? (
               allCategories.map((cat) => (
                 <li key={cat.id}>
-                  <label className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue">
+                  <label
+                    className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
+                    {...filterHoverHandlers(
+                      "category",
+                      cat.slug,
+                      query.categorySlugs.includes(cat.slug)
+                    )}
+                  >
                     <input
                       type="checkbox"
                       name="category"
@@ -355,7 +511,10 @@ export default function ShopLiveExperience({
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {shopBrands.map((b) => (
               <li key={b.slug}>
-                <label className="flex items-center gap-2 text-sm text-dark-4">
+                <label
+                  className="flex items-center gap-2 text-sm text-dark-4"
+                  {...filterHoverHandlers("brand", b.slug, query.brands.includes(b.slug))}
+                >
                   <input
                     type="checkbox"
                     name="brand"
@@ -374,7 +533,10 @@ export default function ShopLiveExperience({
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productSubtypes.map((s) => (
               <li key={s.slug}>
-                <label className="flex items-center gap-2 text-sm text-dark-4">
+                <label
+                  className="flex items-center gap-2 text-sm text-dark-4"
+                  {...filterHoverHandlers("subtype", s.slug, query.subtypes.includes(s.slug))}
+                >
                   <input
                     type="checkbox"
                     name="subtype"
@@ -396,7 +558,10 @@ export default function ShopLiveExperience({
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {productCollections.map((c) => (
               <li key={c.slug}>
-                <label className="flex items-center gap-2 text-sm text-dark-4">
+                <label
+                  className="flex items-center gap-2 text-sm text-dark-4"
+                  {...filterHoverHandlers("collection", c.slug, query.collections.includes(c.slug))}
+                >
                   <input
                     type="checkbox"
                     name="collection"
@@ -418,7 +583,10 @@ export default function ShopLiveExperience({
           <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
             {discountBuckets.map((d) => (
               <li key={d.id}>
-                <label className="flex items-center gap-2 text-sm text-dark-4">
+                <label
+                  className="flex items-center gap-2 text-sm text-dark-4"
+                  {...filterHoverHandlers("discount", d.id, query.discounts.includes(d.id))}
+                >
                   <input
                     type="checkbox"
                     name="discount"
@@ -438,7 +606,10 @@ export default function ShopLiveExperience({
             <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
               {diecastScales.map((s) => (
                 <li key={s}>
-                  <label className="flex items-center gap-2 text-sm text-dark-4">
+                  <label
+                    className="flex items-center gap-2 text-sm text-dark-4"
+                    {...filterHoverHandlers("diecastScale", s, query.diecastScales.includes(s))}
+                  >
                     <input
                       type="checkbox"
                       name="diecastScale"
@@ -545,32 +716,32 @@ export default function ShopLiveExperience({
             ) : null}
             <div className="mb-6 flex items-center justify-between gap-3">
               <h1 className="text-2xl font-semibold text-dark">Shop</h1>
-              {searchPending || isLoading ? (
+              {gridBusy ? (
                 <span className="text-xs font-medium text-meta-3 animate-pulse">Updating…</span>
               ) : null}
             </div>
-            {searchPending || isLoading ? (
-              <div
-                className="mb-4 h-0.5 w-full overflow-hidden rounded-full bg-gray-2"
-                role="status"
-                aria-label="Loading products"
-              >
-                <div className="h-full w-1/3 animate-pulse rounded-full bg-blue" />
-              </div>
-            ) : null}
             <div
-              className={`transition-opacity duration-150 ${
-                searchPending || isLoading ? "opacity-40" : "opacity-100"
+              ref={gridRef}
+              className={`relative scroll-mt-24 transition-opacity duration-150 ${
+                gridBusy ? "opacity-50 pointer-events-none" : "opacity-100"
               }`}
-              aria-busy={searchPending || isLoading}
+              aria-busy={gridBusy}
             >
+              {gridBusy ? (
+                <div
+                  className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+                  aria-hidden
+                >
+                  <div className="h-9 w-9 animate-spin rounded-full border-2 border-gray-3 border-t-blue" />
+                </div>
+              ) : null}
               {products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9">
                   {productGrid}
                 </div>
-              ) : (
+              ) : !gridBusy ? (
                 <p className="text-sm text-meta-3">No products match your filters.</p>
-              )}
+              ) : null}
 
               {totalPages > 1 ? (
                 <nav

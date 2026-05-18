@@ -48,11 +48,26 @@ const getCachedNavBrands = unstable_cache(
  * Primary nav: all categories and all brands (alphabetical).
  * Shop links use `/shop?category=…` and `/shop?brand=…`.
  */
+function dedupeNavItems(items: HeaderNavItem[]): HeaderNavItem[] {
+  const seen = new Set<string>();
+  const out: HeaderNavItem[] = [];
+  for (const item of items) {
+    const key = item.slug.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
 export async function getHeaderNavData(): Promise<HeaderNavData> {
   const [categories, brands] = await Promise.all([
     getCachedNavCategories(),
     getCachedNavBrands(),
   ]);
 
-  return { categories, brands };
+  return {
+    categories: dedupeNavItems(categories),
+    brands: dedupeNavItems(brands),
+  };
 }

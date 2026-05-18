@@ -66,6 +66,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       where: { is_active: true },
       select: { slug: true, updated_at: true },
       orderBy: { updated_at: "desc" },
+      take: 500,
     });
     productEntries = products.map((p) => ({
       url: `${base}/shop/${p.slug}`,

@@ -64,6 +64,12 @@ type Props = {
   allCategories: CategoryRow[];
 };
 
+function queryStringFromWindow(fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const qs = window.location.search.replace(/^\?/, "");
+  return qs || fallback;
+}
+
 export default function ShopLiveExperience({
   initialListing,
   initialQueryString,
@@ -71,15 +77,17 @@ export default function ShopLiveExperience({
 }: Props) {
   const pathname = usePathname();
   const [listing, setListing] = useState(initialListing);
-  const [queryString, setQueryString] = useState(initialQueryString);
+  const [queryString, setQueryString] = useState(() => queryStringFromWindow(initialQueryString));
   const [isLoading, setIsLoading] = useState(false);
-  const [searchInput, setSearchInput] = useState(
-    () => parseShopQueryString(initialQueryString).q
+  const [searchInput, setSearchInput] = useState(() =>
+    parseShopQueryString(queryStringFromWindow(initialQueryString)).q
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const skipFetchRef = useRef(true);
-  const filterFingerprintRef = useRef(listingFilterFingerprint(initialQueryString));
+  const filterFingerprintRef = useRef(
+    listingFilterFingerprint(queryStringFromWindow(initialQueryString))
+  );
 
   const query = parseShopQueryString(queryString);
   const activeFilterCount = useMemo(() => countActiveShopFilters(query), [query]);
@@ -197,11 +205,12 @@ export default function ShopLiveExperience({
   useEffect(() => {
     if (skipFetchRef.current) {
       skipFetchRef.current = false;
-      if (effectiveQueryString === initialQueryString) return;
+      const hasSeededListing = initialListing.items.length > 0;
+      if (hasSeededListing && effectiveQueryString === initialQueryString) return;
     }
     if (isSearchProgressPending()) return;
     void fetchListing(effectiveQueryString);
-  }, [effectiveQueryString, fetchListing, initialQueryString]);
+  }, [effectiveQueryString, fetchListing, initialQueryString, initialListing.items.length]);
 
   const goToPage = useCallback(
     (page: number) => {

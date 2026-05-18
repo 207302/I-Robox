@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { hasCustomerAuthCookie } from "@/lib/auth/clientCookie";
 import {
   AUTH_CHANGED_EVENT,
   displayNameFromUser,
@@ -27,13 +28,16 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 async function fetchMe(signal?: AbortSignal): Promise<SessionUser | null> {
-  // Auth must bypass HTTP cache — cookie/session can change at any time.
   const res = await fetch("/api/auth/me", { cache: "no-store", signal });
   const data = (await res.json().catch(() => null)) as MeApiResponse | null;
   return data?.user ?? null;
 }
 
-export function SessionProvider({ children }: { children: ReactNode }) {
+type SessionProviderProps = {
+  children: ReactNode;
+};
+
+export function SessionProvider({ children }: SessionProviderProps) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const inflightRef = useRef<Promise<void> | null>(null);
@@ -63,7 +67,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
-    void refresh();
+
+    if (!hasCustomerAuthCookie()) {
+      setUser(null);
+      setIsLoading(false);
+    } else {
+      void refresh();
+    }
 
     const onAuthChanged = () => {
       void refresh();

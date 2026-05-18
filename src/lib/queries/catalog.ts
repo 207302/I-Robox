@@ -1,11 +1,11 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
-import { safeCategoriesFindMany } from "@/lib/db/safeReads";
 
 export const getCategories = cache(async () => {
   try {
-    return await safeCategoriesFindMany({
+    return await prisma.categories.findMany({
       orderBy: { updated_at: "desc" },
+      take: 200,
     });
   } catch {
     return [];
@@ -14,9 +14,10 @@ export const getCategories = cache(async () => {
 
 export const getCategoriesForAdmin = cache(async () => {
   try {
-    return await safeCategoriesFindMany({
+    return await prisma.categories.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true },
+      take: 200,
     });
   } catch {
     return [];
@@ -25,7 +26,7 @@ export const getCategoriesForAdmin = cache(async () => {
 
 export const getCategoriesForHome = cache(async () => {
   try {
-    return await safeCategoriesFindMany({
+    return await prisma.categories.findMany({
       orderBy: { name: "asc" },
       take: 8,
       select: { id: true, name: true, slug: true },

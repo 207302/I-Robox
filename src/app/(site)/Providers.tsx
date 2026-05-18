@@ -7,6 +7,7 @@ import CartHydration from "@/components/Providers/CartHydration";
 import CartServerSync from "@/components/Providers/CartServerSync";
 import { SessionProvider } from "@/components/Providers/SessionProvider";
 import { PublicMarketingProvider } from "@/components/Providers/PublicMarketingProvider";
+import type { PublicMarketingPayload } from "@/lib/marketing/publicMarketingTypes";
 import dynamic from "next/dynamic";
 
 const MarketingSiteEffects = dynamic(
@@ -22,11 +23,16 @@ const PreviewSliderModal = dynamic(() => import("@/components/Common/PreviewSlid
   ssr: false,
 });
 
-const Providers = ({ children }: { children: React.ReactNode }) => {
+type ProvidersProps = {
+  children: React.ReactNode;
+  initialMarketing: PublicMarketingPayload;
+};
+
+const Providers = ({ children, initialMarketing }: ProvidersProps) => {
   return (
     <ReduxProvider>
       <SessionProvider>
-        <PublicMarketingProvider>
+        <PublicMarketingProvider initialMarketing={initialMarketing}>
           <CartHydration />
           <CartServerSync />
           <CartProvider>

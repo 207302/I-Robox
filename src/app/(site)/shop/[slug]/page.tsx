@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import DemoProductGallery from "./DemoProductGallery";
 import VariantSelector from "./VariantSelector";
+import { cache } from "react";
 import { getProductBySlug } from "@/get-api-data/product";
 import { formatPrice } from "@/utils/formatePrice";
 import ProductActions from "@/components/Shop/ProductActions";
@@ -24,6 +25,8 @@ export async function generateStaticParams() {
   return getProductSlugsForStaticGeneration();
 }
 
+const getProductBySlugCached = cache(getProductBySlug);
+
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -32,7 +35,7 @@ export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const product = await getProductBySlugCached(slug);
   if (!product) return { title: "Product Not Found | i-Robox" };
 
   return {
@@ -43,7 +46,7 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const product = await getProductBySlugCached(slug);
   if (!product) notFound();
 
   const approvedReviews = await getApprovedReviewsForProduct(product.id);

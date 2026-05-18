@@ -1,6 +1,5 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { safeCategoriesFindMany } from "@/lib/db/safeReads";
 import { BRANDS_TAG, CATEGORIES_TAG, HEADER_NAV_TAG } from "@/lib/cache/tags";
 
 /** Slug + display name for header dropdowns (categories, brands). */
@@ -17,9 +16,10 @@ const BUILD_QUERY_CACHE_SECONDS = 3600;
 const getCachedNavCategories = unstable_cache(
   async (): Promise<HeaderNavItem[]> => {
     try {
-      return await safeCategoriesFindMany({
+      return await prisma.categories.findMany({
         select: { slug: true, name: true },
         orderBy: { name: "asc" },
+        take: 200,
       });
     } catch {
       return [];

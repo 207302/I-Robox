@@ -7,8 +7,8 @@ import { Suspense } from "react";
 import MainHeader from "@/components/Header/MainHeader";
 import Breadcrumb from "@/components/Common/Breadcrumb";
 import WhatsAppFloatingDeferred from "@/components/Common/WhatsAppFloatingDeferred";
+import { getGuestPublicMarketingPayload } from "@/lib/marketing/publicMarketingPayload";
 import { getSiteLayoutShell } from "@/lib/siteLayoutShell";
-
 export const revalidate = 120;
 
 export default async function SiteLayout({
@@ -16,19 +16,25 @@ export default async function SiteLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const {
-    utilityAnnouncement,
-    marqueeAnnouncements,
-    headerNav,
-    storeContact,
-    freeShippingThresholdInr,
-    chromeColors,
-  } = await getSiteLayoutShell();
+  const [
+    {
+      utilityAnnouncement,
+      marqueeAnnouncements,
+      headerNav,
+      storeContact,
+      freeShippingThresholdInr,
+      chromeColors,
+    },
+    initialMarketing,
+  ] = await Promise.all([
+    getSiteLayoutShell(),
+    getGuestPublicMarketingPayload(),
+  ]);
 
   return (
     <div>
       <>
-        <Providers>
+        <Providers initialMarketing={initialMarketing}>
           <SiteTopLoader />
           <Suspense
             fallback={

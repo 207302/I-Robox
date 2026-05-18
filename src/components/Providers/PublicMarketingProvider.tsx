@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { hasCustomerAuthCookie } from "@/lib/auth/clientCookie";
 import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
 import type { PublicMarketingPayload } from "@/lib/marketing/publicMarketingTypes";
 
@@ -34,9 +35,17 @@ async function fetchPublicMarketing(bustCache: boolean): Promise<PublicMarketing
   return json ?? EMPTY;
 }
 
-export function PublicMarketingProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<PublicMarketingPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+type PublicMarketingProviderProps = {
+  children: ReactNode;
+  initialMarketing: PublicMarketingPayload;
+};
+
+export function PublicMarketingProvider({
+  children,
+  initialMarketing,
+}: PublicMarketingProviderProps) {
+  const [data, setData] = useState<PublicMarketingPayload | null>(initialMarketing);
+  const [isLoading, setIsLoading] = useState(false);
   const inflightRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
 
@@ -64,7 +73,10 @@ export function PublicMarketingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
-    void refresh();
+
+    if (hasCustomerAuthCookie()) {
+      void refresh({ bustCache: true });
+    }
 
     const onAuthChanged = () => {
       void refresh({ bustCache: true });

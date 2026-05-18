@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { safeCategoriesFindMany } from "@/lib/db/safeReads";
+import { prisma } from "@/lib/prisma";
 import { CATEGORIES_TAG, PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG } from "@/lib/cache/tags";
 import { onCacheMiss } from "@/lib/observability/cache";
 
@@ -35,8 +35,10 @@ export function slugMatchOrClause(slug: string) {
 const loadCategoryTreeRows = unstable_cache(
   onCacheMiss("shop-category-tree", async (): Promise<CategoryTreeNode[]> => {
     try {
-      return await safeCategoriesFindMany({
+      return await prisma.categories.findMany({
         select: { id: true, parent_id: true, slug: true },
+        orderBy: { name: "asc" },
+        take: 200,
       });
     } catch {
       return [];

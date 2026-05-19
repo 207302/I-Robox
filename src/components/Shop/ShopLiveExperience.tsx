@@ -2,7 +2,6 @@
 
 import ProductItem from "@/components/Common/ProductItem";
 import { ChevronDown } from "@/components/Header/icons";
-import LiveShopFilters from "@/components/Shop/LiveShopFilters";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import {
@@ -83,6 +82,21 @@ function prefetchProductsApi(queryString: string, opts?: { facetsOnly?: boolean 
   void fetch(qs ? `/api/products?${qs}` : "/api/products", { cache: "default" });
 }
 
+type ShopListFilterKey =
+  | "categorySlugs"
+  | "brands"
+  | "ageGroups"
+  | "diecastScales"
+  | "subtypes"
+  | "collections"
+  | "discounts";
+
+function toggleListValue(values: string[], value: string): string[] {
+  const idx = values.indexOf(value);
+  if (idx >= 0) return values.filter((v) => v !== value);
+  return [...values, value];
+}
+
 function buildToggledFilterQueryString(
   baseQueryString: string,
   searchQ: string,
@@ -143,6 +157,13 @@ export default function ShopLiveExperience({
   const prefetchHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefetchedUrlsRef = useRef<Set<string>>(new Set());
   const prevPageScrollRef = useRef(parseShopQueryString(queryStringFromWindow(initialQueryString)).page);
+  const clientQueryRef = useRef(queryStringFromWindow(initialQueryString || urlQueryString));
+  const [minPriceInput, setMinPriceInput] = useState(
+    () => parseShopQueryString(queryStringFromWindow(initialQueryString)).minPrice
+  );
+  const [maxPriceInput, setMaxPriceInput] = useState(
+    () => parseShopQueryString(queryStringFromWindow(initialQueryString)).maxPrice
+  );
 
   const cancelHoverPrefetch = useCallback(() => {
     if (prefetchHoverTimerRef.current) {
@@ -186,6 +207,72 @@ export default function ShopLiveExperience({
 
   const query = parseShopQueryString(queryString);
   const activeFilterCount = useMemo(() => countActiveShopFilters(query), [query]);
+
+  useEffect(() => {
+    clientQueryRef.current = queryString;
+  }, [queryString]);
+
+  useEffect(() => {
+    setMinPriceInput(query.minPrice);
+    setMaxPriceInput(query.maxPrice);
+  }, [query.minPrice, query.maxPrice]);
+
+  const commitQuery = useCallback(
+    (next: ShopQueryState) => {
+      const qs = buildListingQueryString(next);
+      clientQueryRef.current = qs;
+      setQueryString(qs);
+      applyShopQuery(pathname, qs);
+    },
+    [pathname]
+  );
+
+  const toggleFilter = useCallback(
+    (key: ShopListFilterKey, value: string) => {
+      commitQuery({
+        ...query,
+        q: searchInput,
+        page: 1,
+        [key]: toggleListValue(query[key], value),
+      });
+    },
+    [commitQuery, query, searchInput]
+  );
+
+  const toggleCategory = useCallback(
+    (slug: string) => {
+      const prevSig = [...query.categorySlugs].sort().join("|");
+      const nextCategories = toggleListValue(query.categorySlugs, slug);
+      const nextSig = [...nextCategories].sort().join("|");
+      const categorySetChanged = prevSig !== nextSig;
+      commitQuery({
+        ...query,
+        q: searchInput,
+        page: 1,
+        categorySlugs: nextCategories,
+        ...(categorySetChanged ? { brands: [], subtypes: [], collections: [] } : {}),
+      });
+    },
+    [commitQuery, query, searchInput]
+  );
+
+  const toggleBrand = useCallback(
+    (slug: string, count: number) => {
+      if (query.categorySlugs.length > 0 && count === 0) return;
+      toggleFilter("brands", slug);
+    },
+    [query.categorySlugs.length, toggleFilter]
+  );
+
+  const commitPriceFilters = useCallback(() => {
+    commitQuery({
+      ...query,
+      q: searchInput,
+      page: 1,
+      minPrice: minPriceInput.trim(),
+      maxPrice: maxPriceInput.trim(),
+    });
+  }, [commitQuery, maxPriceInput, minPriceInput, query, searchInput]);
   /** 350ms debounce — one listing request per pause; aborts superseded fetches. */
   const debouncedSearchInput = useDebounce(searchInput, 350);
   const effectiveQueryString = useMemo(() => {
@@ -275,7 +362,8 @@ export default function ShopLiveExperience({
     const onQuery = (event: Event) => {
       const detail = (event as CustomEvent<{ queryString: string }>).detail;
       const next = detail?.queryString ?? "";
-      startTransition(() => setQueryString(next));
+      clientQueryRef.current = next;
+      setQueryString(next);
       if (isSearchProgressPending()) {
         void fetchListing(next);
       }
@@ -287,7 +375,8 @@ export default function ShopLiveExperience({
   useEffect(() => {
     const onPopState = () => {
       const qs = window.location.search.replace(/^\?/, "");
-      startTransition(() => setQueryString(qs));
+      clientQueryRef.current = qs;
+      setQueryString(qs);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -295,9 +384,13 @@ export default function ShopLiveExperience({
 
   /** Next.js <Link> shop URLs (header, homepage tiles) update the URL without popstate or SHOP_QUERY_EVENT. */
   useEffect(() => {
-    if (urlQueryString === queryString) return;
-    startTransition(() => setQueryString(urlQueryString));
-  }, [urlQueryString, queryString]);
+    if (urlQueryString === clientQueryRef.current) return;
+    const windowQs =
+      typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+    if (urlQueryString !== windowQs) return;
+    clientQueryRef.current = urlQueryString;
+    setQueryString(urlQueryString);
+  }, [urlQueryString]);
 
   useEffect(() => {
     const q = parseShopQueryString(queryString).q;
@@ -353,14 +446,18 @@ export default function ShopLiveExperience({
 
   const goToPage = useCallback(
     (page: number) => {
-      const nextState: ShopQueryState = { ...query, page };
+      const nextState: ShopQueryState = { ...query, q: searchInput, page };
       applyShopQuery(pathname, buildListingQueryString(nextState));
     },
-    [pathname, query]
+    [pathname, query, searchInput]
   );
 
   const clearFilters = useCallback(() => {
     setSearchInput("");
+    setMinPriceInput("");
+    setMaxPriceInput("");
+    clientQueryRef.current = "";
+    setQueryString("");
     applyShopQuery(pathname, "");
   }, [pathname]);
 
@@ -435,9 +532,7 @@ export default function ShopLiveExperience({
     return (
     <div className="rounded-xl border border-gray-3 bg-white p-5">
       <form id={formId} className="mb-5 space-y-3" onSubmit={(e) => e.preventDefault()}>
-        <LiveShopFilters formId={formId} queryString={queryString} />
         <input
-          name="q"
           type="search"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -447,14 +542,16 @@ export default function ShopLiveExperience({
         />
         <div className="grid grid-cols-2 gap-2">
           <input
-            name="minPrice"
-            defaultValue={query.minPrice}
+            value={minPriceInput}
+            onChange={(e) => setMinPriceInput(e.target.value)}
+            onBlur={commitPriceFilters}
             placeholder="Min ₹"
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
           <input
-            name="maxPrice"
-            defaultValue={query.maxPrice}
+            value={maxPriceInput}
+            onChange={(e) => setMaxPriceInput(e.target.value)}
+            onBlur={commitPriceFilters}
             placeholder="Max ₹"
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
@@ -470,9 +567,8 @@ export default function ShopLiveExperience({
                 >
                   <input
                     type="checkbox"
-                    name="ageGroup"
-                    value={group}
-                    defaultChecked={query.ageGroups.includes(group)}
+                    checked={query.ageGroups.includes(group)}
+                    onChange={() => toggleFilter("ageGroups", group)}
                   />
                   {group}
                 </label>
@@ -497,9 +593,8 @@ export default function ShopLiveExperience({
                   >
                     <input
                       type="checkbox"
-                      name="category"
-                      value={cat.slug}
-                      defaultChecked={query.categorySlugs.includes(cat.slug)}
+                      checked={query.categorySlugs.includes(cat.slug)}
+                      onChange={() => toggleCategory(cat.slug)}
                       className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                     />
                     <span className="leading-snug">{cat.name ?? cat.title ?? cat.slug}</span>
@@ -523,9 +618,8 @@ export default function ShopLiveExperience({
                 >
                   <input
                     type="checkbox"
-                    name="brand"
-                    value={b.slug}
-                    defaultChecked={query.brands.includes(b.slug)}
+                    checked={query.brands.includes(b.slug)}
+                    onChange={() => toggleBrand(b.slug, b.count)}
                   />
                   {b.name} ({b.count})
                 </label>
@@ -545,9 +639,8 @@ export default function ShopLiveExperience({
                 >
                   <input
                     type="checkbox"
-                    name="subtype"
-                    value={s.slug}
-                    defaultChecked={query.subtypes.includes(s.slug)}
+                    checked={query.subtypes.includes(s.slug)}
+                    onChange={() => toggleFilter("subtypes", s.slug)}
                   />
                   {s.name} ({s.count})
                 </label>
@@ -570,9 +663,8 @@ export default function ShopLiveExperience({
                 >
                   <input
                     type="checkbox"
-                    name="collection"
-                    value={c.slug}
-                    defaultChecked={query.collections.includes(c.slug)}
+                    checked={query.collections.includes(c.slug)}
+                    onChange={() => toggleFilter("collections", c.slug)}
                   />
                   {c.name} ({c.count})
                 </label>
@@ -595,9 +687,8 @@ export default function ShopLiveExperience({
                 >
                   <input
                     type="checkbox"
-                    name="discount"
-                    value={d.id}
-                    defaultChecked={query.discounts.includes(d.id)}
+                    checked={query.discounts.includes(d.id)}
+                    onChange={() => toggleFilter("discounts", d.id)}
                   />
                   {d.label} ({d.count})
                 </label>
@@ -618,9 +709,8 @@ export default function ShopLiveExperience({
                   >
                     <input
                       type="checkbox"
-                      name="diecastScale"
-                      value={s}
-                      defaultChecked={query.diecastScales.includes(s)}
+                      checked={query.diecastScales.includes(s)}
+                      onChange={() => toggleFilter("diecastScales", s)}
                     />
                     {s}
                   </label>
@@ -633,9 +723,15 @@ export default function ShopLiveExperience({
         <label className="flex items-center gap-2 text-sm text-meta-3">
           <input
             type="checkbox"
-            name="available"
-            value="true"
-            defaultChecked={query.available === "true"}
+            checked={query.available === "true"}
+            onChange={(e) =>
+              commitQuery({
+                ...query,
+                q: searchInput,
+                page: 1,
+                available: e.target.checked ? "true" : "",
+              })
+            }
           />
           In stock only
         </label>
@@ -643,8 +739,15 @@ export default function ShopLiveExperience({
         <div>
           <label className="mb-1 block text-sm font-semibold text-dark">Sort by</label>
           <select
-            name="sort"
-            defaultValue={query.sort}
+            value={query.sort}
+            onChange={(e) =>
+              commitQuery({
+                ...query,
+                q: searchInput,
+                page: 1,
+                sort: e.target.value,
+              })
+            }
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           >
             <option value="">Newest first</option>

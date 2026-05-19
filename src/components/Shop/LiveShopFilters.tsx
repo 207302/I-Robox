@@ -17,9 +17,13 @@ export default function LiveShopFilters({ formId, queryString }: Props) {
     const form = document.getElementById(formId) as HTMLFormElement | null;
     if (!form) return;
 
-    const usp = new URLSearchParams(queryString);
+    const queryStringFromLocation = () => {
+      if (typeof window === "undefined") return queryString;
+      return window.location.search.replace(/^\?/, "") || queryString;
+    };
 
     const syncFormFromQuery = () => {
+      const usp = new URLSearchParams(queryStringFromLocation());
       const fields = Array.from(
         form.querySelectorAll("input, select, textarea")
       ) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
@@ -145,6 +149,8 @@ export default function LiveShopFilters({ formId, queryString }: Props) {
     const onInput = (e: Event) => {
       const t = e.target as HTMLInputElement | null;
       if (!t) return;
+      // Checkboxes/radios use `change` so `checked` is settled before we read the form.
+      if (t.type === "checkbox" || t.type === "radio") return;
       if (t.name === "category") {
         handleCategoryDrivenReset();
       }

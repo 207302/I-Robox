@@ -5,6 +5,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateProductReviewsByReviewId } from "@/lib/cache/productCache";
+import { redirectUrl } from "@/lib/siteUrl";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runApiRoute(async () => {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const { id } = await ctx.params;
     await prisma.reviews.update({ where: { id }, data: { is_approved: false } });
     await revalidateProductReviewsByReviewId(id);
-    return NextResponse.redirect(new URL("/admin/reviews", req.url));
+    return NextResponse.redirect(redirectUrl(req, "/admin/reviews"));
   
   });}
 

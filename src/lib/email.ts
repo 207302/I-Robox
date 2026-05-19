@@ -1,4 +1,7 @@
 import nodemailer from "nodemailer";
+import type { AbandonedCartReminderLine } from "@/lib/email/abandonedCartReminder";
+
+export type { AbandonedCartReminderLine };
 
 export function isEmailConfigured() {
   return Boolean(
@@ -77,32 +80,33 @@ export function orderUpdateCustomerEmailHtml(input: {
   </div>`;
 }
 
-export type AbandonedCartReminderLine = {
-  name: string;
-  quantity: number;
-  imageUrl: string;
-  productUrl: string;
-};
+function escapeHtmlText(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export function abandonedCartReminderEmailHtml(input: {
   shopUrl: string;
   lines: AbandonedCartReminderLine[];
 }) {
   const safeUrl = escapeHtmlAttr(input.shopUrl);
-  const items = input.lines.slice(0, 5);
+  const items = input.lines.slice(0, 6);
   const itemsHtml =
     items.length > 0
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0.75em 0 1.25em;border-collapse:collapse;width:100%;max-width:480px">
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0 20px;border-collapse:collapse;max-width:520px">
   ${items
     .map((line) => {
-      const safeName = escapeHtmlAttr(line.name);
+      const safeName = escapeHtmlText(line.name);
       const safeImg = escapeHtmlAttr(line.imageUrl);
       const safeProductUrl = escapeHtmlAttr(line.productUrl);
       const qty = Math.max(1, Math.floor(line.quantity));
       return `<tr>
     <td style="padding:10px 14px 10px 0;vertical-align:middle;width:76px">
       <a href="${safeProductUrl}" style="text-decoration:none">
-        <img src="${safeImg}" alt="${safeName}" width="72" height="72" style="display:block;width:72px;height:72px;border-radius:8px;border:1px solid #e5e7eb;background:#f9fafb" />
+        <img src="${safeImg}" alt="${escapeHtmlAttr(line.name)}" width="72" height="72" border="0" style="display:block;width:72px;height:72px;max-width:72px;border-radius:8px;border:1px solid #e5e7eb;background-color:#f9fafb;object-fit:cover" />
       </a>
     </td>
     <td style="padding:10px 0;vertical-align:middle">
@@ -111,7 +115,7 @@ export function abandonedCartReminderEmailHtml(input: {
     </td>
   </tr>`;
     })
-    .join("\n  ")}
+    .join("")}
 </table>`
       : "";
   return `

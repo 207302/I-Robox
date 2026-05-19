@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, abandonedCartReminderEmailHtml, isEmailConfigured } from "@/lib/email";
+import { emailImageSrc, resolveCartLineImagePath } from "@/lib/shop/cartLineImage";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";
@@ -42,7 +43,22 @@ export async function GET(req: NextRequest) {
           take: 6,
           select: {
             quantity: true,
-            products: { select: { name: true } },
+            products: {
+              select: {
+                name: true,
+                slug: true,
+                product_images: { select: { url: true, sort_order: true } },
+                product_variants: {
+                  select: {
+                    is_default: true,
+                    product_images: { select: { url: true, sort_order: true } },
+                  },
+                },
+              },
+            },
+            product_variants: {
+              select: { product_images: { select: { url: true, sort_order: true } } },
+            },
           },
         },
       },
@@ -50,15 +66,24 @@ export async function GET(req: NextRequest) {
     });
   
     let sent = 0;
-    const shopUrl = `${getSiteBaseUrl()}/shop`;
+    const siteBase = getSiteBaseUrl();
+    const shopUrl = `${siteBase}/shop`;
   
     for (const c of carts) {
       const email = c.customers?.email;
       if (!email || isSyntheticPhoneSignupEmail(email)) continue;
-      const sampleLines = c.cart_items.map((ci) => {
+      const lines = c.cart_items.map((ci) => {
         const name = ci.products?.name ?? "Item";
-        return `${name} × ${ci.quantity}`;
+        const slug = ci.products?.slug;
+        const imagePath = resolveCartLineImagePath(ci.products, ci.product_variants);
+        return {
+          name,
+          quantity: ci.quantity,
+          imageUrl: emailImageSrc(imagePath, siteBase),
+          productUrl: slug ? `${siteBase}/shop/${slug}` : shopUrl,
+        };
       });
+      const sampleLines = lines.map((l) => `${l.name} × ${l.quantity}`);
       if (!isEmailConfigured()) {
         console.warn("[cron/abandoned-cart] SMTP not configured — skipping");
         break;
@@ -67,7 +92,7 @@ export async function GET(req: NextRequest) {
         await sendEmail({
           to: email,
           subject: "You left items in your cart — i-Robox",
-          html: abandonedCartReminderEmailHtml({ shopUrl, sampleLines }),
+          html: abandonedCartReminderEmailHtml({ shopUrl, lines }),
           text: `You still have items saved in your cart at i-Robox.\n\n${sampleLines.join("\n")}\n\nContinue: ${shopUrl}`,
         });
         await prisma.carts.update({

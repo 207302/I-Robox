@@ -1,15 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { AdminPagination } from "@/components/admin/AdminPagination";
 
 export const metadata = {
   title: "Admin Inventory | i-Robox",
+};
+
+const PAGE_SIZE = 50;
+
+type PageProps = {
+  searchParams: Promise<{ page?: string }>;
 };
 
 function isBelowThreshold(available: number, threshold: number) {
   return available === 0 || available < threshold;
 }
 
-export default async function AdminInventoryPage() {
+export default async function AdminInventoryPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
   const invRows = await prisma.inventory.findMany({
     orderBy: { updated_at: "desc" },
     select: {
@@ -49,6 +57,15 @@ export default async function AdminInventoryPage() {
 
   const lowStock = rows.filter((r) => isBelowThreshold(r.available_quantity, r.low_stock_threshold));
   const outOfStock = rows.filter((r) => r.available_quantity === 0);
+
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rawPage = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const page = Math.min(rawPage, totalPages);
+  const skip = (page - 1) * PAGE_SIZE;
+  const pagedRows = rows.slice(skip, skip + PAGE_SIZE);
+  const rangeStart = total === 0 ? 0 : skip + 1;
+  const rangeEnd = skip + pagedRows.length;
 
   return (
     <div className="space-y-6">
@@ -114,6 +131,13 @@ export default async function AdminInventoryPage() {
         </div>
       )}
 
+      {total > 0 ? (
+        <p className="text-sm text-meta-3">
+          Showing {rangeStart}–{rangeEnd} of {total}
+          {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : null}
+        </p>
+      ) : null}
+
       {/* Table */}
       <div className="rounded-2xl border border-gray-3 bg-white overflow-x-auto">
         <table className="w-full text-sm">
@@ -130,7 +154,7 @@ export default async function AdminInventoryPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {pagedRows.map((r) => {
               const isRed = isBelowThreshold(r.available_quantity, r.low_stock_threshold);
               const isOut = r.available_quantity === 0;
               const pending = "_pending" in r && r._pending;
@@ -183,7 +207,7 @@ export default async function AdminInventoryPage() {
                 </tr>
               );
             })}
-            {rows.length === 0 ? (
+            {pagedRows.length === 0 ? (
               <tr>
                 <td className="py-6 px-4 text-sm text-meta-3" colSpan={8}>
                   No inventory rows found.
@@ -193,6 +217,12 @@ export default async function AdminInventoryPage() {
           </tbody>
         </table>
       </div>
+
+      <AdminPagination
+        currentPage={page}
+        totalPages={totalPages}
+        pathname="/admin/inventory"
+      />
     </div>
   );
 }

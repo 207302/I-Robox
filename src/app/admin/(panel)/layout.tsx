@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Toaster } from "react-hot-toast";
+import SiteTopLoader from "@/components/Common/SiteTopLoader";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -32,6 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-gray-1">
+      <SiteTopLoader />
       <div className="border-b border-gray-3 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

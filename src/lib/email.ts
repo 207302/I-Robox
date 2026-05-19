@@ -77,20 +77,48 @@ export function orderUpdateCustomerEmailHtml(input: {
   </div>`;
 }
 
-export function abandonedCartReminderEmailHtml(input: { shopUrl: string; sampleLines: string[] }) {
+export type AbandonedCartReminderLine = {
+  name: string;
+  quantity: number;
+  imageUrl: string;
+  productUrl: string;
+};
+
+export function abandonedCartReminderEmailHtml(input: {
+  shopUrl: string;
+  lines: AbandonedCartReminderLine[];
+}) {
   const safeUrl = escapeHtmlAttr(input.shopUrl);
-  const lines =
-    input.sampleLines.length > 0
-      ? `<ul style="margin:0.5em 0 1em;padding-left:1.25em">${input.sampleLines
-          .slice(0, 5)
-          .map((l) => `<li>${escapeHtmlAttr(l)}</li>`)
-          .join("")}</ul>`
+  const items = input.lines.slice(0, 5);
+  const itemsHtml =
+    items.length > 0
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0.75em 0 1.25em;border-collapse:collapse;width:100%;max-width:480px">
+  ${items
+    .map((line) => {
+      const safeName = escapeHtmlAttr(line.name);
+      const safeImg = escapeHtmlAttr(line.imageUrl);
+      const safeProductUrl = escapeHtmlAttr(line.productUrl);
+      const qty = Math.max(1, Math.floor(line.quantity));
+      return `<tr>
+    <td style="padding:10px 14px 10px 0;vertical-align:middle;width:76px">
+      <a href="${safeProductUrl}" style="text-decoration:none">
+        <img src="${safeImg}" alt="${safeName}" width="72" height="72" style="display:block;width:72px;height:72px;border-radius:8px;border:1px solid #e5e7eb;background:#f9fafb" />
+      </a>
+    </td>
+    <td style="padding:10px 0;vertical-align:middle">
+      <a href="${safeProductUrl}" style="color:#111;text-decoration:none;font-weight:600">${safeName}</a>
+      <div style="margin:4px 0 0;font-size:14px;color:#555">Qty ${qty}</div>
+    </td>
+  </tr>`;
+    })
+    .join("\n  ")}
+</table>`
       : "";
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">Still interested?</h2>
     <p style="margin:0 0 1em">You left items in your cart at i-Robox. Come back when you’re ready to check out.</p>
-    ${lines}
+    ${itemsHtml}
     <p style="margin:0"><a href="${safeUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">Continue shopping</a></p>
   </div>`;
 }

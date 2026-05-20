@@ -22,6 +22,22 @@ import {
 } from "@/lib/shop/shopListingProfile";
 import { resolveSearchProductIds } from "@/lib/shop/shopListingSearch";
 
+const PRODUCT_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseProductIdList(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    const id = part.trim();
+    if (!PRODUCT_ID_RE.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= 400) break;
+  }
+  return out;
+}
+
 function toInt(value: string | null, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : fallback;
@@ -125,6 +141,8 @@ export type ShopListingReadyState = {
   sortPrice: "price_asc" | "price_desc" | null;
   now: Date;
   q: string;
+  /** Client fuzzy search relevance order (from `/api/products/search-index`). */
+  searchIdOrder: string[] | null;
   categorySlugs: string[];
   facetCacheParams: FacetCacheParams;
   facetCtx: FacetLoadContext;
@@ -219,7 +237,20 @@ export async function prepareShopListingRequest(
   const skip = (page - 1) * pageSize;
 
   const where: Record<string, unknown> = { is_active: true };
-  if (q) {
+
+  const idsRaw = cleanText(usp.get("ids") ?? "", 12000);
+  let searchIdOrder: string[] | null = null;
+  if (idsRaw) {
+    const parsedIds = parseProductIdList(idsRaw);
+    if (parsedIds.length === 0) {
+      finishShopListingProfile(profile, { ok: false, reason: "invalid_ids" });
+      return { kind: "error", result: { ok: false, error: "Invalid product id list", status: 400 } };
+    }
+    searchIdOrder = parsedIds;
+    where.id = { in: parsedIds };
+  }
+
+  if (q && !searchIdOrder) {
     const searchIds = await resolveSearchProductIds(q, profile);
     if (searchIds.length === 0) {
       const globalBuckets = await profiledQuery(profile, "facets.globalDiscountEmptySearch", () =>
@@ -349,6 +380,7 @@ export async function prepareShopListingRequest(
 
   const hasHeavyFilters =
     Boolean(q) ||
+    Boolean(searchIdOrder?.length) ||
     categorySlugs.length > 0 ||
     brandSlugs.length > 0 ||
     ageGroups.length > 0 ||
@@ -397,6 +429,7 @@ export async function prepareShopListingRequest(
       sortPrice,
       now,
       q,
+      searchIdOrder,
       categorySlugs,
       facetCacheParams,
       facetCtx,

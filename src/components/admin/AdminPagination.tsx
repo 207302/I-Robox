@@ -1,14 +1,28 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { paginationItems } from "@/lib/shop/shopQuery";
 
 type AdminPaginationProps = {
   currentPage: number;
   totalPages: number;
   pathname: string;
+  /** Preserved across pages when searching. */
+  searchQuery?: string;
+  /** Client-side pagination (buttons instead of URL links). */
+  onPageChange?: (page: number) => void;
 };
 
-function pageHref(pathname: string, page: number) {
-  return page <= 1 ? pathname : `${pathname}?page=${page}`;
+export function adminListPageHref(pathname: string, page: number, searchQuery?: string) {
+  const params = new URLSearchParams();
+  const q = searchQuery?.trim();
+  if (q) params.set("q", q);
+  if (page > 1) params.set("page", String(page));
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+function pageHref(pathname: string, page: number, searchQuery?: string) {
+  return adminListPageHref(pathname, page, searchQuery);
 }
 
 const navBtn =
@@ -16,10 +30,55 @@ const navBtn =
 const navBtnActive = `${navBtn} bg-white text-dark hover:bg-gray-1`;
 const navBtnDisabled = `${navBtn} bg-gray-1 text-meta-4 pointer-events-none`;
 
-export function AdminPagination({ currentPage, totalPages, pathname }: AdminPaginationProps) {
+export function AdminPagination({
+  currentPage,
+  totalPages,
+  pathname,
+  searchQuery,
+  onPageChange,
+}: AdminPaginationProps) {
   if (totalPages <= 1) return null;
 
   const items = paginationItems(currentPage, totalPages);
+  const clientMode = Boolean(onPageChange);
+
+  function PageControl({
+    page,
+    children,
+    className,
+    ariaLabel,
+    ariaCurrent,
+  }: {
+    page: number;
+    children: ReactNode;
+    className: string;
+    ariaLabel?: string;
+    ariaCurrent?: boolean;
+  }) {
+    if (clientMode && onPageChange) {
+      return (
+        <button
+          type="button"
+          onClick={() => onPageChange(page)}
+          className={className}
+          aria-label={ariaLabel}
+          aria-current={ariaCurrent ? "page" : undefined}
+        >
+          {children}
+        </button>
+      );
+    }
+    return (
+      <Link
+        href={pageHref(pathname, page, searchQuery)}
+        className={className}
+        aria-label={ariaLabel}
+        aria-current={ariaCurrent ? "page" : undefined}
+      >
+        {children}
+      </Link>
+    );
+  }
 
   return (
     <nav
@@ -27,13 +86,9 @@ export function AdminPagination({ currentPage, totalPages, pathname }: AdminPagi
       aria-label="Pagination"
     >
       {currentPage > 1 ? (
-        <Link
-          href={pageHref(pathname, currentPage - 1)}
-          className={navBtnActive}
-          aria-label="Previous page"
-        >
+        <PageControl page={currentPage - 1} className={navBtnActive} ariaLabel="Previous page">
           &lt;
-        </Link>
+        </PageControl>
       ) : (
         <span className={navBtnDisabled} aria-hidden>
           &lt;
@@ -46,29 +101,25 @@ export function AdminPagination({ currentPage, totalPages, pathname }: AdminPagi
             …
           </span>
         ) : (
-          <Link
+          <PageControl
             key={item}
-            href={pageHref(pathname, item)}
+            page={item}
             className={`${navBtn} ${
               item === currentPage
                 ? "bg-blue text-white border-blue"
                 : "bg-white text-blue hover:bg-gray-1"
             }`}
-            aria-current={item === currentPage ? "page" : undefined}
+            ariaCurrent={item === currentPage}
           >
             {item}
-          </Link>
+          </PageControl>
         )
       )}
 
       {currentPage < totalPages ? (
-        <Link
-          href={pageHref(pathname, currentPage + 1)}
-          className={navBtnActive}
-          aria-label="Next page"
-        >
+        <PageControl page={currentPage + 1} className={navBtnActive} ariaLabel="Next page">
           &gt;
-        </Link>
+        </PageControl>
       ) : (
         <span className={navBtnDisabled} aria-hidden>
           &gt;

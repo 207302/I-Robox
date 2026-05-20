@@ -825,6 +825,12 @@ model site_marketing_settings {
   social_twitter_url      String?  @db.VarChar(500)
   social_instagram_url    String?  @db.VarChar(500)
   social_linkedin_url     String?  @db.VarChar(500)
+  /// Footer “Business” block title.
+  footer_business_title           String?  @db.VarChar(120)
+  footer_business_wholesale_label   String?  @db.VarChar(120)
+  footer_business_wholesale_email   String?  @db.VarChar(200)
+  footer_business_retail_label      String?  @db.VarChar(120)
+  footer_business_retail_email      String?  @db.VarChar(200)
   /// Top utility announcement bar background (e.g. #0c1220).
   utility_bar_bg_color    String?  @db.VarChar(20)
   /// Marquee / promo bar background (e.g. #c41e3a).

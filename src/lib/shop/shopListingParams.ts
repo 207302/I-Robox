@@ -11,7 +11,7 @@ export type ShopListingRequestOptions = {
 
 /** Stable key for listing-only `unstable_cache` (sorted multi-values). Returns null when search `q` is set. */
 export function buildListingCacheKey(usp: URLSearchParams): string | null {
-  if (usp.get("q")?.trim()) return null;
+  if (usp.get("q")?.trim() || usp.get("ids")?.trim()) return null;
   const normalized = normalizeListingSearchParams(usp);
   normalized.delete(SHOP_LISTING_FACETS_PARAM);
   const qs = normalized.toString();

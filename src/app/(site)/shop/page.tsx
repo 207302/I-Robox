@@ -1,4 +1,5 @@
 import ShopLiveExperience from "@/components/Shop/ShopLiveExperience";
+import { getBrands } from "@/get-api-data/brand";
 import { getCategories } from "@/get-api-data/category";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import { Suspense } from "react";
@@ -26,7 +27,7 @@ const EMPTY_LISTING: ShopListingData = {
 };
 
 export default async function ShopPage() {
-  const allCategories = await getCategories();
+  const [allCategories, allBrands] = await Promise.all([getCategories(), getBrands()]);
 
   return (
     <Suspense
@@ -38,6 +39,7 @@ export default async function ShopPage() {
         initialListing={EMPTY_LISTING}
         initialQueryString=""
         allCategories={allCategories}
+        allBrands={allBrands}
       />
     </Suspense>
   );

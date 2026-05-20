@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { AdminPagination } from "@/components/admin/AdminPagination";
+import { AdminListSearch } from "@/components/admin/AdminListSearch";
 
 export const metadata = {
   title: "Admin Inventory | i-Robox",
@@ -9,8 +10,18 @@ export const metadata = {
 const PAGE_SIZE = 50;
 
 type PageProps = {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; q?: string }>;
 };
+
+function matchesInventorySearch(
+  row: { products: { name: string; sku: string | null } | null },
+  q: string
+) {
+  const needle = q.toLowerCase();
+  const name = row.products?.name?.toLowerCase() ?? "";
+  const sku = row.products?.sku?.toLowerCase() ?? "";
+  return name.includes(needle) || sku.includes(needle);
+}
 
 function isBelowThreshold(available: number, threshold: number) {
   return available === 0 || available < threshold;
@@ -18,6 +29,7 @@ function isBelowThreshold(available: number, threshold: number) {
 
 export default async function AdminInventoryPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
   const invRows = await prisma.inventory.findMany({
     orderBy: { updated_at: "desc" },
     select: {
@@ -49,14 +61,16 @@ export default async function AdminInventoryPage({ searchParams }: PageProps) {
     _pending: true as const,
   }));
 
-  const rows = [...invRows, ...synthetic].sort((a, b) => {
+  const allRows = [...invRows, ...synthetic].sort((a, b) => {
     const na = a.products?.name ?? "";
     const nb = b.products?.name ?? "";
     return na.localeCompare(nb, undefined, { sensitivity: "base" });
   });
 
-  const lowStock = rows.filter((r) => isBelowThreshold(r.available_quantity, r.low_stock_threshold));
-  const outOfStock = rows.filter((r) => r.available_quantity === 0);
+  const rows = q ? allRows.filter((r) => matchesInventorySearch(r, q)) : allRows;
+
+  const lowStock = allRows.filter((r) => isBelowThreshold(r.available_quantity, r.low_stock_threshold));
+  const outOfStock = allRows.filter((r) => r.available_quantity === 0);
 
   const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -70,6 +84,13 @@ export default async function AdminInventoryPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-dark">Inventory</h1>
+
+      <AdminListSearch
+        pathname="/admin/inventory"
+        defaultValue={q}
+        placeholder="Search inventory by product name or SKU…"
+      />
+
       <p className="text-sm text-meta-3 max-w-2xl">
         Includes <b className="text-dark">inactive</b> products. Rows are red when available quantity is{" "}
         <b className="text-dark">below</b> the low-stock threshold (or out of stock). Products with no inventory record
@@ -133,9 +154,11 @@ export default async function AdminInventoryPage({ searchParams }: PageProps) {
 
       {total > 0 ? (
         <p className="text-sm text-meta-3">
-          Showing {rangeStart}–{rangeEnd} of {total}
+          {q ? `Found ${total} match${total !== 1 ? "es" : ""}` : `Showing ${rangeStart}–${rangeEnd} of ${total}`}
           {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : null}
         </p>
+      ) : q ? (
+        <p className="text-sm text-meta-3">No inventory rows match &quot;{q}&quot;.</p>
       ) : null}
 
       {/* Table */}
@@ -210,7 +233,7 @@ export default async function AdminInventoryPage({ searchParams }: PageProps) {
             {pagedRows.length === 0 ? (
               <tr>
                 <td className="py-6 px-4 text-sm text-meta-3" colSpan={8}>
-                  No inventory rows found.
+                  {q ? "No matching inventory rows." : "No inventory rows found."}
                 </td>
               </tr>
             ) : null}
@@ -222,6 +245,7 @@ export default async function AdminInventoryPage({ searchParams }: PageProps) {
         currentPage={page}
         totalPages={totalPages}
         pathname="/admin/inventory"
+        searchQuery={q}
       />
     </div>
   );

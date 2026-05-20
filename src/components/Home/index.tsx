@@ -3,6 +3,7 @@ import Link from "next/link";
 import { formatPrice } from "@/utils/formatePrice";
 import HeroBannerSection from "./HeroBannerSection";
 import type { HeroSlide } from "./HeroBannerCarousel";
+import HomeBrandRailSection from "./HomeBrandRailSection";
 import HomeHighlightsSection from "./HomeHighlightsSection";
 import HomeProductCarouselSection from "./HomeProductCarouselSection";
 
@@ -219,60 +220,7 @@ const Home = ({
         </div>
       </section>
 
-      <section className="py-14 bg-gray-1 border-y border-gray-3">
-        <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-          <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-end">
-            <div>
-              <p className="mb-1 text-xs font-semibold tracking-[0.18em] uppercase text-blue">
-                Shop by brand
-              </p>
-              <h2 className="text-xl font-semibold text-dark xl:text-heading-5">
-                Browse by maker or universe.
-              </h2>
-              <p className="mt-1 text-sm text-meta-3">
-                Tiles and images are managed in Admin → Marketing → Shop by brand.
-              </p>
-            </div>
-            <p className="text-xs text-meta-4 sm:text-sm">
-              Scroll sideways on mobile to see more brands.
-            </p>
-          </div>
-
-          <div className="relative">
-            <div className="flex gap-4 px-1 pb-2 overflow-x-auto sm:px-0 sm:gap-5 no-scrollbar">
-              {brandRail && brandRail.length > 0 ? (
-                brandRail.map((item, index) => (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className="min-w-[200px] sm:min-w-[240px] flex flex-col shrink-0 text-left"
-                  >
-                    <div className="relative aspect-square overflow-hidden">
-                      <Image
-                        src={item.image}
-                        alt={item.alt}
-                        fill
-                        sizes="(max-width: 640px) 200px, 240px"
-                        className="object-cover rounded-2xl"
-                        loading="lazy"
-                      />
-                    </div>
-                    <div className="mt-2 w-full rounded-xl bg-white border border-gray-3 px-3 py-2 shadow-sm flex items-center justify-center">
-                      <span className="text-xs sm:text-sm font-semibold text-dark text-center">
-                        {item.label}
-                      </span>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <p className="text-sm text-meta-3 py-4">
-                  No brand tiles yet — add them under Admin → Marketing → Shop by brand.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
+      <HomeBrandRailSection items={brandRail ?? null} />
 
       <section className="py-14 bg-white">
         <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">

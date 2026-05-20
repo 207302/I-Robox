@@ -47,6 +47,9 @@ export const getBrandsForAdmin = cache(async () => {
   }
 });
 
+/** Shop sidebar filters — full brand list (like getCategories). */
+export const getBrands = getBrandsForAdmin;
+
 export const getAdminProductPickerList = cache(async () => {
   try {
     return await prisma.products.findMany({

@@ -143,6 +143,7 @@ async function executeShopListingFromState(
     discountParams,
     sortPrice,
     now,
+    searchIdOrder,
     facetCtx,
   } = state;
   const { profile } = facetCtx;
@@ -203,6 +204,30 @@ async function executeShopListingFromState(
       products = [];
     } else {
       const reordered = await profiledQuery(profile, "listing.discountPage", () =>
+        prisma.products.findMany({
+          where: { id: { in: pageIds } },
+          select: listingSelect,
+        })
+      );
+      const order = new Map(pageIds.map((id, i) => [id, i] as const));
+      reordered.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+      products = reordered;
+    }
+  } else if (searchIdOrder?.length && !sortPrice) {
+    const candidateRows = await profiledQuery(profile, "listing.fuzzyIdFilter", () =>
+      prisma.products.findMany({
+        where: where as never,
+        select: { id: true },
+      })
+    );
+    const allowed = new Set(candidateRows.map((r) => r.id));
+    const ordered = searchIdOrder.filter((id) => allowed.has(id));
+    total = ordered.length;
+    const pageIds = ordered.slice(skip, skip + pageSize);
+    if (pageIds.length === 0) {
+      products = [];
+    } else {
+      const reordered = await profiledQuery(profile, "listing.fuzzyIdPage", () =>
         prisma.products.findMany({
           where: { id: { in: pageIds } },
           select: listingSelect,

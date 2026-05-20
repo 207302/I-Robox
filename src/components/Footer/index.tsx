@@ -156,7 +156,7 @@ export default function Footer({
               className={`mb-7.5 text-xl font-semibold ${textStyle ? "" : "text-dark"}`}
               style={textStyle}
             >
-              Business
+              {storeContact.businessTitle}
             </h2>
             <ul className="flex flex-col gap-3">
               <li className="text-base">
@@ -164,7 +164,7 @@ export default function Footer({
                   className={`font-medium ${textStyle ? "" : "text-dark"}`}
                   style={textStyle}
                 >
-                  Wholesale enquiries
+                  {storeContact.businessWholesaleLabel}
                 </span>
                 <div
                   className={`mt-1 text-sm ${textStyle ? "" : "text-meta-3"}`}
@@ -174,9 +174,9 @@ export default function Footer({
                   <Link
                     className={linkStyle ? "hover:opacity-80" : "text-blue hover:underline"}
                     style={linkStyle}
-                    href="mailto:wholesale@example.com"
+                    href={`mailto:${storeContact.businessWholesaleEmail}`}
                   >
-                    wholesale@example.com
+                    {storeContact.businessWholesaleEmail}
                   </Link>
                 </div>
               </li>
@@ -185,7 +185,7 @@ export default function Footer({
                   className={`font-medium ${textStyle ? "" : "text-dark"}`}
                   style={textStyle}
                 >
-                  Retail partnerships
+                  {storeContact.businessRetailLabel}
                 </span>
                 <div
                   className={`mt-1 text-sm ${textStyle ? "" : "text-meta-3"}`}
@@ -195,9 +195,9 @@ export default function Footer({
                   <Link
                     className={linkStyle ? "hover:opacity-80" : "text-blue hover:underline"}
                     style={linkStyle}
-                    href="mailto:partnerships@example.com"
+                    href={`mailto:${storeContact.businessRetailEmail}`}
                   >
-                    partnerships@example.com
+                    {storeContact.businessRetailEmail}
                   </Link>
                 </div>
               </li>

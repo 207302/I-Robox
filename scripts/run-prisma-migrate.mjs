@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { config } from "dotenv";
 
+config({ path: ".env.local" });
 config();
 
 if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {

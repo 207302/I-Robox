@@ -18,6 +18,7 @@ import {
   type ShopQueryState,
 } from "@/lib/shop/shopQuery";
 import { useDebounce } from "@/hooks/useDebounce";
+import { filterAndSortProducts, type ProductSearchItem } from "@/lib/search/productSearch";
 import {
   completeSearchProgress,
   isSearchProgressPending,
@@ -58,10 +59,17 @@ type CategoryRow = {
   title?: string;
 };
 
+type BrandRow = {
+  id: string;
+  slug: string;
+  name: string;
+};
+
 type Props = {
   initialListing: ShopListingData;
   initialQueryString: string;
   allCategories: CategoryRow[];
+  allBrands: BrandRow[];
 };
 
 function queryStringFromWindow(fallback: string): string {
@@ -132,6 +140,7 @@ export default function ShopLiveExperience({
   initialListing,
   initialQueryString,
   allCategories,
+  allBrands,
 }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -164,6 +173,20 @@ export default function ShopLiveExperience({
   const [maxPriceInput, setMaxPriceInput] = useState(
     () => parseShopQueryString(queryStringFromWindow(initialQueryString)).maxPrice
   );
+  const [searchIndex, setSearchIndex] = useState<ProductSearchItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/products/search-index", { cache: "default" })
+      .then((res) => res.json())
+      .then((data: { items?: ProductSearchItem[] }) => {
+        if (!cancelled && Array.isArray(data.items)) setSearchIndex(data.items);
+      })
+      .catch((err) => console.error("[shop] search index load failed", err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const cancelHoverPrefetch = useCallback(() => {
     if (prefetchHoverTimerRef.current) {
@@ -257,11 +280,10 @@ export default function ShopLiveExperience({
   );
 
   const toggleBrand = useCallback(
-    (slug: string, count: number) => {
-      if (query.categorySlugs.length > 0 && count === 0) return;
+    (slug: string) => {
       toggleFilter("brands", slug);
     },
-    [query.categorySlugs.length, toggleFilter]
+    [toggleFilter]
   );
 
   const commitPriceFilters = useCallback(() => {
@@ -273,21 +295,38 @@ export default function ShopLiveExperience({
       maxPrice: maxPriceInput.trim(),
     });
   }, [commitQuery, maxPriceInput, minPriceInput, query, searchInput]);
-  /** 350ms debounce — one listing request per pause; aborts superseded fetches. */
-  const debouncedSearchInput = useDebounce(searchInput, 350);
+  /** 250ms debounce for URL sync when index not ready (server search fallback). */
+  const debouncedSearchInput = useDebounce(searchInput, 250);
+
+  /** Client fuzzy ids (instant, same algorithm as admin products). */
+  const clientFuzzyIds = useMemo(() => {
+    const q = searchInput.trim();
+    if (!q || searchIndex.length === 0) return null;
+    return filterAndSortProducts(searchIndex, q).map((item) => item.id);
+  }, [searchInput, searchIndex]);
+
+  const clientMatchCount = clientFuzzyIds !== null ? clientFuzzyIds.length : null;
+
   const effectiveQueryString = useMemo(() => {
     const parsed = parseShopQueryString(queryString);
+    if (clientFuzzyIds !== null) {
+      const usp = new URLSearchParams(buildListingQueryString({ ...parsed, q: "" }));
+      if (clientFuzzyIds.length > 0) usp.set("ids", clientFuzzyIds.join(","));
+      return usp.toString();
+    }
     return buildListingQueryString({ ...parsed, q: debouncedSearchInput });
-  }, [queryString, debouncedSearchInput]);
+  }, [queryString, clientFuzzyIds, debouncedSearchInput]);
+
+  const debouncedFetchQs = useDebounce(effectiveQueryString, 250);
   const debouncedFilterFpExclQ = useDebounce(filterFingerprintExcludingSearch(queryString), 300);
-  const fetchQsRef = useRef(effectiveQueryString);
-  fetchQsRef.current = effectiveQueryString;
+  const fetchQsRef = useRef(debouncedFetchQs);
+  fetchQsRef.current = debouncedFetchQs;
   const listingFetchKey = useMemo(
     () =>
-      `${debouncedFilterFpExclQ}|${debouncedSearchInput}|${query.page}|${urlQueryString}`,
-    [debouncedFilterFpExclQ, debouncedSearchInput, query.page, urlQueryString]
+      `${debouncedFilterFpExclQ}|${debouncedFetchQs}|${query.page}|${urlQueryString}`,
+    [debouncedFilterFpExclQ, debouncedFetchQs, query.page, urlQueryString]
   );
-  const searchPending = searchInput !== debouncedSearchInput;
+  const searchPending = searchInput !== debouncedSearchInput || effectiveQueryString !== debouncedFetchQs;
   const gridBusy = searchPending || isLoading;
 
   const fetchListing = useCallback(async (qs: string) => {
@@ -430,13 +469,24 @@ export default function ShopLiveExperience({
   }, [fetchListing, initialListing.items.length]);
 
   useEffect(() => {
+    if (clientFuzzyIds !== null && clientFuzzyIds.length === 0) {
+      setListing((prev) => ({
+        ...prev,
+        items: [],
+        total: 0,
+        totalPages: 1,
+        page: 1,
+      }));
+      setIsLoading(false);
+      return;
+    }
     if (skipListingKeyFetchRef.current) {
       skipListingKeyFetchRef.current = false;
       if (initialListing.items.length === 0) return;
     }
     if (initialListing.items.length > 0 && isSearchProgressPending()) return;
     void fetchListing(fetchQsRef.current);
-  }, [listingFetchKey, fetchListing, initialListing.items.length]);
+  }, [listingFetchKey, fetchListing, initialListing.items.length, clientFuzzyIds]);
 
   useEffect(() => {
     if (prevPageScrollRef.current === query.page) return;
@@ -472,7 +522,18 @@ export default function ShopLiveExperience({
   const currentPage = listing.page ?? query.page;
   const ageGroups = listing.ageGroups ?? [];
   const diecastScales = listing.diecastScales ?? [];
-  const shopBrands = listing.brands ?? [];
+  const shopBrands = useMemo(() => {
+    const countBySlug = new Map(
+      (listing.brands ?? []).map((b) => [b.slug.toLowerCase(), b.count] as const)
+    );
+    return allBrands
+      .map((b) => ({
+        slug: b.slug,
+        name: b.name,
+        count: countBySlug.get(b.slug.toLowerCase()) ?? 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [allBrands, listing.brands]);
   const productSubtypes = listing.productSubtypes ?? [];
   const productCollections = listing.productCollections ?? [];
   const discountBuckets = listing.discountBuckets ?? [];
@@ -536,7 +597,7 @@ export default function ShopLiveExperience({
           type="search"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search products…"
+          placeholder="Search name, brand, category, SKU…"
           autoComplete="off"
           className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />
@@ -558,7 +619,11 @@ export default function ShopLiveExperience({
         </div>
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Age groups</summary>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+          <div className="shop-filter-list-scroll">
+          <ul className="space-y-2 pr-1">
+            {ageGroups.length === 0 ? (
+              <li className="text-meta-4 text-sm">No age groups yet.</li>
+            ) : null}
             {ageGroups.map((group) => (
               <li key={group}>
                 <label
@@ -575,11 +640,13 @@ export default function ShopLiveExperience({
               </li>
             ))}
           </ul>
+          </div>
         </details>
 
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Categories</summary>
-          <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
+          <div className="shop-filter-list-scroll">
+          <ul className="space-y-2 pr-1">
             {allCategories.length > 0 ? (
               allCategories.map((cat) => (
                 <li key={cat.id}>
@@ -605,80 +672,101 @@ export default function ShopLiveExperience({
               <li className="text-meta-4 text-sm">No categories yet.</li>
             )}
           </ul>
+          </div>
         </details>
 
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Brands</summary>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
-            {shopBrands.map((b) => (
-              <li key={b.slug}>
-                <label
-                  className="flex items-center gap-2 text-sm text-dark-4"
-                  {...filterHoverHandlers("brand", b.slug, query.brands.includes(b.slug))}
-                >
-                  <input
-                    type="checkbox"
-                    checked={query.brands.includes(b.slug)}
-                    onChange={() => toggleBrand(b.slug, b.count)}
-                  />
-                  {b.name} ({b.count})
-                </label>
-              </li>
-            ))}
+          <div className="shop-filter-list-scroll">
+          <ul className="space-y-2 pr-1">
+            {shopBrands.length > 0 ? (
+              shopBrands.map((b) => (
+                <li key={b.slug}>
+                  <label
+                    className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
+                    {...filterHoverHandlers("brand", b.slug, query.brands.includes(b.slug))}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={query.brands.includes(b.slug)}
+                      onChange={() => toggleBrand(b.slug)}
+                      className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
+                    />
+                    <span className="leading-snug">
+                      {b.name} ({b.count})
+                    </span>
+                  </label>
+                </li>
+              ))
+            ) : (
+              <li className="text-meta-4 text-sm">No brands yet.</li>
+            )}
           </ul>
+          </div>
         </details>
 
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Sub categories</summary>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+          <div className="shop-filter-list-scroll">
+          <ul className="space-y-2 pr-1">
             {productSubtypes.map((s) => (
               <li key={s.slug}>
                 <label
-                  className="flex items-center gap-2 text-sm text-dark-4"
+                  className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
                   {...filterHoverHandlers("subtype", s.slug, query.subtypes.includes(s.slug))}
                 >
                   <input
                     type="checkbox"
                     checked={query.subtypes.includes(s.slug)}
                     onChange={() => toggleFilter("subtypes", s.slug)}
+                    className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                   />
-                  {s.name} ({s.count})
+                  <span className="leading-snug">
+                    {s.name} ({s.count})
+                  </span>
                 </label>
               </li>
             ))}
-            {!hasCategorySelection ? (
-              <li className="text-xs text-meta-4">Select categories to narrow sub categories.</li>
+            {productSubtypes.length === 0 ? (
+              <li className="text-xs text-meta-4">No sub categories yet.</li>
             ) : null}
           </ul>
+          </div>
         </details>
 
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Collections</summary>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+          <div className="shop-filter-list-scroll">
+          <ul className="space-y-2 pr-1">
             {productCollections.map((c) => (
               <li key={c.slug}>
                 <label
-                  className="flex items-center gap-2 text-sm text-dark-4"
+                  className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
                   {...filterHoverHandlers("collection", c.slug, query.collections.includes(c.slug))}
                 >
                   <input
                     type="checkbox"
                     checked={query.collections.includes(c.slug)}
                     onChange={() => toggleFilter("collections", c.slug)}
+                    className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                   />
-                  {c.name} ({c.count})
+                  <span className="leading-snug">
+                    {c.name} ({c.count})
+                  </span>
                 </label>
               </li>
             ))}
-            {!hasCategorySelection ? (
-              <li className="text-xs text-meta-4">Select categories to narrow collections.</li>
+            {productCollections.length === 0 ? (
+              <li className="text-xs text-meta-4">No collections yet.</li>
             ) : null}
           </ul>
+          </div>
         </details>
 
         <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
           <summary className="cursor-pointer text-sm font-semibold text-dark">Discount</summary>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+          <div className="shop-filter-list-scroll">
+          <ul className="space-y-2 pr-1">
             {discountBuckets.map((d) => (
               <li key={d.id}>
                 <label
@@ -695,12 +783,14 @@ export default function ShopLiveExperience({
               </li>
             ))}
           </ul>
+          </div>
         </details>
 
         {showScales ? (
           <details {...sectionProps} className="shop-filter-details rounded-lg border border-gray-3 p-3">
             <summary className="cursor-pointer text-sm font-semibold text-dark">Scales</summary>
-            <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+            <div className="shop-filter-list-scroll">
+            <ul className="space-y-2 pr-1">
               {diecastScales.map((s) => (
                 <li key={s}>
                   <label
@@ -717,6 +807,7 @@ export default function ShopLiveExperience({
                 </li>
               ))}
             </ul>
+            </div>
           </details>
         ) : null}
 
@@ -802,7 +893,7 @@ export default function ShopLiveExperience({
                 </div>
               ) : null}
             </div>
-            <div className="hidden lg:block lg:sticky lg:top-24 lg:max-h-[calc(100vh-6.5rem)] lg:overflow-y-auto">
+            <div className="hidden lg:block lg:sticky lg:top-24">
               {renderFilters("shop-filters-form", true)}
             </div>
           </aside>
@@ -811,8 +902,20 @@ export default function ShopLiveExperience({
             {query.q.trim() ? (
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <p className="text-sm text-dark sm:text-base">
-                  Showing results for{" "}
-                  <span className="font-semibold">&ldquo;{query.q}&rdquo;</span>
+                  {clientMatchCount !== null ? (
+                    <>
+                      Found{" "}
+                      <span className="font-semibold">
+                        {clientMatchCount} match{clientMatchCount !== 1 ? "es" : ""}
+                      </span>{" "}
+                      for &ldquo;{query.q}&rdquo;
+                    </>
+                  ) : (
+                    <>
+                      Showing results for{" "}
+                      <span className="font-semibold">&ldquo;{query.q}&rdquo;</span>
+                    </>
+                  )}
                 </p>
                 <button
                   type="button"

@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG } from "@/lib/cache/tags";
+import { BRANDS_TAG, CATEGORIES_TAG, PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG } from "@/lib/cache/tags";
 import {
   computeDiscountBucketsForProductIds,
   discountBucketsFromCounts,
@@ -14,6 +14,82 @@ import { onCacheMiss } from "@/lib/observability/cache";
 
 /** Per-filter facet bundle cache TTL (GET /api/products facet layer). */
 export const SHOP_LISTING_FACETS_REVALIDATE_SECONDS = 600;
+
+/** Full catalog options for sidebar filters (counts merged per current listing context). */
+const getCachedCatalogBrands = unstable_cache(
+  async () =>
+    prisma.brands.findMany({
+      select: { id: true, slug: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ["shop-catalog-brands"],
+  { revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS, tags: [BRANDS_TAG, PRODUCT_CATALOG_TAG] }
+);
+
+const getCachedCatalogSubtypes = unstable_cache(
+  async () =>
+    prisma.product_subtypes.findMany({
+      where: { is_active: true },
+      select: { id: true, slug: true, name: true, category_id: true },
+      orderBy: { name: "asc" },
+    }),
+  ["shop-catalog-subtypes"],
+  { revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS, tags: [CATEGORIES_TAG, PRODUCT_CATALOG_TAG] }
+);
+
+const getCachedCatalogCollections = unstable_cache(
+  async () =>
+    prisma.product_collections.findMany({
+      where: { is_active: true },
+      select: { id: true, slug: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ["shop-catalog-collections"],
+  { revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS, tags: [PRODUCT_CATALOG_TAG] }
+);
+
+const getCachedCatalogAgeGroups = unstable_cache(
+  async () => {
+    const rows = await prisma.products.findMany({
+      where: { is_active: true, age_group: { not: null } },
+      distinct: ["age_group"],
+      select: { age_group: true },
+      orderBy: { age_group: "asc" },
+    });
+    return rows
+      .map((r) => r.age_group)
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  },
+  ["shop-catalog-age-groups"],
+  { revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS, tags: [PRODUCT_CATALOG_TAG] }
+);
+
+/** Total active products per taxonomy id (not limited to in-stock). */
+const getCachedCatalogFacetCounts = unstable_cache(
+  async () => {
+    const activeWhere = { is_active: true } as const;
+    const [brandGroups, subtypeGroups, collectionGroups] = await Promise.all([
+      prisma.products.groupBy({
+        by: ["brand_id"],
+        where: { ...activeWhere, brand_id: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.products.groupBy({
+        by: ["subtype_id"],
+        where: { ...activeWhere, subtype_id: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.products.groupBy({
+        by: ["collection_id"],
+        where: { ...activeWhere, collection_id: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    return { brandGroups, subtypeGroups, collectionGroups };
+  },
+  ["shop-catalog-facet-counts"],
+  { revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS, tags: [PRODUCT_CATALOG_TAG] }
+);
 
 export type ListingFacetBrand = { slug: string; name: string; count: number };
 export type ListingFacetRow = { slug: string; name: string; count: number };
@@ -73,118 +149,76 @@ async function loadListingFacetsInternal(ctx: FacetLoadContext): Promise<Listing
     profile,
     fw,
     wNoAge,
-    wNoBrand,
     wNoSubtype,
-    brandFacetWhere,
     selectedCategoryIdSet,
     diecastNorms,
     hasHeavyFilters,
     brandSlugsForUi,
   } = ctx;
 
-  const [ageGroupsRaw, subGroups, colGroups, brandIdGroups, diecastScalesCached, discountBucketCounts] =
-    await Promise.all([
-      profiledQuery(profile, "facets.ageGroups", () =>
-        prisma.products.findMany({
-          where: { ...wNoAge, age_group: { not: null } },
-          distinct: ["age_group"],
-          select: { age_group: true },
-          orderBy: { age_group: "asc" },
+  const [
+    catalogBrands,
+    catalogSubtypes,
+    catalogCollections,
+    catalogAgeGroups,
+    catalogCounts,
+    ageGroupsRaw,
+    diecastScalesCached,
+    discountBucketCounts,
+  ] = await Promise.all([
+    getCachedCatalogBrands(),
+    getCachedCatalogSubtypes(),
+    getCachedCatalogCollections(),
+    getCachedCatalogAgeGroups(),
+    getCachedCatalogFacetCounts(),
+    profiledQuery(profile, "facets.ageGroups", () =>
+      prisma.products.findMany({
+        where: { ...wNoAge, age_group: { not: null } },
+        distinct: ["age_group"],
+        select: { age_group: true },
+        orderBy: { age_group: "asc" },
+      })
+    ),
+    getCachedDiecastScales(),
+    hasHeavyFilters
+      ? profiledQuery(profile, "facets.discountIds+aggregate", async () => {
+          const rows = await prisma.products.findMany({ where: fw, select: { id: true } });
+          return computeDiscountBucketsForProductIds(rows.map((r) => r.id));
         })
-      ),
-      profiledQuery(profile, "facets.subtypeGroupBy", () =>
-        prisma.products.groupBy({
-          by: ["subtype_id"],
-          where: { ...wNoSubtype, subtype_id: { not: null } } as never,
-          _count: { _all: true },
-        })
-      ),
-      profiledQuery(profile, "facets.collectionGroupBy", () =>
-        prisma.products.groupBy({
-          by: ["collection_id"],
-          where: { ...wNoSubtype, collection_id: { not: null } } as never,
-          _count: { _all: true },
-        })
-      ),
-      profiledQuery(profile, "facets.brandGroupBy", () =>
-        prisma.products.groupBy({
-          by: ["brand_id"],
-          where: { ...brandFacetWhere, brand_id: { not: null } } as never,
-          _count: { _all: true },
-        })
-      ),
-      getCachedDiecastScales(),
-      hasHeavyFilters
-        ? profiledQuery(profile, "facets.discountIds+aggregate", async () => {
-            const rows = await prisma.products.findMany({ where: fw, select: { id: true } });
-            return computeDiscountBucketsForProductIds(rows.map((r) => r.id));
-          })
-        : getCachedGlobalDiscountBuckets(),
-    ]);
-
-  const subIdList = subGroups.map((g) => g.subtype_id).filter((v): v is string => v !== null);
-  const colIdList = colGroups.map((g) => g.collection_id).filter((v): v is string => v !== null);
-
-  const [subRows, colRows, brandsIfAny] = await Promise.all([
-    subIdList.length
-      ? profiledQuery(profile, "facets.subtypeRows", () => {
-          const subRowsWhere: Prisma.product_subtypesWhereInput = {
-            id: { in: subIdList },
-            is_active: true,
-          };
-          if (selectedCategoryIdSet) {
-            subRowsWhere.category_id = { in: [...selectedCategoryIdSet] };
-          }
-          return prisma.product_subtypes.findMany({
-            where: subRowsWhere,
-            select: { id: true, name: true, slug: true },
-            orderBy: { name: "asc" },
-          });
-        })
-      : Promise.resolve([]),
-    colIdList.length
-      ? profiledQuery(profile, "facets.collectionRows", () =>
-          prisma.product_collections.findMany({
-            where: { id: { in: colIdList } },
-            select: { id: true, name: true, slug: true },
-            orderBy: { name: "asc" },
-          })
-        )
-      : Promise.resolve([]),
-    (async () => {
-      const brandIdsFromGroups = brandIdGroups
-        .map((g) => g.brand_id)
-        .filter((v): v is string => v !== null);
-      if (brandIdsFromGroups.length === 0) return [];
-      return profiledQuery(profile, "facets.brandRows", () =>
-        prisma.brands.findMany({
-          where: { id: { in: brandIdsFromGroups } },
-          select: { id: true, slug: true, name: true },
-          orderBy: { name: "asc" },
-        })
-      );
-    })(),
+      : getCachedGlobalDiscountBuckets(),
   ]);
 
-  const sCount = new Map(subGroups.map((g) => [g.subtype_id, g._count._all] as const));
-  const productSubtypes: ListingFacetRow[] = subRows.map((r) => ({
+  const brandTotalCount = new Map(
+    catalogCounts.brandGroups.map((g) => [g.brand_id, g._count._all] as const)
+  );
+  const subtypeTotalCount = new Map(
+    catalogCounts.subtypeGroups.map((g) => [g.subtype_id, g._count._all] as const)
+  );
+  const collectionTotalCount = new Map(
+    catalogCounts.collectionGroups.map((g) => [g.collection_id, g._count._all] as const)
+  );
+
+  const subtypeCatalog =
+    selectedCategoryIdSet && selectedCategoryIdSet.size > 0
+      ? catalogSubtypes.filter((s) => selectedCategoryIdSet.has(s.category_id))
+      : catalogSubtypes;
+
+  const productSubtypes: ListingFacetRow[] = subtypeCatalog.map((r) => ({
     slug: r.slug,
     name: r.name,
-    count: sCount.get(r.id) ?? 0,
+    count: subtypeTotalCount.get(r.id) ?? 0,
   }));
 
-  const cCount = new Map(colGroups.map((g) => [g.collection_id, g._count._all] as const));
-  const productCollections: ListingFacetRow[] = colRows.map((r) => ({
+  const productCollections: ListingFacetRow[] = catalogCollections.map((r) => ({
     slug: r.slug,
     name: r.name,
-    count: cCount.get(r.id) ?? 0,
+    count: collectionTotalCount.get(r.id) ?? 0,
   }));
 
-  const bCount = new Map(brandIdGroups.map((g) => [g.brand_id, g._count._all] as const));
-  let brands: ListingFacetBrand[] = brandsIfAny.map((b) => ({
+  let brands: ListingFacetBrand[] = catalogBrands.map((b) => ({
     slug: b.slug,
     name: b.name,
-    count: bCount.get(b.id) ?? 0,
+    count: brandTotalCount.get(b.id) ?? 0,
   }));
 
   if (brandSlugsForUi.length > 0) {
@@ -213,10 +247,15 @@ async function loadListingFacetsInternal(ctx: FacetLoadContext): Promise<Listing
     return (Number.isFinite(na) ? na : 0) - (Number.isFinite(nb) ? nb : 0);
   });
 
+  const facetAgeGroups = ageGroupsRaw
+    .map((x) => x.age_group)
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  const ageGroups = [...new Set([...catalogAgeGroups, ...facetAgeGroups])].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+
   return {
-    ageGroups: ageGroupsRaw
-      .map((x) => x.age_group)
-      .filter((v): v is string => typeof v === "string" && v.trim().length > 0),
+    ageGroups,
     diecastScales: mergedDiecast,
     brands,
     productSubtypes,

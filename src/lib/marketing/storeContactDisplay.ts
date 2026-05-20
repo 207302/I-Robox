@@ -13,6 +13,11 @@ export type StoreContactDisplay = {
   socialTwitterUrl: string;
   socialInstagramUrl: string;
   socialLinkedInUrl: string;
+  businessTitle: string;
+  businessWholesaleLabel: string;
+  businessWholesaleEmail: string;
+  businessRetailLabel: string;
+  businessRetailEmail: string;
 };
 
 const DEFAULTS: StoreContactDisplay = {
@@ -25,6 +30,11 @@ const DEFAULTS: StoreContactDisplay = {
   socialTwitterUrl: "",
   socialInstagramUrl: "",
   socialLinkedInUrl: "",
+  businessTitle: "Business",
+  businessWholesaleLabel: "Wholesale enquiries",
+  businessWholesaleEmail: "wholesale@example.com",
+  businessRetailLabel: "Retail partnerships",
+  businessRetailEmail: "partnerships@example.com",
 };
 
 function orDefault(row: string | null | undefined, fallback: string) {
@@ -46,5 +56,16 @@ export const getStoreContactDisplay = cache(async function getStoreContactDispla
     socialTwitterUrl: orDefault(row.social_twitter_url, DEFAULTS.socialTwitterUrl),
     socialInstagramUrl: orDefault(row.social_instagram_url, DEFAULTS.socialInstagramUrl),
     socialLinkedInUrl: orDefault(row.social_linkedin_url, DEFAULTS.socialLinkedInUrl),
+    businessTitle: orDefault(row.footer_business_title, DEFAULTS.businessTitle),
+    businessWholesaleLabel: orDefault(
+      row.footer_business_wholesale_label,
+      DEFAULTS.businessWholesaleLabel
+    ),
+    businessWholesaleEmail: orDefault(
+      row.footer_business_wholesale_email,
+      DEFAULTS.businessWholesaleEmail
+    ),
+    businessRetailLabel: orDefault(row.footer_business_retail_label, DEFAULTS.businessRetailLabel),
+    businessRetailEmail: orDefault(row.footer_business_retail_email, DEFAULTS.businessRetailEmail),
   };
 });

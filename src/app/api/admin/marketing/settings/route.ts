@@ -177,6 +177,21 @@ export async function PATCH(req: NextRequest) {
     if (body.social_linkedin_url !== undefined) {
       data.social_linkedin_url = cleanOptionalText(body.social_linkedin_url, 500);
     }
+    if (body.footer_business_title !== undefined) {
+      data.footer_business_title = cleanOptionalText(body.footer_business_title, 120);
+    }
+    if (body.footer_business_wholesale_label !== undefined) {
+      data.footer_business_wholesale_label = cleanOptionalText(body.footer_business_wholesale_label, 120);
+    }
+    if (body.footer_business_wholesale_email !== undefined) {
+      data.footer_business_wholesale_email = cleanOptionalText(body.footer_business_wholesale_email, 200);
+    }
+    if (body.footer_business_retail_label !== undefined) {
+      data.footer_business_retail_label = cleanOptionalText(body.footer_business_retail_label, 120);
+    }
+    if (body.footer_business_retail_email !== undefined) {
+      data.footer_business_retail_email = cleanOptionalText(body.footer_business_retail_email, 200);
+    }
     if (body.utility_bar_bg_color !== undefined) {
       data.utility_bar_bg_color = cleanOptionalHexColor(body.utility_bar_bg_color);
     }
@@ -235,6 +250,11 @@ export async function PATCH(req: NextRequest) {
       social_twitter_url: null,
       social_instagram_url: null,
       social_linkedin_url: null,
+      footer_business_title: null,
+      footer_business_wholesale_label: null,
+      footer_business_wholesale_email: null,
+      footer_business_retail_label: null,
+      footer_business_retail_email: null,
       utility_bar_bg_color: null,
       marquee_bar_bg_color: null,
       footer_bg_color: null,

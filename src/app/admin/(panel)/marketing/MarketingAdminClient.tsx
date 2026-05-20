@@ -45,6 +45,11 @@ type SiteSettingsRow = {
   social_twitter_url?: string | null;
   social_instagram_url?: string | null;
   social_linkedin_url?: string | null;
+  footer_business_title?: string | null;
+  footer_business_wholesale_label?: string | null;
+  footer_business_wholesale_email?: string | null;
+  footer_business_retail_label?: string | null;
+  footer_business_retail_email?: string | null;
   utility_bar_bg_color?: string | null;
   marquee_bar_bg_color?: string | null;
   footer_bg_color?: string | null;
@@ -185,6 +190,17 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [socialTwitter, setSocialTwitter] = useState(st0?.social_twitter_url ?? "");
   const [socialInstagram, setSocialInstagram] = useState(st0?.social_instagram_url ?? "");
   const [socialLinkedIn, setSocialLinkedIn] = useState(st0?.social_linkedin_url ?? "");
+  const [businessTitle, setBusinessTitle] = useState(st0?.footer_business_title ?? "");
+  const [businessWholesaleLabel, setBusinessWholesaleLabel] = useState(
+    st0?.footer_business_wholesale_label ?? ""
+  );
+  const [businessWholesaleEmail, setBusinessWholesaleEmail] = useState(
+    st0?.footer_business_wholesale_email ?? ""
+  );
+  const [businessRetailLabel, setBusinessRetailLabel] = useState(st0?.footer_business_retail_label ?? "");
+  const [businessRetailEmail, setBusinessRetailEmail] = useState(
+    st0?.footer_business_retail_email ?? ""
+  );
   const [heroOverlayEyebrow, setHeroOverlayEyebrow] = useState(st0?.hero_overlay_eyebrow ?? "");
   const [heroOverlayHeading, setHeroOverlayHeading] = useState(st0?.hero_overlay_heading ?? "");
   const [heroOverlaySubheading, setHeroOverlaySubheading] = useState(st0?.hero_overlay_subheading ?? "");
@@ -1902,8 +1918,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-2xl">
             <h2 className="text-lg font-semibold">Footer: Help &amp; Support</h2>
             <p className="text-sm text-meta-3">
-              Shown in the site footer (address, phone, email, social icons). Leave any field empty and
-              save to use the built-in default for that field.
+              Shown in the site footer (Help &amp; Support, Business emails, social icons). Leave any
+              field empty and save to use the built-in default for that field.
             </p>
             <label className="block">
               <span className="text-sm font-medium">Section title</span>
@@ -1942,6 +1958,61 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               />
             </label>
+
+            <div className="border-t border-gray-3 pt-4 space-y-3">
+              <h3 className="text-sm font-semibold">Business</h3>
+              <p className="text-sm text-meta-3">
+                Wholesale and retail partnership emails shown in the footer Business column.
+              </p>
+              <label className="block">
+                <span className="text-sm font-medium">Section title</span>
+                <input
+                  value={businessTitle}
+                  onChange={(e) => setBusinessTitle(e.target.value)}
+                  placeholder="Business"
+                  className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">Wholesale label</span>
+                <input
+                  value={businessWholesaleLabel}
+                  onChange={(e) => setBusinessWholesaleLabel(e.target.value)}
+                  placeholder="Wholesale enquiries"
+                  className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">Wholesale email</span>
+                <input
+                  type="email"
+                  value={businessWholesaleEmail}
+                  onChange={(e) => setBusinessWholesaleEmail(e.target.value)}
+                  placeholder="wholesale@example.com"
+                  className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">Retail partnerships label</span>
+                <input
+                  value={businessRetailLabel}
+                  onChange={(e) => setBusinessRetailLabel(e.target.value)}
+                  placeholder="Retail partnerships"
+                  className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">Retail partnerships email</span>
+                <input
+                  type="email"
+                  value={businessRetailEmail}
+                  onChange={(e) => setBusinessRetailEmail(e.target.value)}
+                  placeholder="partnerships@example.com"
+                  className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block sm:col-span-2">
                 <span className="text-sm font-medium">Facebook URL</span>
@@ -2001,6 +2072,11 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                         social_twitter_url: socialTwitter.trim() || null,
                         social_instagram_url: socialInstagram.trim() || null,
                         social_linkedin_url: socialLinkedIn.trim() || null,
+                        footer_business_title: businessTitle.trim() || null,
+                        footer_business_wholesale_label: businessWholesaleLabel.trim() || null,
+                        footer_business_wholesale_email: businessWholesaleEmail.trim() || null,
+                        footer_business_retail_label: businessRetailLabel.trim() || null,
+                        footer_business_retail_email: businessRetailEmail.trim() || null,
                       }),
                     })
                   );
@@ -2012,6 +2088,11 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                   setSocialTwitter(row.social_twitter_url ?? "");
                   setSocialInstagram(row.social_instagram_url ?? "");
                   setSocialLinkedIn(row.social_linkedin_url ?? "");
+                  setBusinessTitle(row.footer_business_title ?? "");
+                  setBusinessWholesaleLabel(row.footer_business_wholesale_label ?? "");
+                  setBusinessWholesaleEmail(row.footer_business_wholesale_email ?? "");
+                  setBusinessRetailLabel(row.footer_business_retail_label ?? "");
+                  setBusinessRetailEmail(row.footer_business_retail_email ?? "");
                   toast.success("Storefront contact saved");
                   router.refresh();
                 } catch (err: unknown) {

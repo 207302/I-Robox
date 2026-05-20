@@ -1,5 +1,9 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
+
+// Next.js uses `.env.local`; Prisma CLI only auto-loads `.env` — load both (local wins).
+config({ path: ".env.local" });
+config();
 
 // IMPORTANT: Do not hardcode database credentials in the repo.
 // The datasource URL must come from the environment (e.g. local `.env` / Vercel env var).

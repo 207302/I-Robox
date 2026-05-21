@@ -3,11 +3,7 @@ import ScrollOnNavigate from "@/components/Common/ScrollOnNavigate";
 import ScrollToTop from "@/components/Common/ScrollToTop";
 import { Toaster } from "react-hot-toast";
 import Providers from "./Providers";
-import dynamic from "next/dynamic";
-
-const SiteTopLoader = dynamic(() => import("@/components/Common/SiteTopLoader"), {
-  ssr: false,
-});
+import SiteTopLoaderDeferred from "@/components/Common/SiteTopLoaderDeferred";
 import { Suspense } from "react";
 import MainHeader from "@/components/Header/MainHeader";
 import Breadcrumb from "@/components/Common/Breadcrumb";
@@ -43,7 +39,7 @@ export default async function SiteLayout({
           <Suspense fallback={null}>
             <ScrollOnNavigate />
           </Suspense>
-          <SiteTopLoader />
+          <SiteTopLoaderDeferred />
           <Suspense
             fallback={
               <header className="h-[120px] border-b border-gray-3 bg-white" aria-hidden />

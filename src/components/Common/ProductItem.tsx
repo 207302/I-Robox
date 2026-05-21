@@ -15,6 +15,11 @@ import WishlistButton from "../Wishlist/AddWishlistButton";
 import Tooltip from "./Tooltip";
 import { PRODUCT_CARD_GRID_SIZES } from "@/lib/shop/productCardGridSizes";
 import { calculateDiscountPercentage } from "@/utils/calculateDiscountPercentage";
+import {
+  buildCartLineId,
+  formatVariantLabel,
+  pickDefaultVariant,
+} from "@/lib/cart/cartLine";
 import { formatPrice } from "@/utils/formatePrice";
 
 type Props = {
@@ -36,8 +41,15 @@ function ProductItemInner({
   shopListingImage,
 }: Props) {
   const displayTitle = item.title;
-  const defaultVariant = item?.productVariants.find((variant) => variant.isDefault);
+  const hasVariants = (item?.productVariants?.length ?? 0) > 0;
+  const defaultVariant = pickDefaultVariant(item?.productVariants ?? []);
   const firstVariantWithImage = item?.productVariants.find((variant) => Boolean(variant.image));
+  const cartVariant = defaultVariant ?? firstVariantWithImage;
+  const cartLineId = buildCartLineId(
+    String(item.id),
+    cartVariant?.id,
+    hasVariants
+  );
   const cardImage = useMemo(
     () =>
       item.image ||
@@ -59,14 +71,15 @@ function ProductItemInner({
 
   const { addItem, cartDetails, incrementItem, decrementItem } = useCart();
 
-  const isAlradyAdded = Object.values(cartDetails ?? {}).some(
-    (cartItem) => cartItem.id === item.id
-  );
-  const currentQty = (cartDetails?.[item.id]?.quantity ?? 0) as number;
+  const isAlradyAdded = Boolean(cartDetails?.[cartLineId]);
+  const currentQty = (cartDetails?.[cartLineId]?.quantity ?? 0) as number;
 
   const cartItem = useMemo(
     () => ({
-      id: item.id,
+      id: cartLineId,
+      productId: String(item.id),
+      variantId: cartVariant?.id ?? null,
+      variantLabel: formatVariantLabel(cartVariant),
       name: displayTitle,
       price: item.discountedPrice ? item.discountedPrice : item.price,
       shippingPerUnit: Number(item.shippingPerUnit ?? 0),
@@ -74,10 +87,10 @@ function ProductItemInner({
       image: cardImage,
       slug: item?.slug,
       availableQuantity: item.quantity,
-      color: defaultVariant?.color ? defaultVariant.color : "",
-      size: defaultVariant?.size ? defaultVariant.size : "",
+      color: cartVariant?.color ? cartVariant.color : "",
+      size: cartVariant?.size ? cartVariant.size : "",
     }),
-    [item, displayTitle, cardImage, defaultVariant?.color, defaultVariant?.size]
+    [item, displayTitle, cardImage, cartLineId, cartVariant]
   );
 
   const handleQuickViewUpdate = useCallback(() => {
@@ -118,12 +131,12 @@ function ProductItemInner({
   }, [dispatch, item, cardImage, defaultVariant?.color]);
 
   const handleDecrement = useCallback(() => {
-    decrementItem(item.id);
-  }, [decrementItem, item.id]);
+    decrementItem(cartLineId);
+  }, [decrementItem, cartLineId]);
 
   const handleIncrement = useCallback(() => {
-    incrementItem(item.id);
-  }, [incrementItem, item.id]);
+    incrementItem(cartLineId);
+  }, [incrementItem, cartLineId]);
 
   const mainImagePriority = shopListingImage === "lcp";
   const listingLoadingProp =
@@ -181,13 +194,20 @@ function ProductItemInner({
             </button>
           </Tooltip>
 
-          {isAlradyAdded ? (
+          {hasVariants ? (
+            <Link
+              href={`/shop/${item.slug}`}
+              className="inline-flex h-[38px] items-center justify-center rounded-lg border border-gray-3 bg-white px-5 text-custom-sm font-medium text-dark hover:border-blue/40 hover:text-blue"
+            >
+              View options
+            </Link>
+          ) : isAlradyAdded ? (
             <div className="inline-flex items-center rounded-lg border border-gray-3 bg-white">
               <button
                 type="button"
                 onClick={handleDecrement}
                 className="px-3 py-2 text-dark hover:bg-gray-1 active:bg-gray-2"
-                aria-label="Decrease quantity"
+                aria-label="Remove from cart"
               >
                 -
               </button>
@@ -213,7 +233,7 @@ function ProductItemInner({
                   ? `Add ${displayTitle} to cart`
                   : `${displayTitle} is out of stock`
               }
-              className="inline-flex px-5 py-2 font-medium h-[38px] text-white duration-200 ease-out rounded-lg text-custom-sm bg-blue hover:bg-blue-dark active:scale-[0.98]"
+              className="inline-flex px-5 py-2 font-medium h-[38px] text-white duration-200 ease-out rounded-lg text-custom-sm bg-blue hover:bg-blue-dark active:scale-[0.98] disabled:opacity-60"
             >
               {item.quantity > 0 ? "Add to Cart" : "Out of Stock"}
             </button>

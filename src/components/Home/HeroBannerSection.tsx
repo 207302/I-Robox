@@ -1,34 +1,14 @@
-import dynamic from "next/dynamic";
 import HeroBannerLcp from "./HeroBannerLcp";
-import type { HeroSlide } from "./HeroBannerCarousel";
-
-const HeroBannerCarousel = dynamic(() => import("./HeroBannerCarousel"), {
-  loading: () => (
-    <div
-      className="relative w-full aspect-[3/2] lg:aspect-[2.7/1] animate-pulse bg-gray-2"
-      aria-hidden
-    />
-  ),
-});
-
-type Overlay = {
-  eyebrow?: string;
-  heading?: string;
-  subheading?: string;
-  ctaLabel?: string;
-  ctaHref?: string;
-  eyebrowColor?: string;
-  headingColor?: string;
-  subheadingColor?: string;
-  ctaLabelColor?: string;
-};
+import HeroBannerMulti from "./HeroBannerMulti";
+import type { HeroSlide } from "./heroTypes";
+import type { HeroOverlayProps } from "./HeroBannerOverlay";
 
 type Props = {
   slides?: HeroSlide[];
-  overlay?: Overlay;
+  overlay?: HeroOverlayProps;
 };
 
-/** Server shell: single-slide LCP without client JS; multi-slide loads carousel lazily. */
+/** Server shell: LCP in HTML; multi-slide uses server images + thin client opacity shell. */
 export default function HeroBannerSection({ slides = [], overlay }: Props) {
   if (slides.length === 0) {
     return (
@@ -56,7 +36,7 @@ export default function HeroBannerSection({ slides = [], overlay }: Props) {
 
   return (
     <div className="relative w-full">
-      <HeroBannerCarousel slides={slides} overlay={overlay} />
+      <HeroBannerMulti slides={slides} overlay={overlay} />
     </div>
   );
 }

@@ -14,12 +14,9 @@ import {
 } from "react";
 import { heroOverlayTextStyle } from "@/lib/marketing/heroOverlayColors";
 
-export type HeroSlide = {
-  id: string;
-  image_url: string;
-  title?: string | null;
-  link_url?: string | null;
-};
+import type { HeroSlide } from "./heroTypes";
+
+export type { HeroSlide };
 
 const AUTO_ROTATE_INTERVAL = 7000;
 const SWIPE_THRESHOLD = 50;

@@ -22,6 +22,7 @@ export type Product = {
   /** Cover image URL for thumbnails/cards (first product_image by sort_order). */
   image?: string;
   productVariants: {
+    id: string;
     name?: string;
     color: string;
     image: string;

@@ -30,7 +30,14 @@ export type ShopListingItem = {
   updatedAt: Date;
   reviews: number;
   product_images: { url: string; sort_order: number }[];
-  productVariants: { name?: string; color: string; size: string; isDefault: boolean; image: string }[];
+  productVariants: {
+    id: string;
+    name?: string;
+    color: string;
+    size: string;
+    isDefault: boolean;
+    image: string;
+  }[];
 };
 
 export type ShopListingData = {
@@ -104,6 +111,7 @@ function mapProductsToItems(
       reviews: 0,
       product_images: images,
       productVariants: p.product_variants.map((v) => ({
+        id: v.id,
         name: v.name ?? "",
         color: v.color ?? "",
         size: v.size ?? "",
@@ -163,6 +171,7 @@ async function executeShopListingFromState(
     product_images: { select: { url: true, sort_order: true } },
     product_variants: {
       select: {
+        id: true,
         name: true,
         color: true,
         size: true,

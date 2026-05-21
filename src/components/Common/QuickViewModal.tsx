@@ -14,10 +14,16 @@ import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { AppDispatch, useAppSelector } from "@/redux/store";
 import { formatPrice } from "@/utils/formatePrice";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
+import {
+  buildCartLineId,
+  formatVariantLabel,
+  pickDefaultVariant,
+} from "@/lib/cart/cartLine";
 import type { CartItem } from "@/redux/features/cart-slice";
 import ReviewStar from "../Shop/ReviewStar";
 import {
@@ -45,11 +51,14 @@ const QuickViewModal = () => {
   const mainImage = galleryImages[activePreview] ?? PRODUCT_IMAGE_PLACEHOLDER;
   const showThumbnails = galleryImages.length > 1;
 
-  const defaultVariant = product?.productVariants?.find(
-    (variant) => variant.isDefault
-  );
+  const variants = product?.productVariants ?? [];
+  const hasVariants = variants.length > 0;
+  const defaultVariant = pickDefaultVariant(variants);
   const cardImage =
     getProductCardImageUrl(product) || PRODUCT_IMAGE_PLACEHOLDER;
+  const cartLineId = product?.id
+    ? buildCartLineId(String(product.id), defaultVariant?.id, hasVariants)
+    : "";
 
   // preview modal
   const handlePreviewSlider = () => {
@@ -65,14 +74,16 @@ const QuickViewModal = () => {
   // add to cart
   const handleAddToCart = () => {
     const cartItem: CartItem = {
-      id: product.id,
+      id: cartLineId,
+      productId: String(product.id),
+      variantId: defaultVariant?.id ?? null,
+      variantLabel: formatVariantLabel(defaultVariant),
       name: product.title,
       price: product.discountedPrice ? product.discountedPrice : product.price,
       quantity: 1,
-      shippingPerUnit: Number((product as any).shippingPerUnit ?? 0),
+      shippingPerUnit: Number((product as { shippingPerUnit?: number }).shippingPerUnit ?? 0),
       currency: "usd",
       image: cardImage,
-      price_id: null,
       slug: product?.slug,
       availableQuantity: product.quantity,
       color: defaultVariant?.color ? defaultVariant.color : "",
@@ -347,13 +358,23 @@ const QuickViewModal = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-4">
-                    <button
-                      disabled={quantity < 1 || product.quantity < 1}
-                      onClick={() => handleAddToCart()}
-                      className="inline-flex py-3 font-medium text-white duration-200 ease-out rounded-lg bg-blue px-7 hover:bg-blue-dark"
-                    >
-                      {product.quantity > 0 ? "Add to Cart" : "Out of Stock"}
-                    </button>
+                    {hasVariants ? (
+                      <Link
+                        href={`/shop/${product.slug}`}
+                        onClick={() => closeModal()}
+                        className="inline-flex py-3 font-medium text-white duration-200 ease-out rounded-lg bg-blue px-7 hover:bg-blue-dark"
+                      >
+                        View options
+                      </Link>
+                    ) : (
+                      <button
+                        disabled={quantity < 1 || product.quantity < 1}
+                        onClick={() => handleAddToCart()}
+                        className="inline-flex py-3 font-medium text-white duration-200 ease-out rounded-lg bg-blue px-7 hover:bg-blue-dark disabled:opacity-60"
+                      >
+                        {product.quantity > 0 ? "Add to Cart" : "Out of Stock"}
+                      </button>
+                    )}
 
                     <button
                       disabled={isAlreadyInWishlist}

@@ -3,7 +3,11 @@ import ScrollOnNavigate from "@/components/Common/ScrollOnNavigate";
 import ScrollToTop from "@/components/Common/ScrollToTop";
 import { Toaster } from "react-hot-toast";
 import Providers from "./Providers";
-import SiteTopLoader from "@/components/Common/SiteTopLoader";
+import dynamic from "next/dynamic";
+
+const SiteTopLoader = dynamic(() => import("@/components/Common/SiteTopLoader"), {
+  ssr: false,
+});
 import { Suspense } from "react";
 import MainHeader from "@/components/Header/MainHeader";
 import Breadcrumb from "@/components/Common/Breadcrumb";

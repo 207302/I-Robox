@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Product } from "@/types/product";
 import { useModalContext } from "@/app/context/QuickViewModalContext";
@@ -10,22 +11,24 @@ import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { useCart } from "@/hooks/useCart";
 import toast from "react-hot-toast";
 import ActionBtn from "./ActionBtn";
+import {
+  buildCartLineId,
+  formatVariantLabel,
+  pickDefaultVariant,
+} from "@/lib/cart/cartLine";
 import { formatPrice } from "@/utils/formatePrice";
 
 const SingleItem = ({ item }: { item: Product }) => {
-  const defaultVariant = item?.productVariants.find(
-    (variant) => variant.isDefault
-  );
+  const hasVariants = (item?.productVariants?.length ?? 0) > 0;
+  const defaultVariant = pickDefaultVariant(item?.productVariants ?? []);
+  const cartLineId = buildCartLineId(String(item.id), defaultVariant?.id, hasVariants);
+  const router = useRouter();
   const { openModal } = useModalContext();
   const dispatch = useDispatch<AppDispatch>();
   const { addItem, cartDetails } = useCart();
   const wishlistItems = useAppSelector((state) => state.wishlistReducer.items);
 
-  const isAlradyAdded = Object.values(cartDetails ?? {}).some(
-    (cartItem) => cartItem.id === item.id
-  )
-    ? true
-    : false;
+  const isAlradyAdded = Boolean(cartDetails?.[cartLineId]);
 
   const isAlradyWishListed = Object.values(wishlistItems ?? {}).some(
     (wishlistItem) => wishlistItem.id === item.id
@@ -37,12 +40,14 @@ const SingleItem = ({ item }: { item: Product }) => {
     .slice(0, 4);
 
   const cartItem = {
-    id: item.id,
+    id: cartLineId,
+    productId: String(item.id),
+    variantId: defaultVariant?.id ?? null,
+    variantLabel: formatVariantLabel(defaultVariant),
     name: item.title,
     price: item.discountedPrice ? item.discountedPrice : item.price,
     currency: "usd",
     image: defaultVariant?.image ? defaultVariant.image : "",
-    price_id: null,
     slug: item?.slug,
     availableQuantity: item.quantity,
     color: defaultVariant?.color ? defaultVariant.color : "",
@@ -155,7 +160,13 @@ const SingleItem = ({ item }: { item: Product }) => {
             icon={"quick-view"}
           />
 
-          {isAlradyAdded ? (
+          {hasVariants ? (
+            <ActionBtn
+              handleClick={() => router.push(`/shop/${item.slug}`)}
+              text="View options"
+              icon="quick-view"
+            />
+          ) : isAlradyAdded ? (
             <ActionBtn text="Checkout" icon="check-out" />
           ) : (
             <ActionBtn

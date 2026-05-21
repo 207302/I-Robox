@@ -18,7 +18,10 @@ export default function CartServerSync() {
     timerRef.current = setTimeout(async () => {
       try {
         const payload = items
-          .map((i) => ({ productId: String(i.id), quantity: i.quantity }))
+          .map((i) => ({
+            productId: String(i.productId ?? i.id),
+            quantity: i.quantity,
+          }))
           .filter((i) => i.productId.length > 10 && i.quantity > 0);
         if (payload.length === 0) return;
         await fetch("/api/account/cart-sync", {

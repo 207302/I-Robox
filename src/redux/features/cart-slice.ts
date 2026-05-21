@@ -1,3 +1,4 @@
+import { normalizeCartItem } from "@/lib/cart/cartLine";
 import { createSelector, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../store";
 
@@ -7,7 +8,12 @@ type InitialState = {
 };
 
 export type CartItem = {
+  /** Unique line id (product id, or `productId::variantId` when variants exist). */
   id: string | number;
+  /** Parent product id — used at checkout. */
+  productId: string;
+  variantId?: string | null;
+  variantLabel?: string;
   name: string;
   price: number;
   quantity: number;
@@ -37,7 +43,7 @@ export const cart = createSlice({
   initialState,
   reducers: {
     addItemToCart: (state, action: PayloadAction<CartItem>) => {
-      const item = action.payload;
+      const item = normalizeCartItem(action.payload);
       const existingItem = state.items.find((i) => i.id === item.id);
 
       if (existingItem) {
@@ -64,8 +70,11 @@ export const cart = createSlice({
     decrementItem: (state, action: PayloadAction<string | number>) => {
       const itemId = action.payload;
       const existingItem = state.items.find((item) => item.id === itemId);
+      if (!existingItem) return;
 
-      if (existingItem && existingItem.quantity > 1) {
+      if (existingItem.quantity <= 1) {
+        state.items = state.items.filter((item) => item.id !== itemId);
+      } else {
         existingItem.quantity -= 1;
       }
     },
@@ -87,7 +96,7 @@ export const cart = createSlice({
       state.items = [];
     },
     loadCartFromStorage: (state, action: PayloadAction<CartItem[]>) => {
-      state.items = action.payload;
+      state.items = action.payload.map(normalizeCartItem);
     },
     toggleCartModal: (state) => {
       state.shouldDisplayCart = !state.shouldDisplayCart;

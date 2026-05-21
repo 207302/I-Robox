@@ -1,3 +1,4 @@
+import { normalizeCartItems } from "@/lib/cart/cartLine";
 import { CartItem } from "@/redux/features/cart-slice";
 
 const CART_STORAGE_KEY = "irobox-cart";
@@ -53,7 +54,7 @@ export const loadCartFromStorage = (): CartItem[] => {
         if (serializedCart === null) {
             return [];
         }
-        return JSON.parse(serializedCart) as CartItem[];
+        return normalizeCartItems(JSON.parse(serializedCart) as CartItem[]);
     } catch (error) {
         // Handle JSON parse errors or localStorage access errors
         if (error instanceof Error) {

@@ -7,7 +7,7 @@ import VariantSelector from "./VariantSelector";
 import { cache } from "react";
 import { getProductBySlug } from "@/get-api-data/product";
 import { formatPrice } from "@/utils/formatePrice";
-import ProductActions from "@/components/Shop/ProductActions";
+import ProductVariantPurchase from "@/components/Shop/ProductVariantPurchase";
 import ReviewStar from "@/components/Shop/ReviewStar";
 import ProductReviewComposer from "@/components/Shop/ProductReviewComposer";
 import { getApprovedReviewsForProduct } from "@/lib/queries/productReviews";
@@ -141,23 +141,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 </p>
               </>
             ) : null}
-            <VariantSelector
-              variants={variantsForSelector}
-              fallbackImage={galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER}
-              galleryId={galleryId}
-            />
-
-            <ProductActions
-              id={product.id}
+            <ProductVariantPurchase
+              productId={product.id}
               title={product.title}
               slug={product.slug}
-              image={galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER}
               price={product.price}
               discountedPrice={product.discountedPrice}
               quantity={product.quantity}
               shippingPerUnit={product.shippingPerUnit ?? 0}
-              color={product.productVariants?.find((v) => v.isDefault)?.color || ""}
-              size={product.productVariants?.find((v) => v.isDefault)?.size || ""}
+              variants={variantsForSelector}
+              fallbackImage={galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER}
+              galleryId={galleryId}
             />
 
             <div className="mt-10 border-t border-gray-3 pt-8">

@@ -1,26 +1,42 @@
-import { getImageProps } from "next/image";
+import { heroLcpPreloadBundle } from "@/lib/images/heroLcpImage";
 import { resolvePublicImageUrl } from "@/lib/lcp/resolveImageUrl";
+import { getImageProps } from "next/image";
 
 type Props = {
+  /** Raw or absolute image URL (pre-transform Cloudinary URL preferred). */
   imageUrl: string;
-  /** Must match the corresponding `next/image` `sizes` for the same URL. */
-  sizes: string;
+  /** Fallback when URL is local — must match `next/image` on the page. */
+  sizes?: string;
   width?: number;
   height?: number;
   quality?: number;
 };
 
 /**
- * Renders `<link rel="preload" as="image">` using the same optimizer output as `next/image`
- * so the browser requests the LCP candidate early (hoisted to document head).
+ * Preload the true LCP image in document head — direct Cloudinary URL when possible
+ * (same URL as server hero `Image`, not `/_next/image`).
  */
 export default function LcpImagePrelink({
   imageUrl,
-  sizes,
-  width = 640,
-  height = 640,
-  quality = 75,
+  sizes = "100vw",
+  width = 828,
+  height = 552,
+  quality = 80,
 }: Props) {
+  const cloudinaryBundle = heroLcpPreloadBundle(imageUrl);
+  if (cloudinaryBundle) {
+    return (
+      <link
+        rel="preload"
+        as="image"
+        href={cloudinaryBundle.href}
+        imageSrcSet={cloudinaryBundle.srcSet}
+        imageSizes={sizes}
+        fetchPriority="high"
+      />
+    );
+  }
+
   const resolved = resolvePublicImageUrl(imageUrl);
   if (!resolved) return null;
 
@@ -33,16 +49,14 @@ export default function LcpImagePrelink({
       sizes,
       quality,
     });
-
     if (!props.src) return null;
-
     return (
       <link
         rel="preload"
         as="image"
         href={props.src}
         imageSrcSet={props.srcSet || undefined}
-        imageSizes={props.sizes || undefined}
+        imageSizes={props.sizes || sizes}
         fetchPriority="high"
       />
     );

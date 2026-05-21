@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
@@ -8,7 +9,7 @@ import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody 
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { v2 as cloudinary } from "cloudinary";
-import { runApiRoute } from "@/lib/api/runApiRoute";
+import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 
 function parseShippingPerUnitIn(body: Record<string, unknown>): number | { error: string } | undefined {
@@ -53,7 +54,8 @@ function cloudinaryPublicIdFromUrl(url: string): string | null {
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  return runApiRoute(async () => {
+  return runAdminApiRoute(
+    async () => {
     const session = await getAdminSession();
     if (!session || !isAllowed(session.roles)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   
@@ -117,11 +119,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       available_quantity: inv?.available_quantity ?? 0,
       low_stock_threshold: inv?.low_stock_threshold ?? 5,
     });
-  
-  });}
+    },
+    { name: "GET /api/admin/products/[id]" }
+  );
+}
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  return runApiRoute(async () => {
+  return runAdminApiRoute(
+    async () => {
     try {
       assertSameOrigin(req);
       await rateLimitStrict(`admin_products_put:${req.ip ?? "unknown"}`, 1);
@@ -335,25 +340,35 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
     }
   
-    if (hasQty) {
-      await syncLowStockAlertsByProductIds([id]).catch((err) => {
-        console.error("[admin products PUT] low stock alert sync failed", err);
-      });
-    }
-
     const nextSlug =
       typeof data.slug === "string" ? data.slug : existingProduct.slug;
-    revalidateProductCatalog({
-      slug: nextSlug,
-      previousSlug: existingProduct.slug,
+    const previousSlug = existingProduct.slug;
+    const productIdForAfter = updatedId;
+
+    after(async () => {
+      try {
+        if (hasQty) {
+          await syncLowStockAlertsByProductIds([productIdForAfter]);
+        }
+        revalidateProductCatalog({
+          slug: nextSlug,
+          previousSlug,
+        });
+        revalidateSitemap();
+      } catch (err) {
+        console.error("[admin products PUT] background work failed", err);
+      }
     });
-    revalidateSitemap();
+
     return NextResponse.json({ ok: true, id: updatedId }, { status: 200 });
-  
-  });}
+    },
+    { name: "PUT /api/admin/products/[id]" }
+  );
+}
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  return runApiRoute(async () => {
+  return runAdminApiRoute(
+    async () => {
     try {
       assertSameOrigin(req);
       await rateLimitStrict(`admin_products_delete:${req.ip ?? "unknown"}`, 1);
@@ -442,8 +457,18 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       cloudinary.api.delete_resources(publicIds, { resource_type: "image" }).catch(() => {});
     }
 
-    revalidateProductCatalog({ slug: productBeforeDelete.slug });
-    revalidateSitemap();
+    const deletedSlug = productBeforeDelete.slug;
+    after(() => {
+      try {
+        revalidateProductCatalog({ slug: deletedSlug });
+        revalidateSitemap();
+      } catch (err) {
+        console.error("[admin products DELETE] revalidate failed", err);
+      }
+    });
+
     return NextResponse.json({ ok: true }, { status: 200 });
-  
-  });}
+    },
+    { name: "DELETE /api/admin/products/[id]" }
+  );
+}

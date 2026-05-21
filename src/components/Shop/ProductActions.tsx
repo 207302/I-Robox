@@ -8,7 +8,10 @@ import { useDispatch } from "react-redux";
 import toast from "react-hot-toast";
 
 type ProductActionsProps = {
-  id: string;
+  lineId: string;
+  productId: string;
+  variantId?: string | null;
+  variantLabel?: string;
   title: string;
   slug: string;
   image: string;
@@ -24,8 +27,8 @@ export default function ProductActions(props: ProductActionsProps) {
   const dispatch = useDispatch<AppDispatch>();
   const { addItem, cartDetails, incrementItem, decrementItem } = useCart();
   const wishlistItems = useAppSelector((state) => state.wishlistReducer.items);
-  const isAlreadyWishlisted = wishlistItems.some((w) => w.id === props.id);
-  const currentQty = (cartDetails?.[props.id]?.quantity ?? 0) as number;
+  const isAlreadyWishlisted = wishlistItems.some((w) => w.id === props.productId);
+  const currentQty = (cartDetails?.[props.lineId]?.quantity ?? 0) as number;
 
   function handleAddToCart() {
     if (props.quantity < 1) {
@@ -34,7 +37,10 @@ export default function ProductActions(props: ProductActionsProps) {
     }
 
     addItem({
-      id: props.id,
+      id: props.lineId,
+      productId: props.productId,
+      variantId: props.variantId ?? null,
+      variantLabel: props.variantLabel,
       name: props.title,
       price: props.discountedPrice ? props.discountedPrice : props.price,
       currency: "inr",
@@ -52,7 +58,7 @@ export default function ProductActions(props: ProductActionsProps) {
   function handleWishlist() {
     dispatch(
       addItemToWishlist({
-        id: props.id,
+        id: props.productId,
         title: props.title,
         slug: props.slug,
         image: props.image,
@@ -68,15 +74,15 @@ export default function ProductActions(props: ProductActionsProps) {
       {currentQty > 0 ? (
         <div className="inline-flex items-center rounded-lg border border-gray-3 bg-white">
           <button
-            onClick={() => decrementItem(props.id)}
+            onClick={() => decrementItem(props.lineId)}
             className="px-3 py-2 text-dark hover:bg-gray-1"
-            aria-label="Decrease quantity"
+            aria-label="Remove from cart"
           >
             -
           </button>
           <span className="px-3 py-2 text-sm font-medium text-dark">{currentQty}</span>
           <button
-            onClick={() => incrementItem(props.id)}
+            onClick={() => incrementItem(props.lineId)}
             className="px-3 py-2 text-dark hover:bg-gray-1"
             aria-label="Increase quantity"
           >
@@ -105,4 +111,3 @@ export default function ProductActions(props: ProductActionsProps) {
     </div>
   );
 }
-

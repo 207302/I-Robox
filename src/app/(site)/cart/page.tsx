@@ -95,6 +95,9 @@ export default function CartPage() {
                           >
                             {item.name}
                           </Link>
+                          {item.variantLabel ? (
+                            <p className="text-xs text-meta-3 mt-0.5">{item.variantLabel}</p>
+                          ) : null}
                           <p className="mt-1 text-sm text-meta-3">
                             {formatPrice(item.price)}
                           </p>

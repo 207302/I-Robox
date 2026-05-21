@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
-import { rateLimit } from "@/lib/security/rateLimit";
+import { rateLimitStorefront } from "@/lib/security/rateLimit";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
     try {
       assertSameOrigin(req);
-      await rateLimit(`cart_sync:${req.ip ?? "unknown"}`, 1);
+      await rateLimitStorefront(`cart_sync:ip:${req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"}`, 1);
     } catch (e: any) {
       if (e?.message === "BAD_ORIGIN") {
         return NextResponse.json({ error: "Bad origin" }, { status: 403 });
@@ -23,6 +23,12 @@ export async function POST(req: NextRequest) {
   
     const session = await getSession();
     if (!session?.sub) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    try {
+      await rateLimitStorefront(`cart_sync:user:${session.sub}`, 1);
+    } catch {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
   
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });

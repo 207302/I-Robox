@@ -23,7 +23,8 @@ export default function WishlistPage() {
       toast("Item already in cart!");
     } else {
       addItem({
-        id: item.id,
+        id: String(item.id),
+        productId: String(item.id),
         name: item.title,
         price: item.price,
         quantity: 1,

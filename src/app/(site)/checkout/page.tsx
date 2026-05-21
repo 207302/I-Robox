@@ -116,7 +116,10 @@ export default function CheckoutPage() {
     setLoading(true);
     try {
       const payload = {
-        items: items.map((i) => ({ productId: String(i.id), quantity: i.quantity })),
+        items: items.map((i) => ({
+          productId: String(i.productId ?? i.id),
+          quantity: i.quantity,
+        })),
         address,
         couponCode: couponCode.trim() || undefined,
         isGift,
@@ -218,7 +221,10 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           code,
           subtotal: Number(totalPrice || 0),
-          lineItems: items.map((i) => ({ productId: String(i.id), quantity: i.quantity })),
+          lineItems: items.map((i) => ({
+            productId: String(i.productId ?? i.id),
+            quantity: i.quantity,
+          })),
         }),
       });
       const data = await res.json().catch(() => ({}));

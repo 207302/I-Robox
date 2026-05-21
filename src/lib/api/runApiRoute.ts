@@ -39,7 +39,11 @@ export async function runApiRoute(
           })
         );
         return NextResponse.json(
-          { error: "Service temporarily unavailable" },
+          {
+            error:
+              "Request timed out. The server or database took too long to respond — wait a few seconds and try again.",
+            code: "TIMEOUT",
+          },
           { status: 503 }
         );
       }

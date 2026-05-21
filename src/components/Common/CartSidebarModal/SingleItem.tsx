@@ -35,7 +35,11 @@ const SingleItem = ({ item }: any) => {
         <div>
           <h3 className="mb-1 text-base font-medium duration-200 ease-out text-dark hover:text-blue">
             <button onClick={handleProductClick} className="text-start">
-              {item.name} ({item.quantity})
+              {item.name}
+              {item.variantLabel ? (
+                <span className="font-normal text-meta-3"> — {item.variantLabel}</span>
+              ) : null}{" "}
+              ({item.quantity})
             </button>
           </h3>
           <p className="font-normal text-custom-sm">Price: {formatPrice(item.price)}</p>

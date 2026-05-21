@@ -8,5 +8,16 @@
       "path": "/api/cron/abandoned-cart",
       "schedule": "0 11 * * *"
     }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Vary",
+          "value": "Accept-Encoding"
+        }
+      ]
+    }
   ]
 }

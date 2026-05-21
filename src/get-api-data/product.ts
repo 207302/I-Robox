@@ -33,6 +33,7 @@ export const getNewArrivalsProduct = unstable_cache(
         updated_at: true,
         product_variants: {
           select: {
+            id: true,
             name: true,
             color: true,
             size: true,
@@ -69,8 +70,7 @@ export const getNewArrivalsProduct = unstable_cache(
       updatedAt: item.updated_at,
       product_images: item.product_images,
       productVariants: item.product_variants.map((v) => ({
-        id: 0,
-        productId: item.id,
+        id: v.id,
         image: v.product_images[0]?.url ?? pickDefaultImage(item),
         name: v.name ?? "",
         color: v.color ?? "",
@@ -95,6 +95,7 @@ const bestSellerProductSelect = {
   updated_at: true,
   product_variants: {
     select: {
+      id: true,
       name: true,
       color: true,
       size: true,
@@ -134,8 +135,7 @@ const mapProductToHomeCard = (item: BestSellerProductRow) => ({
   updatedAt: item.updated_at,
   product_images: item.product_images,
   productVariants: item.product_variants.map((v) => ({
-    id: 0,
-    productId: item.id,
+    id: v.id,
     image: v.product_images[0]?.url ?? pickDefaultImage(item),
     name: v.name ?? "",
     color: v.color ?? "",
@@ -227,6 +227,7 @@ async function loadProductBySlug(slug: string) {
       product_variants: {
         orderBy: [{ is_default: "desc" }, { created_at: "asc" }],
         select: {
+          id: true,
           name: true,
           color: true,
           size: true,
@@ -278,8 +279,7 @@ async function loadProductBySlug(slug: string) {
       const images = v.product_images.map((p) => p.url).filter(Boolean);
       const fallback = pickDefaultImage(product);
       return {
-        id: 0,
-        productId: product.id,
+        id: v.id,
         images,
         image: images[0] ?? fallback,
         name: v.name ?? "",

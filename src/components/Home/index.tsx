@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import HeroBannerSection from "./HeroBannerSection";
 import HomeProductCard from "./shared/HomeProductCard";
-import type { HeroSlide } from "./HeroBannerCarousel";
+import type { HeroSlide } from "./heroTypes";
 import HomeBrandRailSection from "./HomeBrandRailSection";
 import HomeCategoryTilesSection from "./HomeCategoryTilesSection";
 import HomeHighlightsSection from "./HomeHighlightsSection";
@@ -121,7 +121,8 @@ const Home = ({
                 width={28}
                 height={28}
                 className="h-7 w-7 shrink-0 md:h-9 md:w-9"
-                sizes="28px"
+                sizes="36px"
+                loading="lazy"
               />
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-tight text-dark md:text-[15px]">{item.title}</p>

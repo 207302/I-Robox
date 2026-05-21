@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
 import { parseAdminJsonResponse } from "@/lib/admin/parseAdminFetchResponse";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -69,7 +70,7 @@ export default function EditProductPage() {
     (async () => {
       try {
         const [productRes, catRes, brandRes, scaleRes, colRes] = await Promise.all([
-          fetch(`/api/admin/products/${id}`),
+          fetchAdminWithRetry(`/api/admin/products/${id}`),
           fetch("/api/admin/categories"),
           fetch("/api/admin/brands"),
           fetch("/api/admin/diecast-scales"),
@@ -82,6 +83,13 @@ export default function EditProductPage() {
           readJsonSafe(scaleRes),
           readJsonSafe(colRes),
         ]);
+        if (!productRes.ok) {
+          const msg =
+            (product as { error?: string } | null)?.error ||
+            `Failed to load product (${productRes.status})`;
+          throw new Error(msg);
+        }
+
         if (!catRes.ok || !brandRes.ok || !scaleRes.ok || !colRes.ok) {
           const msg =
             (cats as { error?: string } | null)?.error ||
@@ -139,7 +147,7 @@ export default function EditProductPage() {
   async function save() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/products/${id}`, {
+      const res = await fetchAdminWithRetry(`/api/admin/products/${id}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -181,7 +189,7 @@ export default function EditProductPage() {
     if (!ok) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
+      const res = await fetchAdminWithRetry(`/api/admin/products/${id}`, { method: "DELETE" });
       const parsed = await parseAdminJsonResponse<{ ok?: boolean }>(res);
       if (!parsed.ok) throw new Error(parsed.message || "Failed to delete product");
       toast.success("Product deleted");

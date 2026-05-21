@@ -1,13 +1,7 @@
-const { existsSync } = require("node:fs");
-const { resolve } = require("node:path");
-const { config: loadDotenv } = require("dotenv");
-
-// Load env before Next boots workers (fixes Prisma before `.env.local` injection in dev).
-const root = __dirname;
-for (const name of [".env.local", ".env"]) {
-  const path = resolve(root, name);
-  if (existsSync(path)) loadDotenv({ path, override: true });
-}
+/**
+ * Env: `next dev` loads `.env.local` automatically; `npm run build` loads via
+ * `scripts/run-prisma-build.mjs`. Do not use fs/path here — Turbopack NFT traces the repo.
+ */
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -43,6 +37,7 @@ const nextConfig = {
       },
     ],
   },
+  serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
     workerThreads: false,
     /** Fewer SSG workers = less Neon connection churn during `next build`. Override with STATIC_GENERATION_CPUS=2 */
@@ -61,15 +56,6 @@ const nextConfig = {
   },
   async headers() {
     return [
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
       {
         source: "/:all*(svg|jpg|jpeg|png|gif|ico|webp|avif|woff|woff2)",
         headers: [
@@ -113,15 +99,6 @@ const nextConfig = {
           {
             key: "Cache-Control",
             value: "public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=3600",
-          },
-        ],
-      },
-      {
-        source: "/_next/image",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
           },
         ],
       },

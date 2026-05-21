@@ -39,6 +39,13 @@ type Props = {
   };
 };
 
+function shouldMountSlideImage(index: number, activeIndex: number, total: number): boolean {
+  if (total <= 1) return index === 0;
+  const prev = (activeIndex - 1 + total) % total;
+  const next = (activeIndex + 1) % total;
+  return index === activeIndex || index === prev || index === next;
+}
+
 const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   const slides = slidesProp && slidesProp.length > 0 ? slidesProp : [];
   const overlayCopy = {
@@ -142,7 +149,6 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
     );
   }
 
-  const slideFraction = 100 / slides.length;
   const showArrows = slides.length > 1;
 
   return (
@@ -153,93 +159,94 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="absolute inset-0 overflow-hidden">
-        <div
-          className="flex h-full transition-transform duration-500 ease-out"
-          style={{
-            width: `${slides.length * 100}%`,
-            transform: `translateX(-${activeIndex * slideFraction}%)`,
-          }}
-        >
-          {slides.map((banner, index) => (
+      <div className="absolute inset-0 overflow-hidden bg-gray-2">
+        {slides.map((banner, index) => {
+          const isActive = index === activeIndex;
+          const mountImage = shouldMountSlideImage(index, activeIndex, slides.length);
+          return (
             <div
               key={banner.id}
-              className="relative h-full shrink-0"
-              style={{ width: `${slideFraction}%` }}
+              className={`absolute inset-0 transition-opacity duration-500 ease-out will-change-[opacity] ${
+                isActive ? "z-[1] opacity-100" : "z-0 opacity-0 pointer-events-none"
+              }`}
+              aria-hidden={!isActive}
             >
-              {banner.link_url ? (
-                <Link href={banner.link_url} className="relative block h-full w-full">
+              {mountImage ? (
+                banner.link_url ? (
+                  <Link href={banner.link_url} className="relative block h-full w-full">
+                    <Image
+                      src={banner.image_url}
+                      alt={banner.title ?? "Hero banner"}
+                      fill
+                      priority={index === 0}
+                      fetchPriority={index === 0 ? "high" : undefined}
+                      sizes="100vw"
+                      className="object-cover"
+                      loading={index === 0 ? "eager" : "lazy"}
+                    />
+                  </Link>
+                ) : (
                   <Image
                     src={banner.image_url}
                     alt={banner.title ?? "Hero banner"}
                     fill
                     priority={index === 0}
+                    fetchPriority={index === 0 ? "high" : undefined}
                     sizes="100vw"
                     className="object-cover"
                     loading={index === 0 ? "eager" : "lazy"}
                   />
-                </Link>
-              ) : (
-                <Image
-                  src={banner.image_url}
-                  alt={banner.title ?? "Hero banner"}
-                  fill
-                  priority={index === 0}
-                  sizes="100vw"
-                  className="object-cover"
-                  loading={index === 0 ? "eager" : "lazy"}
-                />
-              )}
+                )
+              ) : null}
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Static overlay copy: stays fixed while slides move underneath */}
       {hasOverlayCopy || showCta ? (
         <>
           <div className="pointer-events-none absolute inset-y-0 left-0 z-[15] w-[88%] bg-gradient-to-r from-black/80 via-black/45 to-transparent sm:w-[70%] lg:w-[52%]" />
           <div className="pointer-events-none absolute inset-y-0 left-0 z-[16] flex w-full items-center">
             <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 xl:px-0">
               <div className="max-w-xl text-white">
-            {overlayCopy.eyebrow ? (
-              <p
-                style={eyebrowStyle}
-                className={`mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] sm:text-xs ${eyebrowStyle ? "" : "text-white/90"}`}
-              >
-                {overlayCopy.eyebrow}
-              </p>
-            ) : null}
-            {overlayCopy.heading ? (
-              <h1
-                style={headingStyle}
-                className={`text-2xl font-semibold leading-[1.08] drop-shadow-[0_1px_4px_rgba(0,0,0,0.25)] sm:text-4xl sm:font-extrabold sm:drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] lg:text-6xl ${headingStyle ? "" : "text-white/95"}`}
-              >
-                {overlayCopy.heading}
-              </h1>
-            ) : null}
-            {overlayCopy.subheading ? (
-              <p
-                style={subheadingStyle}
-                className={`mt-3 max-w-lg text-sm leading-relaxed sm:text-base lg:text-lg ${subheadingStyle ? "" : "text-white/80 sm:text-white/90"}`}
-              >
-                {overlayCopy.subheading}
-              </p>
-            ) : null}
-            {showCta ? (
-              <div className="pointer-events-auto mt-5">
-                <Link
-                  href={overlayCopy.ctaHref}
-                  style={ctaLabelStyle}
-                  className={`inline-flex items-center rounded-lg bg-red px-5 py-2.5 text-sm font-semibold shadow-lg shadow-black/25 transition hover:bg-red-dark sm:px-6 sm:py-3 sm:text-base ${ctaLabelStyle ? "" : "text-white"}`}
-                >
-                  {overlayCopy.ctaLabel}
-                </Link>
+                {overlayCopy.eyebrow ? (
+                  <p
+                    style={eyebrowStyle}
+                    className={`mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] sm:text-xs ${eyebrowStyle ? "" : "text-white/90"}`}
+                  >
+                    {overlayCopy.eyebrow}
+                  </p>
+                ) : null}
+                {overlayCopy.heading ? (
+                  <h1
+                    style={headingStyle}
+                    className={`text-2xl font-semibold leading-[1.08] drop-shadow-[0_1px_4px_rgba(0,0,0,0.25)] sm:text-4xl sm:font-extrabold sm:drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] lg:text-6xl ${headingStyle ? "" : "text-white/95"}`}
+                  >
+                    {overlayCopy.heading}
+                  </h1>
+                ) : null}
+                {overlayCopy.subheading ? (
+                  <p
+                    style={subheadingStyle}
+                    className={`mt-3 max-w-lg text-sm leading-relaxed sm:text-base lg:text-lg ${subheadingStyle ? "" : "text-white/80 sm:text-white/90"}`}
+                  >
+                    {overlayCopy.subheading}
+                  </p>
+                ) : null}
+                {showCta ? (
+                  <div className="pointer-events-auto mt-5">
+                    <Link
+                      href={overlayCopy.ctaHref}
+                      style={ctaLabelStyle}
+                      className={`inline-flex items-center rounded-lg bg-red px-5 py-2.5 text-sm font-semibold shadow-lg shadow-black/25 transition hover:bg-red-dark sm:px-6 sm:py-3 sm:text-base ${ctaLabelStyle ? "" : "text-white"}`}
+                    >
+                      {overlayCopy.ctaLabel}
+                    </Link>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
-        </div>
-      </div>
         </>
       ) : null}
 
@@ -292,7 +299,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
               e.preventDefault();
               startTransition(() => setActiveIndex(index));
             }}
-            className={`pointer-events-auto h-2.5 rounded-full transition-all duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            className={`pointer-events-auto h-2.5 rounded-full transition-[width,opacity] duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
               index === activeIndex
                 ? "w-8 bg-white shadow-sm"
                 : "w-2.5 bg-white/55 hover:bg-white/80"

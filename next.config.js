@@ -107,6 +107,15 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: "/",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate, s-maxage=60, stale-while-revalidate=300",
+          },
+        ],
+      },
     ];
   },
   redirects: async () => {

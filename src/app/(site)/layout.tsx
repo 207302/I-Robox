@@ -1,4 +1,5 @@
 import Footer from "../../components/Footer";
+import ScrollOnNavigate from "@/components/Common/ScrollOnNavigate";
 import ScrollToTop from "@/components/Common/ScrollToTop";
 import { Toaster } from "react-hot-toast";
 import Providers from "./Providers";
@@ -35,6 +36,9 @@ export default async function SiteLayout({
     <div>
       <>
         <Providers initialMarketing={initialMarketing}>
+          <Suspense fallback={null}>
+            <ScrollOnNavigate />
+          </Suspense>
           <SiteTopLoader />
           <Suspense
             fallback={

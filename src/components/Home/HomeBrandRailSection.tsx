@@ -1,51 +1,15 @@
-"use client";
-
-import { ChevronLeftIcon, ChevronRightIcon } from "@/assets/icons";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { HomeBrandRailItem } from "./index";
+import { ScrollRailNext, ScrollRailPrev } from "./shared/ScrollRailButtons";
+
+const RAIL_ID = "home-brand-rail";
 
 type HomeBrandRailSectionProps = {
   items: HomeBrandRailItem[] | null;
 };
 
-const ARROW_BTN =
-  "shrink-0 flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-dark text-white shadow-lg shadow-dark/30 transition hover:bg-blue hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue disabled:cursor-default disabled:opacity-50";
-
 export default function HomeBrandRailSection({ items }: HomeBrandRailSectionProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const updateScrollState = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanScrollLeft(scrollLeft > 4);
-    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    updateScrollState();
-    el.addEventListener("scroll", updateScrollState, { passive: true });
-    const ro = new ResizeObserver(updateScrollState);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", updateScrollState);
-      ro.disconnect();
-    };
-  }, [items, updateScrollState]);
-
-  const scrollPage = useCallback((direction: -1 | 1) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const step = Math.max(320, Math.floor(el.clientWidth * 0.9));
-    el.scrollBy({ left: direction * step, behavior: "smooth" });
-  }, []);
-
   const hasItems = items && items.length > 0;
   const showArrows = hasItems && items.length > 1;
 
@@ -73,28 +37,18 @@ export default function HomeBrandRailSection({ items }: HomeBrandRailSectionProp
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
-          {showArrows ? (
-            <button
-              type="button"
-              onClick={() => scrollPage(-1)}
-              disabled={!canScrollLeft}
-              className={`${ARROW_BTN} max-md:hidden`}
-              aria-label="Scroll brands left"
-            >
-              <ChevronLeftIcon className="size-6 text-white [&_path]:stroke-[2.5]" />
-            </button>
-          ) : null}
+          {showArrows ? <ScrollRailPrev scrollId={RAIL_ID} label="Scroll brands left" /> : null}
 
           <div
-            ref={scrollRef}
-            className="min-w-0 flex-1 flex gap-4 px-1 pb-2 overflow-x-auto sm:px-0 sm:gap-5 no-scrollbar scroll-smooth"
+            id={RAIL_ID}
+            className="min-w-0 flex-1 flex gap-4 px-1 pb-2 overflow-x-auto sm:px-0 sm:gap-5 no-scrollbar scroll-smooth snap-x snap-mandatory"
           >
             {hasItems ? (
               items.map((item) => (
                 <Link
                   key={item.id}
                   href={item.href}
-                  className="min-w-[200px] sm:min-w-[240px] flex flex-col shrink-0 text-left"
+                  className="min-w-[200px] sm:min-w-[240px] flex flex-col shrink-0 snap-start text-left"
                 >
                   <div className="relative aspect-square overflow-hidden">
                     <Image
@@ -120,17 +74,7 @@ export default function HomeBrandRailSection({ items }: HomeBrandRailSectionProp
             )}
           </div>
 
-          {showArrows ? (
-            <button
-              type="button"
-              onClick={() => scrollPage(1)}
-              disabled={!canScrollRight}
-              className={`${ARROW_BTN} max-md:hidden`}
-              aria-label="Scroll brands right"
-            >
-              <ChevronRightIcon className="size-6 text-white [&_path]:stroke-[2.5]" />
-            </button>
-          ) : null}
+          {showArrows ? <ScrollRailNext scrollId={RAIL_ID} label="Scroll brands right" /> : null}
         </div>
       </div>
     </section>

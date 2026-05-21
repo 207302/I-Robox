@@ -35,7 +35,10 @@ const CartSidebarModal = () => {
   }, [shouldDisplayCart, handleCartClick]);
 
   const router = useRouter();
+  const canCheckout = cartCount > 0;
+
   const handleCheckout = () => {
+    if (!canCheckout) return;
     router.push("/checkout");
     handleCartClick();
   };
@@ -99,8 +102,11 @@ const CartSidebarModal = () => {
             </Link>
 
             <button
-              onClick={() => handleCheckout()}
-              className="flex justify-center w-full px-6 py-3 text-base font-medium text-white duration-200 ease-out rounded-lg bg-dark hover:bg-opacity-95"
+              type="button"
+              disabled={!canCheckout}
+              onClick={handleCheckout}
+              aria-disabled={!canCheckout}
+              className="flex justify-center w-full px-6 py-3 text-base font-medium text-white duration-200 ease-out rounded-lg bg-dark hover:bg-opacity-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-dark"
             >
               Checkout
             </button>

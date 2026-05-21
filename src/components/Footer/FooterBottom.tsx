@@ -37,13 +37,6 @@ const paymentsData: PaymentIcon[] = [
     style: { width: "auto", height: "auto" },
   },
   {
-    id: 4,
-    image: "/images/payment/payment-04.svg",
-    alt: "apple pay",
-    width: 52.94,
-    height: 22,
-  },
-  {
     id: 5,
     image: "/images/payment/payment-05.svg",
     alt: "google pay",

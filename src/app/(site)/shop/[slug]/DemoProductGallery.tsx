@@ -21,6 +21,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
   const touchStartX = useRef<number | null>(null);
   const thumbnailRailRef = useRef<HTMLDivElement>(null);
   const autoplayPausedRef = useRef(false);
+  const skipThumbScrollIntoViewRef = useRef(true);
 
   const goTo = (index: number) => {
     const total = images.length;
@@ -98,6 +99,10 @@ export default function DemoProductGallery({ title, images, galleryId = "default
   useEffect(() => {
     const rail = thumbnailRailRef.current;
     if (!rail || images.length <= 1) return;
+    if (skipThumbScrollIntoViewRef.current) {
+      skipThumbScrollIntoViewRef.current = false;
+      return;
+    }
     const thumb = rail.querySelector<HTMLElement>(`[data-thumb-index="${activeIndex}"]`);
     thumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [activeIndex, images.length]);

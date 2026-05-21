@@ -9,10 +9,15 @@ import Home, {
   type HomeProductCard,
 } from "@/components/Home";
 import type { HeroSlide } from "@/components/Home/HeroBannerCarousel";
+import {
+  cloudinaryCardUrl,
+  cloudinaryHeroUrl,
+  cloudinaryProductCardUrl,
+} from "@/lib/images/cloudinaryDeliver";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
 /** ISR: keep in sync with `HOME_PAGE_REVALIDATE_SECONDS` in homePageCache.ts */
-export const revalidate = 60;
+export const revalidate = 120;
 
 const FALLBACK_HIGHLIGHT_IMAGE =
   "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";
@@ -60,7 +65,7 @@ export default async function HomePage() {
     .filter((s) => isActiveInWindow(s.is_active, s.active_from, s.active_until, now))
     .map((s) => ({
       id: s.id,
-      image_url: s.image_url,
+      image_url: cloudinaryHeroUrl(s.image_url),
       title: s.title,
       link_url: s.link_url,
     }));
@@ -90,7 +95,7 @@ export default async function HomePage() {
       return {
         id: h.id,
         href,
-        image,
+        image: image.startsWith("http") ? cloudinaryCardUrl(image, 720) : image,
         label,
         alt,
         subtitle: h.subtitle,
@@ -107,7 +112,7 @@ export default async function HomePage() {
       id: row.id,
       name: row.label_override?.trim() || row.categories!.name,
       slug: row.categories!.slug,
-      image: row.image_url,
+      image: row.image_url ? cloudinaryCardUrl(row.image_url, 480) : null,
     }));
 
   const categories: HomeCategoryTile[] =
@@ -129,7 +134,7 @@ export default async function HomePage() {
     .map((row) => ({
       id: row.id,
       href: `/shop?brand=${encodeURIComponent(row.brands!.slug)}`,
-      image: row.image_url,
+      image: cloudinaryCardUrl(row.image_url, 480),
       label: row.label_override?.trim() || row.brands!.name,
       alt: row.brands!.name,
     }));
@@ -138,7 +143,7 @@ export default async function HomePage() {
     id: p.id,
     slug: p.slug,
     title: p.title,
-    image: pickCardImage(p.product_images),
+    image: cloudinaryProductCardUrl(pickCardImage(p.product_images)),
     price: Number(p.price),
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
   }));
@@ -147,7 +152,7 @@ export default async function HomePage() {
     id: p.id,
     slug: p.slug,
     title: p.title,
-    image: pickCardImage(p.product_images),
+    image: cloudinaryProductCardUrl(pickCardImage(p.product_images)),
     price: Number(p.price),
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
   }));

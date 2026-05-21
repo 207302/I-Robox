@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { formatPrice } from "@/utils/formatePrice";
 import HeroBannerSection from "./HeroBannerSection";
+import HomeProductCard from "./shared/HomeProductCard";
 import type { HeroSlide } from "./HeroBannerCarousel";
 import HomeBrandRailSection from "./HomeBrandRailSection";
 import HomeCategoryTilesSection from "./HomeCategoryTilesSection";
@@ -142,8 +142,7 @@ const Home = ({
               {highlightsSectionHeading}
             </h2>
             <p className="text-sm leading-relaxed text-meta-3 sm:text-base">
-              Cards below are managed in Admin → Marketing (featured, trending, categories, or
-              individual products).
+              Curated picks from our catalog.
             </p>
           </div>
 
@@ -186,36 +185,8 @@ const Home = ({
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {(bestSellers ?? []).map((p, index) => (
-              <Link
-                key={p.id}
-                href={`/shop/${p.slug}`}
-                className="group overflow-hidden rounded-2xl border border-gray-3 bg-white hover:border-blue/40"
-              >
-                <div className="relative aspect-square bg-gray-2">
-                  <Image
-                    src={p.image}
-                    alt={p.title}
-                    fill
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    className="object-cover"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-3">
-                  <h3 className="line-clamp-2 text-sm font-semibold text-dark">{p.title}</h3>
-                  <div className="mt-2 flex items-center gap-2">
-                    {p.discountedPrice != null ? (
-                      <>
-                        <span className="text-sm font-semibold text-blue">{formatPrice(p.discountedPrice)}</span>
-                        <span className="text-xs line-through text-meta-4">{formatPrice(p.price)}</span>
-                      </>
-                    ) : (
-                      <span className="text-sm font-semibold text-dark">{formatPrice(p.price)}</span>
-                    )}
-                  </div>
-                </div>
-              </Link>
+            {(bestSellers ?? []).map((p) => (
+              <HomeProductCard key={p.id} item={p} />
             ))}
           </div>
         </div>

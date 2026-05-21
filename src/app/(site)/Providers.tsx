@@ -10,10 +10,7 @@ import { PublicMarketingProvider } from "@/components/Providers/PublicMarketingP
 import type { PublicMarketingPayload } from "@/lib/marketing/publicMarketingTypes";
 import dynamic from "next/dynamic";
 
-const MarketingSiteEffects = dynamic(
-  () => import("@/components/Marketing/MarketingSiteEffects").then((m) => m.default),
-  { ssr: false }
-);
+import MarketingSiteEffectsDeferred from "@/components/Marketing/MarketingSiteEffectsDeferred";
 
 const QuickViewModal = dynamic(() => import("@/components/Common/QuickViewModal"), { ssr: false });
 const CartSidebarModal = dynamic(() => import("@/components/Common/CartSidebarModal"), {
@@ -38,7 +35,7 @@ const Providers = ({ children, initialMarketing }: ProvidersProps) => {
           <CartProvider>
             <ModalProvider>
               <PreviewSliderProvider>
-                <MarketingSiteEffects />
+                <MarketingSiteEffectsDeferred />
                 {children}
                 <QuickViewModal />
                 <CartSidebarModal />

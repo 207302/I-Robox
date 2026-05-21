@@ -15,7 +15,7 @@ import {
 import { getShopListingFacetsOnly } from "@/lib/shop/shopListingPrepare";
 
 /** Align with `GET /api/products` and shop ISR. */
-export const SHOP_LISTING_API_REVALIDATE_SECONDS = 30;
+export const SHOP_LISTING_API_REVALIDATE_SECONDS = 60;
 
 export type ShopListingCacheSource = "edge" | "live";
 

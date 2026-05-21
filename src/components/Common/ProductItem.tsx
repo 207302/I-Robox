@@ -175,6 +175,7 @@ function ProductItemInner({
               type="button"
               className="border border-gray-3 h-[38px] w-[38px] rounded-lg flex items-center justify-center text-dark bg-white hover:text-blue active:scale-95"
               onClick={handleQuickViewOpen}
+              aria-label={`Quick view ${displayTitle}`}
             >
               <EyeIcon />
             </button>
@@ -207,6 +208,11 @@ function ProductItemInner({
               type="button"
               onClick={handleAddToCart}
               disabled={item.quantity < 1}
+              aria-label={
+                item.quantity > 0
+                  ? `Add ${displayTitle} to cart`
+                  : `${displayTitle} is out of stock`
+              }
               className="inline-flex px-5 py-2 font-medium h-[38px] text-white duration-200 ease-out rounded-lg text-custom-sm bg-blue hover:bg-blue-dark active:scale-[0.98]"
             >
               {item.quantity > 0 ? "Add to Cart" : "Out of Stock"}
@@ -220,14 +226,14 @@ function ProductItemInner({
         </div>
       </div>
 
-      <h3 className="font-semibold text-dark ease-out text-base duration-200 hover:text-blue mb-1.5 line-clamp-1">
+      <h2 className="font-semibold text-dark ease-out text-base duration-200 hover:text-blue mb-1.5 line-clamp-1">
         <Link
           href={`/shop/${item?.slug}`}
         >
           {" "}
           {displayTitle}{" "}
         </Link>
-      </h3>
+      </h2>
 
       {item.ageGroup || item.diecastScale ? (
         <div className="mb-2 flex flex-wrap gap-1.5">

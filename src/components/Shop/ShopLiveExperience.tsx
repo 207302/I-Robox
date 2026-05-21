@@ -1,6 +1,7 @@
 "use client";
 
 import ProductItem from "@/components/Common/ProductItem";
+import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
 import { ChevronDown } from "@/components/Header/icons";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import type { ShopListingData } from "@/lib/shop/shopListing";
@@ -180,14 +181,25 @@ export default function ShopLiveExperience({
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/products/search-index", { cache: "default" })
-      .then((res) => res.json())
-      .then((data: { items?: ProductSearchItem[] }) => {
-        if (!cancelled && Array.isArray(data.items)) setSearchIndex(data.items);
-      })
-      .catch((err) => console.error("[shop] search index load failed", err));
+    const load = () => {
+      void fetch("/api/products/search-index", { cache: "default" })
+        .then((res) => res.json())
+        .then((data: { items?: ProductSearchItem[] }) => {
+          if (!cancelled && Array.isArray(data.items)) setSearchIndex(data.items);
+        })
+        .catch((err) => console.error("[shop] search index load failed", err));
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(load, { timeout: 4000 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(id);
+      };
+    }
+    const t = setTimeout(load, 2000);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
   }, []);
 
@@ -929,6 +941,11 @@ export default function ShopLiveExperience({
           <button
             type="button"
             className="shop-filters-mobile-toggle"
+            aria-label={
+              activeFilterCount > 0
+                ? `Shop filters, ${activeFilterCount} active`
+                : "Shop filters"
+            }
             aria-expanded={mobileFiltersOpen}
             aria-controls="shop-filters-mobile-panel"
             onClick={() => setMobileFiltersOpen((open) => !open)}
@@ -992,7 +1009,7 @@ export default function ShopLiveExperience({
               }`}
               aria-busy={gridBusy}
             >
-              {gridBusy ? (
+              {gridBusy && products.length > 0 ? (
                 <div
                   className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
                   aria-hidden
@@ -1004,9 +1021,11 @@ export default function ShopLiveExperience({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9">
                   {productGrid}
                 </div>
-              ) : !gridBusy ? (
+              ) : gridBusy ? (
+                <ShopProductGridSkeleton count={listing.pageSize || 12} />
+              ) : (
                 <p className="text-sm text-meta-3">No products match your filters.</p>
-              ) : null}
+              )}
 
               {totalPages > 1 ? (
                 <nav

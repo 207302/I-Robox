@@ -23,7 +23,7 @@ export function shopListingResponseHeaders(
   const hasSearch = Boolean(searchParams.get("q")?.trim());
   const base = hasSearch
     ? publicSearchCatalogCacheHeaders(10)
-    : publicCatalogCacheHeaders(30);
+    : publicCatalogCacheHeaders(60);
   return {
     ...base,
     ...(options?.listingCache ? { "X-Listing-Cache": options.listingCache } : {}),

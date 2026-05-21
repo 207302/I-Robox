@@ -1,6 +1,24 @@
 import type { ShopQueryState } from "@/lib/shop/shopQuery";
 import { parseShopQueryString } from "@/lib/shop/shopQuery";
 
+/** Map Next.js `searchParams` to listing API params (server shop page). */
+export function listingSearchParamsFromRecord(
+  sp: Record<string, string | string[] | undefined>
+): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        if (v) params.append(key, v);
+      }
+    } else if (value) {
+      params.set(key, value);
+    }
+  }
+  return params;
+}
+
 /** Control param — not part of catalog filter semantics. */
 export const SHOP_LISTING_FACETS_PARAM = "facets";
 

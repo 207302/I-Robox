@@ -29,6 +29,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -154,6 +155,9 @@ export default function ShopLiveExperience({
     parseShopQueryString(queryStringFromWindow(initialQueryString)).q
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const productsPaneRef = useRef<HTMLDivElement>(null);
+  const desktopSidebarPaneRef = useRef<HTMLDivElement>(null);
+  const desktopSidebarScrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fetchGenRef = useRef(0);
   const inflightQsRef = useRef<string | null>(null);
@@ -162,7 +166,6 @@ export default function ShopLiveExperience({
   const filterFingerprintRef = useRef(
     listingFilterFingerprint(queryStringFromWindow(initialQueryString))
   );
-  const gridRef = useRef<HTMLDivElement | null>(null);
   const prefetchHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefetchedUrlsRef = useRef<Set<string>>(new Set());
   const prevPageScrollRef = useRef(parseShopQueryString(queryStringFromWindow(initialQueryString)).page);
@@ -491,7 +494,7 @@ export default function ShopLiveExperience({
   useEffect(() => {
     if (prevPageScrollRef.current === query.page) return;
     prevPageScrollRef.current = query.page;
-    gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    productsPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [query.page]);
 
   const goToPage = useCallback(
@@ -520,6 +523,7 @@ export default function ShopLiveExperience({
   const products = listing.items ?? [];
   const totalPages = Math.max(1, listing.totalPages ?? 1);
   const currentPage = listing.page ?? query.page;
+
   const ageGroups = listing.ageGroups ?? [];
   const diecastScales = listing.diecastScales ?? [];
   const shopBrands = useMemo(() => {
@@ -573,6 +577,58 @@ export default function ShopLiveExperience({
       )),
     [products]
   );
+
+  useLayoutEffect(() => {
+    const productsPane = productsPaneRef.current;
+    const sidebarPane = desktopSidebarPaneRef.current;
+    const sidebarScroll = desktopSidebarScrollRef.current;
+    if (!productsPane || !sidebarPane || !sidebarScroll) return;
+
+    const clearSidebarHeight = () => {
+      sidebarPane.style.height = "";
+      sidebarPane.style.maxHeight = "";
+      sidebarPane.style.overflow = "";
+      sidebarScroll.style.height = "";
+      sidebarScroll.style.maxHeight = "";
+      sidebarScroll.style.overflowY = "";
+    };
+
+    const syncSidebarHeight = () => {
+      if (window.innerWidth < 1024) {
+        clearSidebarHeight();
+        return;
+      }
+      const h = Math.round(productsPane.getBoundingClientRect().height);
+      if (h <= 0) return;
+      const px = `${h}px`;
+      sidebarPane.style.height = px;
+      sidebarPane.style.maxHeight = px;
+      sidebarPane.style.overflow = "hidden";
+      sidebarScroll.style.height = px;
+      sidebarScroll.style.maxHeight = px;
+      sidebarScroll.style.overflowY = "auto";
+    };
+
+    const scheduleSync = () => requestAnimationFrame(syncSidebarHeight);
+
+    scheduleSync();
+    const ro = new ResizeObserver(scheduleSync);
+    ro.observe(productsPane);
+
+    const onImgLoad = () => scheduleSync();
+    const imgs = productsPane.querySelectorAll("img");
+    imgs.forEach((img) => {
+      if (!img.complete) img.addEventListener("load", onImgLoad, { once: true });
+    });
+
+    window.addEventListener("resize", scheduleSync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", scheduleSync);
+      imgs.forEach((img) => img.removeEventListener("load", onImgLoad));
+      clearSidebarHeight();
+    };
+  }, [products.length, totalPages, currentPage, gridBusy, query.q, clientMatchCount]);
 
   const filterHoverHandlers = useCallback(
     (fieldName: string, value: string, isChecked: boolean) => ({
@@ -862,43 +918,45 @@ export default function ShopLiveExperience({
   return (
     <section className="overflow-hidden py-10 pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-        <div className="flex flex-col gap-8 lg:flex-row">
-          <aside className="order-2 w-full shrink-0 lg:order-none lg:w-64">
-            <div className="lg:hidden">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-3 bg-white px-4 py-3.5 text-left text-sm font-semibold text-dark"
-                aria-expanded={mobileFiltersOpen}
-                aria-controls="shop-filters-mobile-panel"
-                onClick={() => setMobileFiltersOpen((open) => !open)}
-              >
-                <span className="flex items-center gap-2">
-                  Filters
-                  {activeFilterCount > 0 ? (
-                    <span className="rounded-full bg-blue px-2 py-0.5 text-xs font-semibold text-white">
-                      {activeFilterCount}
-                    </span>
-                  ) : null}
-                </span>
-                <span
-                  className={`shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${mobileFiltersOpen ? "rotate-180" : ""}`}
-                  aria-hidden
-                >
-                  <ChevronDown />
-                </span>
-              </button>
-              {mobileFiltersOpen ? (
-                <div id="shop-filters-mobile-panel" className="shop-filters-mobile-panel mt-3">
-                  {renderFilters("shop-filters-form-mobile")}
-                </div>
-              ) : null}
-            </div>
-            <div className="hidden lg:block lg:sticky lg:top-24">
-              {renderFilters("shop-filters-form", true)}
-            </div>
-          </aside>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-dark">Shop</h1>
+          {gridBusy ? (
+            <span className="text-xs font-medium text-meta-3 animate-pulse">Updating…</span>
+          ) : null}
+        </div>
 
-          <div className="order-1 min-w-0 flex-1 lg:order-none">
+        <div className="shop-mobile-filters-wrap">
+          <button
+            type="button"
+            className="shop-filters-mobile-toggle"
+            aria-expanded={mobileFiltersOpen}
+            aria-controls="shop-filters-mobile-panel"
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+          >
+            <span className="flex items-center gap-2">
+              Filters
+              {activeFilterCount > 0 ? (
+                <span className="rounded-full bg-blue px-2 py-0.5 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={`shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${mobileFiltersOpen ? "rotate-180" : ""}`}
+              aria-hidden
+            >
+              <ChevronDown />
+            </span>
+          </button>
+          {mobileFiltersOpen ? (
+            <div id="shop-filters-mobile-panel" className="shop-filters-mobile-panel mt-3">
+              {renderFilters("shop-filters-form-mobile")}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="shop-page-columns flex flex-col gap-8 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
+          <div className="min-w-0 lg:col-start-2 lg:row-start-1">
             {query.q.trim() ? (
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <p className="text-sm text-dark sm:text-base">
@@ -926,14 +984,9 @@ export default function ShopLiveExperience({
                 </button>
               </div>
             ) : null}
-            <div className="mb-6 flex items-center justify-between gap-3">
-              <h1 className="text-2xl font-semibold text-dark">Shop</h1>
-              {gridBusy ? (
-                <span className="text-xs font-medium text-meta-3 animate-pulse">Updating…</span>
-              ) : null}
-            </div>
+
             <div
-              ref={gridRef}
+              ref={productsPaneRef}
               className={`relative scroll-mt-24 transition-opacity duration-150 ${
                 gridBusy ? "opacity-50 pointer-events-none" : "opacity-100"
               }`}
@@ -1025,6 +1078,14 @@ export default function ShopLiveExperience({
               ) : null}
             </div>
           </div>
+
+          <aside className="shop-desktop-filters-aside lg:col-start-1 lg:row-start-1">
+            <div ref={desktopSidebarPaneRef} className="shop-desktop-sidebar-pane">
+              <div ref={desktopSidebarScrollRef} className="shop-desktop-sidebar-scroll">
+                {renderFilters("shop-filters-form", true)}
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </section>

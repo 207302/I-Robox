@@ -4,6 +4,7 @@ import { formatPrice } from "@/utils/formatePrice";
 import HeroBannerSection from "./HeroBannerSection";
 import type { HeroSlide } from "./HeroBannerCarousel";
 import HomeBrandRailSection from "./HomeBrandRailSection";
+import HomeCategoryTilesSection from "./HomeCategoryTilesSection";
 import HomeHighlightsSection from "./HomeHighlightsSection";
 import HomeProductCarouselSection from "./HomeProductCarouselSection";
 
@@ -222,67 +223,7 @@ const Home = ({
 
       <HomeBrandRailSection items={brandRail ?? null} />
 
-      <section className="py-14 bg-white">
-        <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-          <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-end">
-            <div>
-              <p className="mb-1 text-xs font-semibold tracking-[0.18em] uppercase text-blue">
-                Categories
-              </p>
-              <h2 className="text-xl font-semibold text-dark xl:text-heading-5">
-                Discover by category.
-              </h2>
-              <p className="mt-1 text-sm text-meta-3">
-                Choose categories, order, and photos in Admin → Marketing → Discover by category. If none
-                are configured, the first eight catalog categories show here without images.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {categories && categories.length > 0 ? (
-              categories.map((cat, index) => (
-                <Link
-                  key={cat.id}
-                  href={`/shop?category=${encodeURIComponent(cat.slug)}`}
-                  className="flex flex-col h-full overflow-hidden rounded-2xl bg-gray-1 border border-gray-3 hover:border-blue/40 hover:shadow-sm transition"
-                >
-                  {cat.image ? (
-                    <div className="relative aspect-[5/3] w-full shrink-0 bg-gray-2">
-                      <Image
-                        src={cat.image}
-                        alt={cat.name}
-                        fill
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                        className="object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  ) : null}
-                  <div className="flex flex-col flex-1 justify-between px-4 py-4">
-                    <h3 className="text-sm font-semibold text-dark sm:text-base">{cat.name}</h3>
-                    <p className="mt-2 text-[11px] text-meta-3">View products in this category.</p>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              Array.from({ length: 8 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="flex flex-col justify-between h-full px-4 py-5 rounded-2xl bg-gray-1 border border-gray-3"
-                >
-                  <h3 className="text-sm font-semibold text-dark sm:text-base">
-                    Category placeholder {index + 1}
-                  </h3>
-                  <p className="mt-2 text-[11px] text-meta-3">
-                    Add categories in admin to populate this grid.
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
+      <HomeCategoryTilesSection categories={categories ?? null} />
 
     </main>
   );

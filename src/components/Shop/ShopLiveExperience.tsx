@@ -85,6 +85,17 @@ function filterFingerprintExcludingSearch(queryString: string): string {
   return listingFilterFingerprintFromState({ ...state, q: "" });
 }
 
+function hasActiveListingSearch(
+  fetchQs: string,
+  searchInput: string,
+  clientFuzzyIds: string[] | null
+): boolean {
+  if (clientFuzzyIds !== null) return true;
+  if (searchInput.trim()) return true;
+  const usp = new URLSearchParams(fetchQs);
+  return Boolean(usp.get("q")?.trim() || usp.get("ids")?.trim());
+}
+
 function prefetchProductsApi(queryString: string, opts?: { facetsOnly?: boolean }) {
   const params = new URLSearchParams(queryString);
   if (opts?.facetsOnly) params.set(SHOP_LISTING_FACETS_PARAM, "0");
@@ -186,12 +197,11 @@ export default function ShopLiveExperience({
   const [searchFilterReady, setSearchFilterReady] = useState(false);
 
   useEffect(() => {
-    if (!searchInput.trim() || filterProductsRef.current) return;
     void import("@/lib/search/productSearch").then((m) => {
       filterProductsRef.current = m.filterAndSortProducts;
       setSearchFilterReady(true);
     });
-  }, [searchInput]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,17 +213,9 @@ export default function ShopLiveExperience({
         })
         .catch((err) => console.error("[shop] search index load failed", err));
     };
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(load, { timeout: 4000 });
-      return () => {
-        cancelled = true;
-        cancelIdleCallback(id);
-      };
-    }
-    const t = setTimeout(load, 2000);
+    load();
     return () => {
       cancelled = true;
-      clearTimeout(t);
     };
   }, []);
 
@@ -349,16 +351,27 @@ export default function ShopLiveExperience({
   }, [queryString, clientFuzzyIds, debouncedSearchInput]);
 
   const debouncedFetchQs = useDebounce(effectiveQueryString, 250);
+  /** Client fuzzy ids are instant — skip debounce so the grid matches the match count. */
+  const listingFetchQs =
+    clientFuzzyIds !== null ? effectiveQueryString : debouncedFetchQs;
   const debouncedFilterFpExclQ = useDebounce(filterFingerprintExcludingSearch(queryString), 300);
-  const fetchQsRef = useRef(debouncedFetchQs);
-  fetchQsRef.current = debouncedFetchQs;
+  const fetchQsRef = useRef(listingFetchQs);
+  fetchQsRef.current = listingFetchQs;
   const listingFetchKey = useMemo(
     () =>
-      `${debouncedFilterFpExclQ}|${debouncedFetchQs}|${query.page}|${urlQueryString}`,
-    [debouncedFilterFpExclQ, debouncedFetchQs, query.page, urlQueryString]
+      `${debouncedFilterFpExclQ}|${listingFetchQs}|${query.page}|${urlQueryString}`,
+    [debouncedFilterFpExclQ, listingFetchQs, query.page, urlQueryString]
   );
-  const searchPending = searchInput !== debouncedSearchInput || effectiveQueryString !== debouncedFetchQs;
-  const gridBusy = searchPending || isLoading;
+  const searchPending =
+    searchInput !== debouncedSearchInput ||
+    (clientFuzzyIds === null && effectiveQueryString !== debouncedFetchQs);
+  const priceFiltersPending =
+    minPriceInput.trim() !== query.minPrice.trim() ||
+    maxPriceInput.trim() !== query.maxPrice.trim();
+  const filtersPending =
+    priceFiltersPending ||
+    listingFilterFingerprint(queryString) !== debouncedFilterFpExclQ;
+  const gridBusy = searchPending || filtersPending || isLoading;
 
   const fetchListing = useCallback(async (qs: string) => {
     if (inflightQsRef.current === qs && abortRef.current && !abortRef.current.signal.aborted) {
@@ -369,16 +382,16 @@ export default function ShopLiveExperience({
     const controller = new AbortController();
     abortRef.current = controller;
     inflightQsRef.current = qs;
-    if (!hasVisibleProductsRef.current) {
+    const params = new URLSearchParams(qs);
+    const fingerprint = listingFilterFingerprint(qs);
+    const paginationOnly =
+      fingerprint === filterFingerprintRef.current && params.has("page");
+    if (!paginationOnly) {
       setIsLoading(true);
     }
     const trackProgress = isSearchProgressPending();
     if (trackProgress) setSearchProgress(55);
     try {
-      const params = new URLSearchParams(qs);
-      const fingerprint = listingFilterFingerprint(qs);
-      const paginationOnly =
-        fingerprint === filterFingerprintRef.current && params.has("page");
       if (paginationOnly) {
         params.set(SHOP_LISTING_FACETS_PARAM, "0");
       } else {
@@ -523,6 +536,7 @@ export default function ShopLiveExperience({
     if (
       !skippedSsrRefetchRef.current &&
       initialListing.items.length > 0 &&
+      !hasActiveListingSearch(fetchQsRef.current, searchInput, clientFuzzyIds) &&
       listingFilterFingerprint(fetchQsRef.current) ===
         listingFilterFingerprint(initialQueryString) &&
       parseShopQueryString(fetchQsRef.current).page === (initialListing.page ?? 1)
@@ -530,9 +544,15 @@ export default function ShopLiveExperience({
       skippedSsrRefetchRef.current = true;
       return;
     }
-    if (initialListing.items.length > 0 && isSearchProgressPending()) return;
+    if (
+      initialListing.items.length > 0 &&
+      isSearchProgressPending() &&
+      !hasActiveListingSearch(fetchQsRef.current, searchInput, clientFuzzyIds)
+    ) {
+      return;
+    }
     void fetchListing(fetchQsRef.current);
-  }, [listingFetchKey, fetchListing, initialListing.items.length, initialListing.page, initialQueryString, clientFuzzyIds]);
+  }, [listingFetchKey, fetchListing, initialListing.items.length, initialListing.page, initialQueryString, clientFuzzyIds, searchInput]);
 
   useEffect(() => {
     if (prevPageScrollRef.current === query.page) return;
@@ -566,8 +586,7 @@ export default function ShopLiveExperience({
   const products = listing.items ?? [];
   const totalPages = Math.max(1, listing.totalPages ?? 1);
   const currentPage = listing.page ?? query.page;
-  /** Keep SSR product grid fully opaque so LCP is not delayed by a background refetch dim. */
-  const gridDimmed = gridBusy && products.length === 0;
+  const gridResultsLoading = gridBusy && products.length > 0;
 
   const ageGroups = listing.ageGroups ?? [];
   const diecastScales = listing.diecastScales ?? [];
@@ -992,8 +1011,8 @@ export default function ShopLiveExperience({
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="mb-6 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-dark">Shop</h1>
-          {gridBusy ? (
-            <span className="text-xs font-medium text-meta-3 animate-pulse">Updating…</span>
+          {gridResultsLoading ? (
+            <span className="text-xs font-medium text-meta-3 animate-pulse">Updating results…</span>
           ) : null}
         </div>
 
@@ -1064,19 +1083,30 @@ export default function ShopLiveExperience({
 
             <div
               ref={productsPaneRef}
-              className={`relative scroll-mt-24 ${
-                gridDimmed ? "opacity-50 pointer-events-none" : gridBusy && products.length > 0 ? "pointer-events-none" : ""
-              }`}
+              className="relative scroll-mt-24"
               aria-busy={gridBusy}
             >
-              {gridBusy && products.length > 0 ? (
-                <div
-                  className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-                  aria-hidden
-                >
-                  <div className="h-9 w-9 animate-spin rounded-full border-2 border-gray-3 border-t-blue" />
-                </div>
+              {gridResultsLoading ? (
+                <>
+                  <div
+                    className="shop-search-results-busy-bar"
+                    role="progressbar"
+                    aria-label="Loading products"
+                    aria-valuetext="Loading"
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+                    aria-hidden
+                  >
+                    <div className="shop-search-results-busy-spinner" />
+                  </div>
+                </>
               ) : null}
+              <div
+                className={
+                  gridResultsLoading ? "shop-search-results-grid-dim transition-opacity duration-200" : ""
+                }
+              >
               {products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9">
                   {productGrid}
@@ -1155,6 +1185,7 @@ export default function ShopLiveExperience({
                   )}
                 </nav>
               ) : null}
+              </div>
             </div>
           </div>
 

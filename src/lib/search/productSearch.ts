@@ -50,17 +50,25 @@ export function fuzzyMatchProduct(query: string, item: ProductSearchItem): boole
   if (!q) return true;
 
   const qCompact = compactSearchText(query);
-  const { spaced, compact } = fieldHaystack(searchableFields(item));
-
-  if (spaced.includes(q) || compact.includes(qCompact)) return true;
-
   const tokens = q.split(" ").filter(Boolean);
-  if (tokens.length > 1) {
-    const allTokens = tokens.every((t) => spaced.includes(t) || compact.includes(compactSearchText(t)));
-    if (allTokens) return true;
+
+  const fields = searchableFields(item);
+  for (const field of fields) {
+    const n = normalizeSearchText(field);
+    const c = compactSearchText(field);
+    if (n.includes(q) || c.includes(qCompact)) return true;
+    if (tokens.length > 1 && tokens.every((t) => n.includes(t) || c.includes(compactSearchText(t)))) {
+      return true;
+    }
+    if (qCompact.length >= 4 && subsequenceMatch(c, qCompact)) return true;
   }
 
-  if (qCompact.length >= 3 && subsequenceMatch(compact, qCompact)) return true;
+  if (tokens.length > 1) {
+    const { spaced, compact } = fieldHaystack(fields);
+    if (tokens.every((t) => spaced.includes(t) || compact.includes(compactSearchText(t)))) {
+      return true;
+    }
+  }
 
   return false;
 }

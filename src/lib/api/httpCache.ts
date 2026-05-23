@@ -20,7 +20,7 @@ export function shopListingResponseHeaders(
   searchParams: URLSearchParams,
   options?: { listingCache?: "edge" | "live" }
 ): HeadersInit {
-  const hasSearch = Boolean(searchParams.get("q")?.trim());
+  const hasSearch = Boolean(searchParams.get("q")?.trim() || searchParams.get("ids")?.trim());
   const base = hasSearch
     ? publicSearchCatalogCacheHeaders(10)
     : publicCatalogCacheHeaders(60);

@@ -83,12 +83,6 @@ export default function HeroCarouselClient({ slides }: Props) {
   }, [slidesKey, activeIndex]);
 
   useEffect(() => {
-    if (slideCount <= 1 || heroReady) return undefined;
-    const fallback = window.setTimeout(() => setHeroReady(true), 4000);
-    return () => window.clearTimeout(fallback);
-  }, [slidesKey, slideCount, heroReady]);
-
-  useEffect(() => {
     if (slideCount <= 1 || !heroReady) return undefined;
     const timer = window.setInterval(() => {
       goToNext();

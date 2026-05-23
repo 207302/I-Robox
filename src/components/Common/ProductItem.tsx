@@ -11,9 +11,13 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
+import dynamic from "next/dynamic";
 import WishlistButton from "../Wishlist/AddWishlistButton";
-import Tooltip from "./Tooltip";
 import { PRODUCT_CARD_GRID_SIZES } from "@/lib/shop/productCardGridSizes";
+import {
+  cloudinaryProductCardUrl,
+  isCloudinaryDeliveryUrl,
+} from "@/lib/images/cloudinaryDeliver";
 import { calculateDiscountPercentage } from "@/utils/calculateDiscountPercentage";
 import {
   buildCartLineId,
@@ -21,6 +25,8 @@ import {
   pickDefaultVariant,
 } from "@/lib/cart/cartLine";
 import { formatPrice } from "@/utils/formatePrice";
+
+const Tooltip = dynamic(() => import("./Tooltip"), { ssr: false });
 
 type Props = {
   bgClr?: string;
@@ -59,6 +65,10 @@ function ProductItemInner({
       "",
     [item, defaultVariant?.image, firstVariantWithImage?.image]
   );
+  const cardImageSrc = useMemo(() => {
+    if (!cardImage || !isCloudinaryDeliveryUrl(cardImage)) return cardImage;
+    return cloudinaryProductCardUrl(cardImage, shopListingImage !== undefined ? 380 : 220);
+  }, [cardImage, shopListingImage]);
   const variantPreview = useMemo(
     () =>
       item.productVariants
@@ -156,7 +166,7 @@ function ProductItemInner({
           className="relative block h-full w-full"
         >
           <SafeProductImage
-            src={cardImage}
+            src={cardImageSrc}
             alt={item.title || "product-image"}
             width={640}
             height={640}
@@ -165,6 +175,7 @@ function ProductItemInner({
             priority={mainImagePriority}
             {...(shopListingImage === "lcp" ? { fetchPriority: "high" as const } : {})}
             {...(listingLoadingProp ? { loading: listingLoadingProp } : {})}
+            unoptimized={isCloudinaryDeliveryUrl(cardImageSrc)}
           />
         </Link>
         <div className="pointer-events-none absolute right-2 top-2 z-10 flex h-[26px] w-[4.5rem] shrink-0 items-center justify-end">

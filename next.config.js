@@ -3,7 +3,6 @@
  * `scripts/run-prisma-build.mjs`. Do not use fs/path here — Turbopack NFT traces the repo.
  */
 
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   /** SSG pages (PDPs, ISR shells) — Neon cold queries can exceed 60s default. */
   staticPageGenerationTimeout: Number(process.env.STATIC_PAGE_GENERATION_TIMEOUT ?? 180),
@@ -133,4 +132,10 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+const withBundleAnalyzer =
+  process.env.ANALYZE === "true"
+    ? require("@next/bundle-analyzer")({ enabled: true })
+    : (config) => config;
+
+/** @type {import('next').NextConfig} */
+module.exports = withBundleAnalyzer(nextConfig);

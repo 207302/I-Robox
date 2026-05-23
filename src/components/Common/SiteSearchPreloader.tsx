@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SEARCH_PROGRESS_EVENT,
   getSearchProgress,
@@ -19,7 +19,7 @@ export default function SiteSearchPreloader({ onDone }: Props) {
   const doneRef = useRef(false);
   const clamped = Math.min(100, Math.max(0, progress));
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     doneRef.current = false;
     setProgress(getSearchProgress());
   }, []);

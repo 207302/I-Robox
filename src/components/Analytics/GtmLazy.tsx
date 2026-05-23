@@ -1,11 +1,11 @@
 "use client";
 
-import Script from "next/script";
 import { useEffect } from "react";
 
 /**
- * Same behavior as `@next/third-parties/google` GTM, but loads after window `load`
- * (`lazyOnload`) so it does not compete with LCP/critical rendering.
+ * GTM loads after window `load` + idle — keeps third-party tags (e.g. i.edwardmartin.com
+ * nb-collector injected via GTM) off the critical path. Configure those tags in GTM to
+ * fire on "Window Loaded", not "DOM Ready".
  */
 export default function GtmLazy({
   gtmId,
@@ -28,41 +28,56 @@ export default function GtmLazy({
         detail: { feature: "irobox-gtm-lazy" },
       });
     }
-  }, []);
 
-  const scriptUrl = new URL("https://www.googletagmanager.com/gtm.js");
-  scriptUrl.searchParams.set("id", gtmId);
-  if (dataLayerName !== "dataLayer") {
-    scriptUrl.searchParams.set("l", dataLayerName);
-  }
-  if (auth) scriptUrl.searchParams.set("gtm_auth", auth);
-  if (preview) {
-    scriptUrl.searchParams.set("gtm_preview", preview);
-    scriptUrl.searchParams.set("gtm_cookies_win", "x");
-  }
+    const scriptUrl = new URL("https://www.googletagmanager.com/gtm.js");
+    scriptUrl.searchParams.set("id", gtmId);
+    if (dataLayerName !== "dataLayer") {
+      scriptUrl.searchParams.set("l", dataLayerName);
+    }
+    if (auth) scriptUrl.searchParams.set("gtm_auth", auth);
+    if (preview) {
+      scriptUrl.searchParams.set("gtm_preview", preview);
+      scriptUrl.searchParams.set("gtm_cookies_win", "x");
+    }
 
-  const initHtml = `
-      (function(w,l){
+    const initHtml = `(function(w,l){
         w[l]=w[l]||[];
         w[l].push({'gtm.start': new Date().getTime(),event:'gtm.js'});
         ${dataLayer ? `w[l].push(${JSON.stringify(dataLayer)})` : ""}
       })(window,'${dataLayerName}');`;
 
-  return (
-    <>
-      <Script
-        id="_irobox-gtm-init"
-        strategy="lazyOnload"
-        nonce={nonce}
-        dangerouslySetInnerHTML={{ __html: initHtml }}
-      />
-      <Script
-        id="_irobox-gtm"
-        strategy="lazyOnload"
-        src={scriptUrl.href}
-        nonce={nonce}
-        data-ntpc="GTM"
-      />
-    </>
-  );
+    const inject = () => {
+      if (document.getElementById("_irobox-gtm")) return;
+
+      const init = document.createElement("script");
+      init.id = "_irobox-gtm-init";
+      init.text = initHtml;
+      if (nonce) init.setAttribute("nonce", nonce);
+      document.body.appendChild(init);
+
+      const gtm = document.createElement("script");
+      gtm.id = "_irobox-gtm";
+      gtm.async = true;
+      gtm.src = scriptUrl.href;
+      if (nonce) gtm.setAttribute("nonce", nonce);
+      gtm.setAttribute("data-ntpc", "GTM");
+      document.body.appendChild(gtm);
+    };
+
+    const schedule = () => {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(inject, { timeout: 3000 });
+      } else {
+        window.setTimeout(inject, 1500);
+      }
+    };
+
+    if (document.readyState === "complete") {
+      schedule();
+    } else {
+      window.addEventListener("load", schedule, { once: true });
+    }
+  }, [gtmId, dataLayerName, dataLayer, auth, preview, nonce]);
+
+  return null;
 }

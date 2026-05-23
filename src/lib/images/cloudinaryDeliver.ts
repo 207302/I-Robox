@@ -106,7 +106,7 @@ export function cloudinaryCardUrl(url: string, width = 640): string {
   return cloudinaryDeliverUrl(url, { width, quality: "auto" });
 }
 
-/** Product grid cards — layout ~180–220px; width cap saves bytes (quality unchanged). */
-export function cloudinaryProductCardUrl(url: string): string {
-  return cloudinaryDeliverUrl(url, { width: 220, quality: "auto" });
+/** Product grid cards — layout ~180–380px; width cap saves bytes (quality unchanged). */
+export function cloudinaryProductCardUrl(url: string, width = 220): string {
+  return cloudinaryDeliverUrl(url, { width, quality: "auto" });
 }

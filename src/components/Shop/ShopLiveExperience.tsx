@@ -20,7 +20,7 @@ import {
 } from "@/lib/shop/shopQuery";
 import { useDebounce } from "@/hooks/useDebounce";
 import { throttle } from "@/lib/perf/throttle";
-import { filterAndSortProducts, type ProductSearchItem } from "@/lib/search/productSearch";
+import type { ProductSearchItem } from "@/lib/search/productSearch";
 import {
   completeSearchProgress,
   isSearchProgressPending,
@@ -31,7 +31,6 @@ import {
   startTransition,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -165,6 +164,8 @@ export default function ShopLiveExperience({
   const inflightQsRef = useRef<string | null>(null);
   const shellLoadStartedRef = useRef(false);
   const skipListingKeyFetchRef = useRef(true);
+  const skippedSsrRefetchRef = useRef(false);
+  const hasVisibleProductsRef = useRef(initialListing.items.length > 0);
   const filterFingerprintRef = useRef(
     listingFilterFingerprint(queryStringFromWindow(initialQueryString))
   );
@@ -179,6 +180,18 @@ export default function ShopLiveExperience({
     () => parseShopQueryString(queryStringFromWindow(initialQueryString)).maxPrice
   );
   const [searchIndex, setSearchIndex] = useState<ProductSearchItem[]>([]);
+  const filterProductsRef = useRef<
+    ((items: ProductSearchItem[], q: string) => ProductSearchItem[]) | null
+  >(null);
+  const [searchFilterReady, setSearchFilterReady] = useState(false);
+
+  useEffect(() => {
+    if (!searchInput.trim() || filterProductsRef.current) return;
+    void import("@/lib/search/productSearch").then((m) => {
+      filterProductsRef.current = m.filterAndSortProducts;
+      setSearchFilterReady(true);
+    });
+  }, [searchInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,8 +331,10 @@ export default function ShopLiveExperience({
   const clientFuzzyIds = useMemo(() => {
     const q = searchInput.trim();
     if (!q || searchIndex.length === 0) return null;
-    return filterAndSortProducts(searchIndex, q).map((item) => item.id);
-  }, [searchInput, searchIndex]);
+    const filterProducts = filterProductsRef.current;
+    if (!filterProducts) return null;
+    return filterProducts(searchIndex, q).map((item) => item.id);
+  }, [searchInput, searchIndex, searchFilterReady]);
 
   const clientMatchCount = clientFuzzyIds !== null ? clientFuzzyIds.length : null;
 
@@ -354,7 +369,9 @@ export default function ShopLiveExperience({
     const controller = new AbortController();
     abortRef.current = controller;
     inflightQsRef.current = qs;
-    setIsLoading(true);
+    if (!hasVisibleProductsRef.current) {
+      setIsLoading(true);
+    }
     const trackProgress = isSearchProgressPending();
     if (trackProgress) setSearchProgress(55);
     try {
@@ -377,22 +394,25 @@ export default function ShopLiveExperience({
       if (!res.ok) throw new Error(data.error || "Failed to load products");
       if (!controller.signal.aborted) {
         setListing((prev) => {
-          if (!paginationOnly) return data;
-          return {
-            ...data,
-            ageGroups: data.ageGroups.length ? data.ageGroups : prev.ageGroups,
-            diecastScales: data.diecastScales.length ? data.diecastScales : prev.diecastScales,
-            brands: data.brands.length ? data.brands : prev.brands,
-            productSubtypes: data.productSubtypes.length
-              ? data.productSubtypes
-              : prev.productSubtypes,
-            productCollections: data.productCollections.length
-              ? data.productCollections
-              : prev.productCollections,
-            discountBuckets: data.discountBuckets.length
-              ? data.discountBuckets
-              : prev.discountBuckets,
-          };
+          const next = !paginationOnly
+            ? data
+            : {
+                ...data,
+                ageGroups: data.ageGroups.length ? data.ageGroups : prev.ageGroups,
+                diecastScales: data.diecastScales.length ? data.diecastScales : prev.diecastScales,
+                brands: data.brands.length ? data.brands : prev.brands,
+                productSubtypes: data.productSubtypes.length
+                  ? data.productSubtypes
+                  : prev.productSubtypes,
+                productCollections: data.productCollections.length
+                  ? data.productCollections
+                  : prev.productCollections,
+                discountBuckets: data.discountBuckets.length
+                  ? data.discountBuckets
+                  : prev.discountBuckets,
+              };
+          if (next.items?.length) hasVisibleProductsRef.current = true;
+          return next;
         });
         if (trackProgress) completeSearchProgress();
         prefetchAdjacentPages(data, qs);
@@ -500,9 +520,19 @@ export default function ShopLiveExperience({
       skipListingKeyFetchRef.current = false;
       if (initialListing.items.length === 0) return;
     }
+    if (
+      !skippedSsrRefetchRef.current &&
+      initialListing.items.length > 0 &&
+      listingFilterFingerprint(fetchQsRef.current) ===
+        listingFilterFingerprint(initialQueryString) &&
+      parseShopQueryString(fetchQsRef.current).page === (initialListing.page ?? 1)
+    ) {
+      skippedSsrRefetchRef.current = true;
+      return;
+    }
     if (initialListing.items.length > 0 && isSearchProgressPending()) return;
     void fetchListing(fetchQsRef.current);
-  }, [listingFetchKey, fetchListing, initialListing.items.length, clientFuzzyIds]);
+  }, [listingFetchKey, fetchListing, initialListing.items.length, initialListing.page, initialQueryString, clientFuzzyIds]);
 
   useEffect(() => {
     if (prevPageScrollRef.current === query.page) return;
@@ -536,6 +566,8 @@ export default function ShopLiveExperience({
   const products = listing.items ?? [];
   const totalPages = Math.max(1, listing.totalPages ?? 1);
   const currentPage = listing.page ?? query.page;
+  /** Keep SSR product grid fully opaque so LCP is not delayed by a background refetch dim. */
+  const gridDimmed = gridBusy && products.length === 0;
 
   const ageGroups = listing.ageGroups ?? [];
   const diecastScales = listing.diecastScales ?? [];
@@ -591,7 +623,7 @@ export default function ShopLiveExperience({
     [products]
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const productsPane = productsPaneRef.current;
     const sidebarPane = desktopSidebarPaneRef.current;
     const sidebarScroll = desktopSidebarScrollRef.current;
@@ -1032,8 +1064,8 @@ export default function ShopLiveExperience({
 
             <div
               ref={productsPaneRef}
-              className={`relative scroll-mt-24 transition-opacity duration-150 ${
-                gridBusy ? "opacity-50 pointer-events-none" : "opacity-100"
+              className={`relative scroll-mt-24 ${
+                gridDimmed ? "opacity-50 pointer-events-none" : gridBusy && products.length > 0 ? "pointer-events-none" : ""
               }`}
               aria-busy={gridBusy}
             >

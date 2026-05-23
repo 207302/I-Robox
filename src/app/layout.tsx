@@ -1,4 +1,6 @@
 import "./css/style.css";
+// TODO(perf): Tailwind v4 emits one global CSS bundle from this import; page-level
+// splitting needs a future migration (e.g. per-route @import) without visual changes.
 import type { Metadata } from "next";
 import GtmLazy from "@/components/Analytics/GtmLazy";
 import { DM_Sans } from "next/font/google";

@@ -207,10 +207,10 @@ export default function HeroCarouselClient({ slides }: Props) {
               e.preventDefault();
               startTransition(() => setActiveIndex(index));
             }}
-            className={`pointer-events-auto h-2.5 w-2.5 rounded-full transition-[transform,opacity] duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            className={`pointer-events-auto h-2.5 rounded-full transition-opacity duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
               index === activeIndex
-                ? "scale-[3.2] bg-white shadow-sm"
-                : "scale-100 bg-white/55 hover:bg-white/80"
+                ? "w-8 bg-white shadow-sm"
+                : "w-2.5 bg-white/55 hover:bg-white/80"
             }`}
           />
         ))}

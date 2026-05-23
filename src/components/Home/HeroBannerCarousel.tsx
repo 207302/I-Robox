@@ -296,7 +296,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
               e.preventDefault();
               startTransition(() => setActiveIndex(index));
             }}
-            className={`pointer-events-auto h-2.5 rounded-full transition-[width,opacity] duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            className={`pointer-events-auto h-2.5 rounded-full transition-opacity duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
               index === activeIndex
                 ? "w-8 bg-white shadow-sm"
                 : "w-2.5 bg-white/55 hover:bg-white/80"

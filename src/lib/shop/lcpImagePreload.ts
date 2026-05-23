@@ -6,7 +6,7 @@ export function shopLcpPreloadHref(src?: string | null): string | null {
   if (!resolved.startsWith("http")) return null;
 
   if (resolved.includes("res.cloudinary.com") && resolved.includes("/upload/")) {
-    return resolved.replace("/upload/", "/upload/c_limit,f_auto,q_auto:best,w_640/");
+    return resolved.replace("/upload/", "/upload/c_limit,f_auto,q_auto:best,w_380/");
   }
 
   return resolved;

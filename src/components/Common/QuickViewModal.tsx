@@ -15,7 +15,7 @@ import { AppDispatch, useAppSelector } from "@/redux/store";
 import { formatPrice } from "@/utils/formatePrice";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
@@ -33,6 +33,16 @@ import {
   PRODUCT_IMAGE_PLACEHOLDER,
 } from "@/lib/shop/productCardImage";
 
+/** Horizontal thumbnail rail — scroll only the rail, not the page. */
+function scrollThumbnailIntoRail(rail: HTMLDivElement, thumb: HTMLElement) {
+  const targetLeft = thumb.offsetLeft - (rail.clientWidth - thumb.offsetWidth) / 2;
+  const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  rail.scrollTo({
+    left: Math.max(0, Math.min(targetLeft, maxScroll)),
+    behavior: "smooth",
+  });
+}
+
 const QuickViewModal = () => {
   const { isModalOpen, closeModal } = useModalContext();
   const { openPreviewModal } = usePreviewSlider();
@@ -46,6 +56,8 @@ const QuickViewModal = () => {
   // get the product data
   const product = useAppSelector((state) => state.quickViewReducer.value);
   const [activePreview, setActivePreview] = useState(0);
+  const thumbnailRailDesktopRef = useRef<HTMLDivElement>(null);
+  const thumbnailRailMobileRef = useRef<HTMLDivElement>(null);
 
   const galleryImages = product?.title ? getProductGalleryImages(product) : [];
   const mainImage = galleryImages[activePreview] ?? PRODUCT_IMAGE_PLACEHOLDER;
@@ -131,10 +143,18 @@ const QuickViewModal = () => {
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-
       setQuantity(1);
     };
   }, [isModalOpen, closeModal]);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isModalOpen]);
 
   useEffect(() => {
     if (product?.title) {
@@ -142,6 +162,19 @@ const QuickViewModal = () => {
       setActivePreview(getDefaultGalleryIndex(product, gallery));
     }
   }, [product?.id, product?.title]);
+
+  /** Keep the active thumbnail visible in the desktop (vertical) or mobile (horizontal) rail. */
+  useEffect(() => {
+    if (!isModalOpen || !showThumbnails) return;
+    const mobile = window.matchMedia("(max-width: 639px)").matches;
+    const rail = mobile ? thumbnailRailMobileRef.current : thumbnailRailDesktopRef.current;
+    const thumb = rail?.querySelector<HTMLElement>(
+      `[data-thumb-index="${activePreview}"]`
+    );
+    if (!rail || !thumb) return;
+    if (mobile) scrollThumbnailIntoRail(rail, thumb);
+    else thumb.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activePreview, isModalOpen, showThumbnails]);
 
   useEffect(() => {
     if (product?.slug) {
@@ -175,11 +208,11 @@ const QuickViewModal = () => {
     <>
       {product?.title && (
         <div
-          className={`${isModalOpen ? "z-99999" : "hidden"
-            } fixed top-0 left-0 o overflow-y-scroll no-scrollbar max-h-[100vh] w-full sm:py-20 xl:py-25 2xl:py-[230px] bg-dark/70 sm:px-8 px-4 py-5`}
+          className={`${
+            isModalOpen ? "z-99999" : "hidden"
+          } fixed inset-0 flex items-center justify-center overflow-hidden bg-dark/70 px-4 py-5 sm:px-8 sm:py-8`}
         >
-          <div className="flex items-center justify-center ">
-            <div className="w-full max-w-[1100px] rounded-xl shadow-3 bg-white p-7.5 relative modal-content">
+            <div className="modal-content relative flex max-h-[calc(100dvh-2.5rem)] w-full max-w-[1100px] flex-col overflow-x-hidden overflow-y-auto rounded-xl bg-white p-7.5 shadow-3">
               <button
                 onClick={() => closeModal()}
                 className="absolute top-0 right-0 flex items-center justify-center duration-150 ease-in rounded-full sm:top-6 sm:right-6 text-body hover:text-dark"
@@ -188,39 +221,47 @@ const QuickViewModal = () => {
                 <CloseLine />
               </button>
 
-              <div className="flex flex-wrap items-center gap-12.5">
-                <div className="max-w-[526px] w-full">
-                  <div className="flex gap-5">
+              <div className="flex min-h-0 flex-1 flex-wrap items-start gap-12.5 overflow-hidden">
+                <div className="w-full max-w-[526px]">
+                  <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
                     {showThumbnails ? (
-                      <div className="flex flex-col gap-5">
-                        {galleryImages.map((thumb, key) => (
-                          <button
-                            type="button"
-                            onClick={() => setActivePreview(key)}
-                            key={`${thumb}-${key}`}
-                            className={`flex items-center justify-center w-20 h-20 overflow-hidden rounded-lg bg-gray-1 ease-out duration-200 hover:border-2 hover:border-blue ${activePreview === key && "border-2 border-blue"
+                      <div
+                        ref={thumbnailRailDesktopRef}
+                        className="hidden max-h-[30rem] min-h-0 w-20 shrink-0 overflow-y-auto overflow-x-hidden pr-1 no-scrollbar sm:block"
+                        aria-label="Product image thumbnails"
+                      >
+                        <div className="flex flex-col gap-5">
+                          {galleryImages.map((thumb, key) => (
+                            <button
+                              type="button"
+                              data-thumb-index={key}
+                              onClick={() => setActivePreview(key)}
+                              key={`desktop-${thumb}-${key}`}
+                              className={`flex h-20 w-20 shrink-0 flex-none items-center justify-center overflow-hidden rounded-lg bg-gray-1 ease-out duration-200 hover:border-2 hover:border-blue ${
+                                activePreview === key ? "border-2 border-blue" : "border-transparent"
                               }`}
-                          >
-                            <Image
-                              src={thumb}
-                              alt="thumbnail"
-                              width={61}
-                              height={61}
-                              className="aspect-square object-contain"
-                              loading="lazy"
-                              sizes="61px"
-                            />
-                          </button>
-                        ))}
+                            >
+                              <Image
+                                src={thumb}
+                                alt="thumbnail"
+                                width={61}
+                                height={61}
+                                className="aspect-square object-contain"
+                                loading="lazy"
+                                sizes="61px"
+                              />
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
 
-                    <div className="relative z-1 overflow-hidden flex items-center justify-center w-full sm:min-h-[508px] bg-gray-1 rounded-lg border border-gray-3">
-                      <div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-3">
+                      <div className="relative z-1 aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-3 bg-gray-1 sm:aspect-auto sm:min-h-[508px] sm:max-h-[min(508px,calc(100dvh-12rem))]">
                         <button
                           type="button"
                           onClick={handlePreviewSlider}
-                          className="absolute z-50 flex items-center justify-center w-10 h-10 duration-200 ease-out bg-white rounded-lg gallery__Image shadow-1 text-dark hover:text-blue top-4 lg:top-8 right-4 lg:right-8"
+                          className="gallery__Image absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-1 duration-200 ease-out text-dark hover:text-blue sm:right-4 sm:top-4"
                         >
                           <span className="sr-only">Fullscreen</span>
                           <FullScreenIcon />
@@ -229,14 +270,44 @@ const QuickViewModal = () => {
                         <Image
                           src={mainImage}
                           alt={product.title || "product preview"}
-                          width={400}
-                          height={400}
-                          className="object-contain"
-                          sizes="(max-width: 1024px) 100vw, 526px"
+                          fill
+                          className="object-contain p-2 sm:p-4"
+                          sizes="(max-width: 640px) 100vw, 526px"
                           priority
                           fetchPriority="high"
                         />
                       </div>
+
+                      {showThumbnails ? (
+                        <div
+                          ref={thumbnailRailMobileRef}
+                          className="flex w-full max-w-full gap-3 overflow-x-auto pb-1 no-scrollbar sm:hidden"
+                          aria-label="Product image thumbnails"
+                        >
+                          {galleryImages.map((thumb, key) => (
+                            <button
+                              type="button"
+                              data-thumb-index={key}
+                              onClick={() => setActivePreview(key)}
+                              key={`mobile-${thumb}-${key}`}
+                              className={`relative aspect-square h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border bg-white ease-out duration-200 ${
+                                activePreview === key
+                                  ? "border-blue"
+                                  : "border-gray-3 hover:border-blue/40"
+                              }`}
+                            >
+                              <Image
+                                src={thumb}
+                                alt="thumbnail"
+                                fill
+                                className="object-contain p-2"
+                                loading="lazy"
+                                sizes="72px"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -390,7 +461,6 @@ const QuickViewModal = () => {
                 </div>
               </div>
             </div>
-          </div>
         </div>
       )}
     </>

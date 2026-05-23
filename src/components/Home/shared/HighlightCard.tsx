@@ -24,7 +24,7 @@ export default function HighlightCard({ item }: { item: HighlightCardItem }) {
           src={item.image}
           alt={item.alt}
           fill
-          sizes="(max-width: 768px) 85vw, 33vw"
+          sizes="(max-width: 640px) calc(100vw - 2rem), (max-width: 1024px) calc(50vw - 2rem), 380px"
           className="object-cover"
           loading="lazy"
         />

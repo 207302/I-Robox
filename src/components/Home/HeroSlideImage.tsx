@@ -20,6 +20,7 @@ export default function HeroSlideImage({ slide, isLcp, onLcpLoaded }: Props) {
       alt={slide.title ?? "Hero banner"}
       fill
       className="object-cover"
+      onLoad={isLcp ? onLcpLoaded : undefined}
       onLoadingComplete={isLcp ? onLcpLoaded : undefined}
     />
   );

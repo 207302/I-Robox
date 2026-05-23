@@ -212,7 +212,7 @@ const MainHeader = ({
   return (
     <>
       <header
-        className={`fixed left-0 top-0 w-full z-50 bg-white transition-all  ease-in-out duration-300 ${stickyMenu && "shadow-sm"
+        className={`fixed left-0 top-0 z-50 w-full min-h-14 bg-white transition-all ease-in-out duration-300 sm:min-h-16 ${stickyMenu && "shadow-sm"
           }`}
       >
         {/* Announcement bar */}
@@ -316,7 +316,7 @@ const MainHeader = ({
 
         {/* Main Header */}
         <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
-          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:min-h-14 xl:py-2" suppressHydrationWarning>
+          <div className="relative flex min-h-14 items-center justify-between py-2 sm:min-h-16 xl:py-2" suppressHydrationWarning>
             {/* Left: mobile menu + search | desktop logo + nav */}
             <div className="z-10 flex min-w-[5rem] shrink-0 items-center gap-2 xl:min-w-0 xl:gap-8" suppressHydrationWarning>
               <div className="flex items-center gap-2 xl:hidden" suppressHydrationWarning>
@@ -337,6 +337,7 @@ const MainHeader = ({
                     width={110}
                     height={44}
                     className="h-10 w-auto max-h-10 object-contain xl:h-11 xl:max-h-11"
+                    style={{ width: "auto", height: "auto" }}
                     loading="eager"
                     sizes="110px"
                   />
@@ -360,6 +361,7 @@ const MainHeader = ({
                   width={88}
                   height={36}
                   className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
+                  style={{ width: "auto", height: "auto" }}
                   loading="eager"
                   sizes="88px"
                 />

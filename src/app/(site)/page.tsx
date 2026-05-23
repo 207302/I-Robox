@@ -99,7 +99,7 @@ export default async function HomePage() {
       return {
         id: h.id,
         href,
-        image: image.startsWith("http") ? cloudinaryCardUrl(image, 720) : image,
+        image: image.startsWith("http") ? cloudinaryCardUrl(image, 400) : image,
         label,
         alt,
         subtitle: h.subtitle,

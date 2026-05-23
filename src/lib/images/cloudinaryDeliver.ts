@@ -43,7 +43,7 @@ export function cloudinaryDeliverUrl(
 
 /** Hero banner — sharp desktop delivery (fallback when srcSet unsupported). */
 export function cloudinaryHeroUrl(url: string): string {
-  return cloudinaryHeroDeliverUrl(url, 1920);
+  return cloudinaryHeroDeliverUrl(url, 1280);
 }
 
 /** High-quality hero transform — limit upscale, best auto quality per width. */
@@ -82,7 +82,12 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
  * Layout widths for hero srcSet — physical pixels via dpr_2.0 (not extra q/f changes).
  * Full-bleed hero uses 100vw; w_854 is not used because render width tracks viewport, not a fixed box.
  */
-const HERO_SRCSET_LAYOUT_WIDTHS = [640, 828, 1080, 1280, 1920] as const;
+const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1536] as const;
+
+/** Hero delivery URL for a layout width (dpr_2.0, q_auto:best unchanged). */
+export function cloudinaryHeroDeliverUrlForLayout(url: string, layoutWidth: number): string {
+  return cloudinaryHeroDeliverUrl(cloudinaryUrlWithoutTransforms(url), layoutWidth);
+}
 
 /** Responsive hero srcSet for direct Cloudinary delivery (mobile LCP sizing). */
 export function cloudinaryHeroSrcSet(url: string): { src: string; srcSet: string } {
@@ -91,7 +96,7 @@ export function cloudinaryHeroSrcSet(url: string): { src: string; srcSet: string
     (w) => `${cloudinaryHeroDeliverUrl(base, w)} ${w}w`
   ).join(", ");
   return {
-    src: cloudinaryHeroDeliverUrl(base, 1920),
+    src: cloudinaryHeroDeliverUrl(base, 1280),
     srcSet,
   };
 }
@@ -101,7 +106,7 @@ export function cloudinaryCardUrl(url: string, width = 640): string {
   return cloudinaryDeliverUrl(url, { width, quality: "auto" });
 }
 
-/** Product grid cards on homepage. */
+/** Product grid cards — layout ~180–220px; width cap saves bytes (quality unchanged). */
 export function cloudinaryProductCardUrl(url: string): string {
-  return cloudinaryDeliverUrl(url, { width: 512, quality: "auto" });
+  return cloudinaryDeliverUrl(url, { width: 220, quality: "auto" });
 }

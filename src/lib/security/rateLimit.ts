@@ -5,6 +5,11 @@ const limiter = new RateLimiterMemory({
   duration: 60,
 });
 
+/**
+ * API route rate limits only — static assets and Cloudinary URLs are not throttled here.
+ * Homepage 429 bursts are typically Cloudinary transformation limits; reduce parallel
+ * image preloads / srcSet fan-out in image delivery helpers.
+ */
 /** Storefront/session APIs (Lighthouse + cart sync) — avoid 429 during bursty navigation. */
 const storefrontLimiter = new RateLimiterMemory({
   points: 120,

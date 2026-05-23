@@ -1,6 +1,14 @@
-import { cloudinaryHeroSrcSet, isCloudinaryDeliveryUrl } from "@/lib/images/cloudinaryDeliver";
+import {
+  cloudinaryHeroDeliverUrlForLayout,
+  cloudinaryHeroSrcSet,
+  isCloudinaryDeliveryUrl,
+} from "@/lib/images/cloudinaryDeliver";
 
 export { isCloudinaryDeliveryUrl };
+
+/** Matches hero `fill` layout — lets the browser pick the correct srcSet width (not 1536px on mobile). */
+export const HERO_IMAGE_SIZES =
+  "(max-width: 640px) 100vw, (max-width: 1280px) 100vw, 1536px";
 
 export function heroLcpPreloadBundle(
   rawUrl: string
@@ -14,6 +22,16 @@ export function heroLcpPreloadBundle(
   return { href: t };
 }
 
+/** Single-URL preload for LCP — avoids firing every srcSet width at once (Cloudinary 429 burst). */
+export function heroLcpPreloadHref(rawUrl: string): string | null {
+  const t = rawUrl?.trim();
+  if (!t || t === "/images/404.svg") return null;
+  if (isCloudinaryDeliveryUrl(t)) {
+    return cloudinaryHeroDeliverUrlForLayout(t, 640);
+  }
+  return t;
+}
+
 export function heroSlideImageProps(
   src: string,
   srcSet: string | undefined,
@@ -24,7 +42,7 @@ export function heroSlideImageProps(
     src,
     ...(srcSet ? { srcSet } : {}),
     unoptimized,
-    sizes: "100vw",
+    sizes: HERO_IMAGE_SIZES,
   };
 
   if (isLcp) {

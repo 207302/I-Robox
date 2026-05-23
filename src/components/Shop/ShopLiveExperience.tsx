@@ -597,6 +597,8 @@ export default function ShopLiveExperience({
     const sidebarScroll = desktopSidebarScrollRef.current;
     if (!productsPane || !sidebarPane || !sidebarScroll) return;
 
+    let cancelled = false;
+
     const clearSidebarHeight = () => {
       sidebarPane.style.height = "";
       sidebarPane.style.maxHeight = "";
@@ -607,7 +609,7 @@ export default function ShopLiveExperience({
     };
 
     const syncSidebarHeight = () => {
-      if (window.innerWidth < 1024) {
+      if (cancelled || window.innerWidth < 1024) {
         clearSidebarHeight();
         return;
       }
@@ -625,21 +627,45 @@ export default function ShopLiveExperience({
     const scheduleSync = () => requestAnimationFrame(syncSidebarHeight);
     const onResize = throttle(scheduleSync, 100);
 
-    scheduleSync();
-    const ro = new ResizeObserver(scheduleSync);
-    ro.observe(productsPane);
+    const run = () => {
+      if (cancelled) return;
+      scheduleSync();
+      const ro = new ResizeObserver(scheduleSync);
+      ro.observe(productsPane);
 
-    const onImgLoad = () => scheduleSync();
-    const imgs = productsPane.querySelectorAll("img");
-    imgs.forEach((img) => {
-      if (!img.complete) img.addEventListener("load", onImgLoad, { once: true });
-    });
+      const onImgLoad = () => scheduleSync();
+      const imgs = productsPane.querySelectorAll("img");
+      imgs.forEach((img) => {
+        if (!img.complete) img.addEventListener("load", onImgLoad, { once: true });
+      });
 
-    window.addEventListener("resize", onResize);
+      window.addEventListener("resize", onResize);
+
+      return () => {
+        ro.disconnect();
+        window.removeEventListener("resize", onResize);
+        imgs.forEach((img) => img.removeEventListener("load", onImgLoad));
+        clearSidebarHeight();
+      };
+    };
+
+    let teardown: (() => void) | undefined;
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(() => {
+        teardown = run();
+      }, { timeout: 800 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(id);
+        teardown?.();
+        clearSidebarHeight();
+      };
+    }
+
+    teardown = run();
     return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", onResize);
-      imgs.forEach((img) => img.removeEventListener("load", onImgLoad));
+      cancelled = true;
+      teardown?.();
       clearSidebarHeight();
     };
   }, [products.length, totalPages, currentPage, gridBusy, query.q, clientMatchCount]);

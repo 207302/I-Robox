@@ -1,4 +1,4 @@
-import { heroLcpPreloadBundle } from "@/lib/images/heroLcpImage";
+import { HERO_IMAGE_SIZES, heroLcpPreloadHref } from "@/lib/images/heroLcpImage";
 import { resolvePublicImageUrl } from "@/lib/lcp/resolveImageUrl";
 import { getImageProps } from "next/image";
 
@@ -18,20 +18,18 @@ type Props = {
  */
 export default function LcpImagePrelink({
   imageUrl,
-  sizes = "100vw",
+  sizes = HERO_IMAGE_SIZES,
   width = 1920,
   height = 711,
   quality = 90,
 }: Props) {
-  const cloudinaryBundle = heroLcpPreloadBundle(imageUrl);
-  if (cloudinaryBundle) {
+  const cloudinaryHref = heroLcpPreloadHref(imageUrl);
+  if (cloudinaryHref) {
     return (
       <link
         rel="preload"
         as="image"
-        href={cloudinaryBundle.href}
-        imageSrcSet={cloudinaryBundle.srcSet}
-        imageSizes={sizes}
+        href={cloudinaryHref}
         fetchPriority="high"
       />
     );

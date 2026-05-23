@@ -83,6 +83,12 @@ export default function HeroCarouselClient({ slides }: Props) {
   }, [slidesKey, activeIndex]);
 
   useEffect(() => {
+    if (slideCount <= 1 || heroReady) return undefined;
+    const fallback = window.setTimeout(() => setHeroReady(true), 4000);
+    return () => window.clearTimeout(fallback);
+  }, [slidesKey, slideCount, heroReady]);
+
+  useEffect(() => {
     if (slideCount <= 1 || !heroReady) return undefined;
     const timer = window.setInterval(() => {
       goToNext();
@@ -201,10 +207,10 @@ export default function HeroCarouselClient({ slides }: Props) {
               e.preventDefault();
               startTransition(() => setActiveIndex(index));
             }}
-            className={`pointer-events-auto h-2.5 rounded-full transition-[width,opacity] duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            className={`pointer-events-auto h-2.5 w-2.5 rounded-full transition-[transform,opacity] duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
               index === activeIndex
-                ? "w-8 bg-white shadow-sm"
-                : "w-2.5 bg-white/55 hover:bg-white/80"
+                ? "scale-[3.2] bg-white shadow-sm"
+                : "scale-100 bg-white/55 hover:bg-white/80"
             }`}
           />
         ))}

@@ -1,14 +1,26 @@
 "use client";
 
+import { usePreviewSlider } from "@/app/context/PreviewSliderContext";
+import { FullScreenIcon } from "@/assets/icons";
 import SafeProductImage from "@/components/Common/SafeProductImage";
 import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
-import { useEffect, useRef, useState, type TouchEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 
 const SWIPE_THRESHOLD = 40;
 /** Auto-advance main image when there are multiple photos */
 const AUTO_ADVANCE_MS = 4500;
 /** Main stage slide animation */
 const SLIDE_MS = 600;
+
+/** Scroll thumbnail rail horizontally only — avoids scrollIntoView jumping the page on mobile */
+function scrollThumbnailIntoRail(rail: HTMLDivElement, thumb: HTMLElement) {
+  const targetLeft = thumb.offsetLeft - (rail.clientWidth - thumb.offsetWidth) / 2;
+  const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  rail.scrollTo({
+    left: Math.max(0, Math.min(targetLeft, maxScroll)),
+    behavior: "smooth",
+  });
+}
 
 type Props = {
   title: string;
@@ -17,10 +29,14 @@ type Props = {
 };
 
 export default function DemoProductGallery({ title, images, galleryId = "default" }: Props) {
+  const { openPreviewModal } = usePreviewSlider();
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
+  const didSwipeRef = useRef(false);
+  const galleryRootRef = useRef<HTMLDivElement>(null);
   const thumbnailRailRef = useRef<HTMLDivElement>(null);
   const autoplayPausedRef = useRef(false);
+  const galleryVisibleRef = useRef(true);
   const skipThumbScrollIntoViewRef = useRef(true);
 
   const goTo = (index: number) => {
@@ -28,7 +44,15 @@ export default function DemoProductGallery({ title, images, galleryId = "default
     setActiveIndex(((index % total) + total) % total);
   };
 
+  const openLightbox = useCallback(
+    (index = activeIndex) => {
+      openPreviewModal(index, { images, title });
+    },
+    [activeIndex, images, openPreviewModal, title]
+  );
+
   const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    didSwipeRef.current = false;
     touchStartX.current = event.touches[0]?.clientX ?? null;
   };
 
@@ -41,8 +65,17 @@ export default function DemoProductGallery({ title, images, galleryId = "default
     touchStartX.current = null;
 
     if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+    didSwipeRef.current = true;
     if (deltaX < 0) goTo(activeIndex + 1);
     else goTo(activeIndex - 1);
+  };
+
+  const handleMainImageClick = () => {
+    if (didSwipeRef.current) {
+      didSwipeRef.current = false;
+      return;
+    }
+    openLightbox(activeIndex);
   };
 
   const scrollThumbnails = (direction: "left" | "right") => {
@@ -88,9 +121,23 @@ export default function DemoProductGallery({ title, images, galleryId = "default
   }, [images.length, images.join("|")]);
 
   useEffect(() => {
+    const root = galleryRootRef.current;
+    if (!root) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        galleryVisibleRef.current = entry.isIntersecting;
+      },
+      { threshold: 0.15 }
+    );
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (images.length <= 1) return undefined;
     const id = window.setInterval(() => {
-      if (autoplayPausedRef.current) return;
+      if (autoplayPausedRef.current || !galleryVisibleRef.current) return;
       setActiveIndex((prev) => (prev + 1) % images.length);
     }, AUTO_ADVANCE_MS);
     return () => window.clearInterval(id);
@@ -98,17 +145,18 @@ export default function DemoProductGallery({ title, images, galleryId = "default
 
   useEffect(() => {
     const rail = thumbnailRailRef.current;
-    if (!rail || images.length <= 1) return;
+    if (!rail || images.length <= 1 || !galleryVisibleRef.current) return;
     if (skipThumbScrollIntoViewRef.current) {
       skipThumbScrollIntoViewRef.current = false;
       return;
     }
     const thumb = rail.querySelector<HTMLElement>(`[data-thumb-index="${activeIndex}"]`);
-    thumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (thumb) scrollThumbnailIntoRail(rail, thumb);
   }, [activeIndex, images.length]);
 
   return (
     <div
+      ref={galleryRootRef}
       className="w-full max-w-full space-y-3 overflow-x-hidden sm:space-y-4"
       onPointerEnter={() => {
         autoplayPausedRef.current = true;
@@ -122,11 +170,37 @@ export default function DemoProductGallery({ title, images, galleryId = "default
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
+        <button
+          type="button"
+          onClick={() => openLightbox(activeIndex)}
+          className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-3 bg-white/95 text-dark shadow-sm transition hover:bg-white sm:right-4 sm:top-4"
+          aria-label="Open fullscreen image viewer"
+        >
+          <FullScreenIcon />
+        </button>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleMainImageClick}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openLightbox(activeIndex);
+            }
+          }}
+          className="absolute inset-0 z-[1] cursor-zoom-in"
+          aria-label={`View ${title} image ${activeIndex + 1} in fullscreen`}
+        />
+
         {images.length > 1 ? (
           <>
             <button
               type="button"
-              onClick={() => goTo(activeIndex - 1)}
+              onClick={(event) => {
+                event.stopPropagation();
+                goTo(activeIndex - 1);
+              }}
               className="absolute left-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-3 bg-white/95 text-dark shadow-sm transition hover:bg-white sm:left-3 sm:h-10 sm:w-10"
               aria-label="Previous image"
             >
@@ -142,7 +216,10 @@ export default function DemoProductGallery({ title, images, galleryId = "default
             </button>
             <button
               type="button"
-              onClick={() => goTo(activeIndex + 1)}
+              onClick={(event) => {
+                event.stopPropagation();
+                goTo(activeIndex + 1);
+              }}
               className="absolute right-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-3 bg-white/95 text-dark shadow-sm transition hover:bg-white sm:right-3 sm:h-10 sm:w-10"
               aria-label="Next image"
             >

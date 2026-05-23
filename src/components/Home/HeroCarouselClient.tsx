@@ -126,7 +126,7 @@ export default function HeroCarouselClient({ slideCount, slidesKey, children }: 
             }}
             className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white transition-opacity duration-200 ${
               mobileControlsActive ? "opacity-95" : "opacity-30"
-            } sm:left-4 sm:flex sm:h-11 sm:w-11 sm:items-center sm:justify-center sm:rounded-full sm:border-2 sm:border-white/90 sm:bg-dark sm:opacity-100 sm:shadow-lg sm:shadow-dark/40 sm:hover:bg-blue`}
+            } sm:left-4 sm:flex sm:h-11 sm:w-11 sm:items-center sm:justify-center sm:rounded-full sm:border-2 sm:border-white/80 sm:bg-transparent sm:opacity-100 sm:shadow-none sm:hover:bg-white/10`}
             aria-label="Previous banner"
             onTouchStart={() => showMobileControlsTemporarily()}
           >
@@ -140,7 +140,7 @@ export default function HeroCarouselClient({ slideCount, slidesKey, children }: 
             }}
             className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white transition-opacity duration-200 ${
               mobileControlsActive ? "opacity-95" : "opacity-30"
-            } sm:right-4 sm:flex sm:h-11 sm:w-11 sm:items-center sm:justify-center sm:rounded-full sm:border-2 sm:border-white/90 sm:bg-dark sm:opacity-100 sm:shadow-lg sm:shadow-dark/40 sm:hover:bg-blue`}
+            } sm:right-4 sm:flex sm:h-11 sm:w-11 sm:items-center sm:justify-center sm:rounded-full sm:border-2 sm:border-white/80 sm:bg-transparent sm:opacity-100 sm:shadow-none sm:hover:bg-white/10`}
             aria-label="Next banner"
             onTouchStart={() => showMobileControlsTemporarily()}
           >

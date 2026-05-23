@@ -1,10 +1,16 @@
 "use client";
 import React, { createContext, useContext, useState } from "react";
 
+export type PreviewGalleryData = {
+  images: string[];
+  title: string;
+};
+
 interface PreviewSliderType {
   isModalPreviewOpen: boolean;
   previewStartIndex: number;
-  openPreviewModal: (startIndex?: number) => void;
+  previewGallery: PreviewGalleryData | null;
+  openPreviewModal: (startIndex?: number, gallery?: PreviewGalleryData) => void;
   closePreviewModal: () => void;
 }
 
@@ -25,19 +31,28 @@ export const PreviewSliderProvider = ({
 }) => {
   const [isModalPreviewOpen, setIsModalOpen] = useState(false);
   const [previewStartIndex, setPreviewStartIndex] = useState(0);
+  const [previewGallery, setPreviewGallery] = useState<PreviewGalleryData | null>(null);
 
-  const openPreviewModal = (startIndex = 0) => {
+  const openPreviewModal = (startIndex = 0, gallery?: PreviewGalleryData) => {
     setPreviewStartIndex(Math.max(0, startIndex));
+    setPreviewGallery(gallery ?? null);
     setIsModalOpen(true);
   };
 
   const closePreviewModal = () => {
     setIsModalOpen(false);
+    setPreviewGallery(null);
   };
 
   return (
     <PreviewSlider.Provider
-      value={{ isModalPreviewOpen, previewStartIndex, openPreviewModal, closePreviewModal }}
+      value={{
+        isModalPreviewOpen,
+        previewStartIndex,
+        previewGallery,
+        openPreviewModal,
+        closePreviewModal,
+      }}
     >
       {children}
     </PreviewSlider.Provider>

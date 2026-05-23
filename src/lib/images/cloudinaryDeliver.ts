@@ -29,12 +29,26 @@ export function cloudinaryHeroUrl(url: string): string {
   return cloudinaryDeliverUrl(url, { width: 1080, quality: 80 });
 }
 
+/** Cloudinary transform path segments (e.g. f_auto,q_80,w_640) — not version or asset folders. */
+function isCloudinaryTransformSegment(segment: string): boolean {
+  if (!segment) return false;
+  if (/^v\d+$/i.test(segment)) return false;
+  if (segment.includes(",")) return true;
+  return /^(f_|q_|w_|h_|c_|g_|e_|b_|dpr_|ar_|fl_)/i.test(segment);
+}
+
 /** Strip existing transform segments so width variants do not stack. */
 function cloudinaryUrlWithoutTransforms(url: string): string {
-  return url.replace(
-    /(\/image\/upload\/)(?:[^/]+\/)*(?=v\d+\/|[^/]+\.(?:webp|jpg|jpeg|png|avif|gif))/i,
-    "$1"
-  );
+  const marker = "/image/upload/";
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) return url;
+
+  const prefix = url.slice(0, markerIndex + marker.length);
+  const segments = url.slice(markerIndex + marker.length).split("/");
+  while (segments.length > 0 && isCloudinaryTransformSegment(segments[0]!)) {
+    segments.shift();
+  }
+  return segments.length > 0 ? `${prefix}${segments.join("/")}` : url;
 }
 
 /** Responsive hero srcSet for direct Cloudinary delivery (mobile LCP sizing). */

@@ -584,7 +584,7 @@ export default function ShopLiveExperience({
           }}
           key={item.id}
           cardImageSizes={SHOP_GRID_CARD_SIZES}
-          shopListingImage={index === 0 ? "lcp" : index < 3 ? "eager" : "lazy"}
+          shopListingImage="lazy"
         />
       )),
     [products]

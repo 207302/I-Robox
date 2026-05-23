@@ -17,7 +17,7 @@ function qualityTransform(quality: CloudinaryQuality): string {
 
 export function cloudinaryDeliverUrl(
   url: string,
-  opts?: { width?: number; quality?: CloudinaryQuality; crop?: "limit" }
+  opts?: { width?: number; dpr?: number; quality?: CloudinaryQuality; crop?: "limit" }
 ): string {
   const trimmed = url?.trim();
   if (!trimmed) return trimmed;
@@ -26,12 +26,14 @@ export function cloudinaryDeliverUrl(
   }
 
   const w = opts?.width;
+  const dpr = opts?.dpr;
   const q = opts?.quality ?? "auto";
   const transforms = [
     opts?.crop === "limit" ? "c_limit" : null,
     "f_auto",
     qualityTransform(q),
     w ? `w_${w}` : null,
+    dpr != null && dpr > 0 ? `dpr_${dpr}` : null,
   ]
     .filter(Boolean)
     .join(",");
@@ -41,13 +43,14 @@ export function cloudinaryDeliverUrl(
 
 /** Hero banner — sharp desktop delivery (fallback when srcSet unsupported). */
 export function cloudinaryHeroUrl(url: string): string {
-  return cloudinaryHeroDeliverUrl(url, 2560);
+  return cloudinaryHeroDeliverUrl(url, 1920);
 }
 
 /** High-quality hero transform — limit upscale, best auto quality per width. */
-function cloudinaryHeroDeliverUrl(url: string, width: number): string {
+function cloudinaryHeroDeliverUrl(url: string, layoutWidth: number): string {
   return cloudinaryDeliverUrl(url, {
-    width,
+    width: layoutWidth,
+    dpr: 2,
     quality: "auto:best",
     crop: "limit",
   });
@@ -75,17 +78,17 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
   return segments.length > 0 ? `${prefix}${segments.join("/")}` : url;
 }
 
-/** Hero widths — include 2× densities for full-bleed banners on Retina displays. */
-const HERO_SRCSET_WIDTHS = [640, 828, 1080, 1280, 1536, 1920, 2560, 3840] as const;
+/** Layout widths for hero srcSet — physical pixels via dpr_2.0 (not extra q/f changes). */
+const HERO_SRCSET_LAYOUT_WIDTHS = [640, 828, 1080, 1280, 1920] as const;
 
 /** Responsive hero srcSet for direct Cloudinary delivery (mobile LCP sizing). */
 export function cloudinaryHeroSrcSet(url: string): { src: string; srcSet: string } {
   const base = cloudinaryUrlWithoutTransforms(url);
-  const srcSet = HERO_SRCSET_WIDTHS.map(
+  const srcSet = HERO_SRCSET_LAYOUT_WIDTHS.map(
     (w) => `${cloudinaryHeroDeliverUrl(base, w)} ${w}w`
   ).join(", ");
   return {
-    src: cloudinaryHeroDeliverUrl(base, 2560),
+    src: cloudinaryHeroDeliverUrl(base, 1920),
     srcSet,
   };
 }

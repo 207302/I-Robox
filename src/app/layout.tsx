@@ -1,6 +1,5 @@
 import "./css/style.css";
-import { Metadata } from "next";
-import { getSeoSettings } from "@/get-api-data/seo-setting";
+import type { Metadata } from "next";
 import GtmLazy from "@/components/Analytics/GtmLazy";
 import { DM_Sans } from "next/font/google";
 const dm_sans = DM_Sans({
@@ -12,41 +11,35 @@ const dm_sans = DM_Sans({
   adjustFontFallback: true,
 });
 const defaultFavicon = "/ChatGPT Image Mar 3, 2026, 09_17_53 PM.png";
+const siteTitle = process.env.SITE_NAME ?? "i-Robox";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const seoSettings = await getSeoSettings();
-  return {
-    title: `${seoSettings?.siteTitle || "Home"} | i-Robox`,
-    description:
-      seoSettings?.metadescription ||
-      "i-Robox – diecast models, collectibles & play. Shop online.",
-    keywords: seoSettings?.metaKeywords || "diecast, collectibles, toys, i-Robox, hot wheels",
-    openGraph: {
-      images: seoSettings?.metaImage ? [seoSettings.metaImage] : [],
-    },
-    icons: {
-      icon: seoSettings?.favicon || defaultFavicon,
-      shortcut: seoSettings?.favicon || defaultFavicon,
-      apple: seoSettings?.favicon || defaultFavicon,
-    },
-  };
-}
+/** Static metadata — avoids blocking TTFB on a cached DB round-trip for env-only SEO fields. */
+export const metadata: Metadata = {
+  title: `${siteTitle} | i-Robox`,
+  description: "i-Robox – diecast models, collectibles & play. Shop online.",
+  keywords: "diecast, collectibles, toys, i-Robox, hot wheels",
+  icons: {
+    icon: defaultFavicon,
+    shortcut: defaultFavicon,
+    apple: defaultFavicon,
+  },
+};
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const seoSettings = await getSeoSettings();
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || null;
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <head>
-        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
       </head>
       <body suppressHydrationWarning={true} className={dm_sans.variable}>
         {children}
-        {seoSettings?.gtmId ? <GtmLazy gtmId={seoSettings.gtmId} /> : null}
+        {gtmId ? <GtmLazy gtmId={gtmId} /> : null}
       </body>
     </html>
   );

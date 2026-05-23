@@ -10,7 +10,7 @@ import Breadcrumb from "@/components/Common/Breadcrumb";
 import WhatsAppFloatingDeferred from "@/components/Common/WhatsAppFloatingDeferred";
 import { getGuestPublicMarketingPayload } from "@/lib/marketing/publicMarketingPayload";
 import { getSiteLayoutShell } from "@/lib/siteLayoutShell";
-export const revalidate = 120;
+export const revalidate = 300;
 
 export default async function SiteLayout({
   children,

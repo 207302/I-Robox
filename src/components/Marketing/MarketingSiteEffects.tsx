@@ -88,7 +88,6 @@ export default function MarketingSiteEffects() {
                     className="object-cover"
                     sizes="(max-width: 512px) 100vw, 512px"
                     loading="eager"
-                    priority
                     unoptimized={
                       popup.image_url.startsWith("http://") || popup.image_url.startsWith("https://")
                     }

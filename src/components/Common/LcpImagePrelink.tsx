@@ -19,8 +19,8 @@ type Props = {
 export default function LcpImagePrelink({
   imageUrl,
   sizes = "100vw",
-  width = 2560,
-  height = 948,
+  width = 1920,
+  height = 711,
   quality = 90,
 }: Props) {
   const cloudinaryBundle = heroLcpPreloadBundle(imageUrl);

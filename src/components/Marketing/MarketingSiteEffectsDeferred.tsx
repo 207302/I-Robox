@@ -11,10 +11,10 @@ export default function MarketingSiteEffectsDeferred() {
 
   useEffect(() => {
     if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(() => setReady(true), { timeout: 5000 });
+      const id = requestIdleCallback(() => setReady(true), { timeout: 1000 });
       return () => cancelIdleCallback(id);
     }
-    const t = window.setTimeout(() => setReady(true), 3000);
+    const t = window.setTimeout(() => setReady(true), 1000);
     return () => window.clearTimeout(t);
   }, []);
 

@@ -311,7 +311,7 @@ const MainHeader = ({
 
         {/* Main Header */}
         <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
-          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:min-h-0 xl:py-0" suppressHydrationWarning>
+          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:py-2" suppressHydrationWarning>
             {/* Left: mobile menu + search | desktop logo + nav */}
             <div className="z-10 flex min-w-[5rem] shrink-0 items-center gap-2 xl:min-w-0 xl:gap-8" suppressHydrationWarning>
               <div className="flex items-center gap-2 xl:hidden" suppressHydrationWarning>
@@ -325,16 +325,15 @@ const MainHeader = ({
                 </button>
               </div>
               <div className="hidden items-center gap-8 xl:flex" suppressHydrationWarning>
-                <Link className="block shrink-0 py-2" href="/">
+                <Link className="block shrink-0" href="/">
                   <Image
                     src={headerData?.headerLogo || DEFAULT_HEADER_LOGO}
                     alt="Site logo"
-                    width={160}
-                    height={160}
-                    className="h-14 w-auto xl:h-16"
-                    style={{ width: "auto" }}
+                    width={100}
+                    height={100}
+                    className="h-10 w-auto max-h-10 object-contain xl:h-11 xl:max-h-11"
                     loading="eager"
-                    sizes="160px"
+                    sizes="110px"
                   />
                 </Link>
                 <DesktopMenu
@@ -349,16 +348,15 @@ const MainHeader = ({
 
             {/* Center logo — mobile only */}
             <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center xl:hidden" suppressHydrationWarning>
-              <Link className="pointer-events-auto block py-1" href="/">
+              <Link className="pointer-events-auto block" href="/">
                 <Image
                   src={headerData?.headerLogo || DEFAULT_HEADER_LOGO}
                   alt="Site logo"
-                  width={160}
-                  height={160}
-                  className="h-9 w-auto max-h-9 sm:h-10 sm:max-h-10"
-                  style={{ width: "auto" }}
+                  width={88}
+                  height={88}
+                  className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
                   loading="eager"
-                  sizes="(max-width: 1280px) 120px, 160px"
+                  sizes="88px"
                 />
               </Link>
             </div>

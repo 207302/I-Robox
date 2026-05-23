@@ -40,6 +40,7 @@ const nextConfig = {
   serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
     workerThreads: false,
+    browsersListForSwc: true,
     /** Fewer SSG workers = less Neon connection churn during `next build`. Override with STATIC_GENERATION_CPUS=2 */
     cpus: Number(process.env.STATIC_GENERATION_CPUS ?? 1),
     optimizeCss: true,
@@ -66,11 +67,20 @@ const nextConfig = {
         ],
       },
       {
-        source: "/images/:path*",
+        source: "/images/icons/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/images/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
           },
         ],
       },

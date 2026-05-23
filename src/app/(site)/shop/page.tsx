@@ -1,5 +1,4 @@
 import ShopLiveExperience from "@/components/Shop/ShopLiveExperience";
-import ShopLcpPreload from "@/components/Shop/ShopLcpPreload";
 import ShopPageFallback from "@/components/Shop/ShopPageFallback";
 import { getBrands } from "@/get-api-data/brand";
 import { getCategories } from "@/get-api-data/category";
@@ -47,11 +46,8 @@ export default async function ShopPage({ searchParams }: PageProps) {
 
   const initialListing = listingEnvelope.ok ? listingEnvelope.data : EMPTY_LISTING;
 
-  const lcpImage = initialListing.items[0]?.image ?? null;
-
   return (
     <>
-      <ShopLcpPreload src={lcpImage} />
       <Suspense fallback={<ShopPageFallback />}>
         <ShopLiveExperience
           initialListing={initialListing}

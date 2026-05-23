@@ -2,29 +2,44 @@
 
 import { ChevronLeftIcon, ChevronRightIcon } from "@/assets/icons";
 import {
-  Children,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   startTransition,
-  type ReactNode,
   type TouchEvent,
 } from "react";
+import HeroSlideImage from "./HeroSlideImage";
+import type { HeroSlide } from "./heroTypes";
 
 const AUTO_ROTATE_INTERVAL = 7000;
 const SWIPE_THRESHOLD = 50;
 
 type Props = {
-  slideCount: number;
-  slidesKey: string;
-  children: ReactNode;
+  slides: HeroSlide[];
 };
 
-/** Opacity carousel shell — slide images are server-rendered children (LCP in initial HTML). */
-export default function HeroCarouselClient({ slideCount, slidesKey, children }: Props) {
-  const slides = Children.toArray(children);
+function shouldMountSlideImage(
+  index: number,
+  activeIndex: number,
+  total: number,
+  prefetchAdjacent: boolean
+): boolean {
+  if (total <= 1) return index === 0;
+  if (!prefetchAdjacent) return index === activeIndex;
+  const prev = (activeIndex - 1 + total) % total;
+  const next = (activeIndex + 1) % total;
+  return index === activeIndex || index === prev || index === next;
+}
+
+/** Opacity carousel — only mounts slide images near the active index (fewer parallel Cloudinary requests). */
+export default function HeroCarouselClient({ slides }: Props) {
+  const slideCount = slides.length;
+  const slidesKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
   const [activeIndex, setActiveIndex] = useState(0);
+  /** After first paint, prefetch prev/next slides for smooth carousel transitions. */
+  const [prefetchAdjacent, setPrefetchAdjacent] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const [mobileControlsActive, setMobileControlsActive] = useState(false);
@@ -56,7 +71,13 @@ export default function HeroCarouselClient({ slideCount, slidesKey, children }: 
 
   useEffect(() => {
     startTransition(() => setActiveIndex(0));
+    setPrefetchAdjacent(false);
   }, [slidesKey]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setPrefetchAdjacent(true));
+    return () => cancelAnimationFrame(id);
+  }, [slidesKey, activeIndex]);
 
   useEffect(() => {
     if (slideCount <= 1) return undefined;
@@ -102,15 +123,23 @@ export default function HeroCarouselClient({ slideCount, slidesKey, children }: 
       <div className="absolute inset-0 overflow-hidden bg-gray-2">
         {slides.map((slide, index) => {
           const isActive = index === activeIndex;
+          const mountImage = shouldMountSlideImage(
+            index,
+            activeIndex,
+            slideCount,
+            prefetchAdjacent
+          );
           return (
             <div
-              key={index}
+              key={slide.id}
               className={`absolute inset-0 transition-opacity duration-500 ease-out will-change-[opacity] ${
                 isActive ? "z-[1] opacity-100" : "z-0 opacity-0 pointer-events-none"
               }`}
               aria-hidden={!isActive}
             >
-              {slide}
+              {mountImage ? (
+                <HeroSlideImage slide={slide} isLcp={index === 0} />
+              ) : null}
             </div>
           );
         })}

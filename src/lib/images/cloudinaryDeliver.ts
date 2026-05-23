@@ -6,9 +6,18 @@ export function isCloudinaryDeliveryUrl(url: string): boolean {
   return url.includes("res.cloudinary.com") && url.includes("/image/upload/");
 }
 
+export type CloudinaryQuality = "auto" | "auto:good" | "auto:best" | "auto:eco" | number;
+
+function qualityTransform(quality: CloudinaryQuality): string {
+  if (typeof quality === "number") {
+    return `q_${Math.min(100, Math.max(1, Math.round(quality)))}`;
+  }
+  return `q_${quality}`;
+}
+
 export function cloudinaryDeliverUrl(
   url: string,
-  opts?: { width?: number; quality?: "auto" | number }
+  opts?: { width?: number; quality?: CloudinaryQuality; crop?: "limit" }
 ): string {
   const trimmed = url?.trim();
   if (!trimmed) return trimmed;
@@ -18,15 +27,30 @@ export function cloudinaryDeliverUrl(
 
   const w = opts?.width;
   const q = opts?.quality ?? "auto";
-  const qPart = q === "auto" ? "q_auto" : `q_${q}`;
-  const transforms = ["f_auto", qPart, w ? `w_${w}` : null].filter(Boolean).join(",");
+  const transforms = [
+    opts?.crop === "limit" ? "c_limit" : null,
+    "f_auto",
+    qualityTransform(q),
+    w ? `w_${w}` : null,
+  ]
+    .filter(Boolean)
+    .join(",");
 
   return trimmed.replace("/image/upload/", `/image/upload/${transforms}/`);
 }
 
-/** Hero banner — default src (~tablet/desktop cap). */
+/** Hero banner — sharp desktop delivery (fallback when srcSet unsupported). */
 export function cloudinaryHeroUrl(url: string): string {
-  return cloudinaryDeliverUrl(url, { width: 1080, quality: 80 });
+  return cloudinaryHeroDeliverUrl(url, 2560);
+}
+
+/** High-quality hero transform — limit upscale, best auto quality per width. */
+function cloudinaryHeroDeliverUrl(url: string, width: number): string {
+  return cloudinaryDeliverUrl(url, {
+    width,
+    quality: "auto:best",
+    crop: "limit",
+  });
 }
 
 /** Cloudinary transform path segments (e.g. f_auto,q_80,w_640) — not version or asset folders. */
@@ -51,16 +75,18 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
   return segments.length > 0 ? `${prefix}${segments.join("/")}` : url;
 }
 
+/** Hero widths — include 2× densities for full-bleed banners on Retina displays. */
+const HERO_SRCSET_WIDTHS = [640, 828, 1080, 1280, 1536, 1920, 2560, 3840] as const;
+
 /** Responsive hero srcSet for direct Cloudinary delivery (mobile LCP sizing). */
 export function cloudinaryHeroSrcSet(url: string): { src: string; srcSet: string } {
   const base = cloudinaryUrlWithoutTransforms(url);
-  const w640 = cloudinaryDeliverUrl(base, { width: 640, quality: 80 });
-  const w828 = cloudinaryDeliverUrl(base, { width: 828, quality: 80 });
-  const w1080 = cloudinaryDeliverUrl(base, { width: 1080, quality: 80 });
-  const w1920 = cloudinaryDeliverUrl(base, { width: 1920, quality: 80 });
+  const srcSet = HERO_SRCSET_WIDTHS.map(
+    (w) => `${cloudinaryHeroDeliverUrl(base, w)} ${w}w`
+  ).join(", ");
   return {
-    src: w828,
-    srcSet: `${w640} 640w, ${w828} 828w, ${w1080} 1080w, ${w1920} 1920w`,
+    src: cloudinaryHeroDeliverUrl(base, 2560),
+    srcSet,
   };
 }
 

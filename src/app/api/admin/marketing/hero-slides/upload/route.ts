@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
         {
           folder: "irobox/homepage-hero",
           resource_type: "image",
-          format: "webp",
-          transformation: [{ width: 2000, height: 1200, crop: "limit" }],
+          /** Store near-original resolution; delivery URLs apply responsive transforms. */
+          quality: "auto:best",
         },
         (error, uploaded) => {
           if (error || !uploaded) reject(error ?? new Error("Upload failed"));

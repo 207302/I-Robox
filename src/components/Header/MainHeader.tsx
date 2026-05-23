@@ -20,7 +20,12 @@ import {
 import { useAppSelector } from "@/redux/store";
 import toast from "react-hot-toast";
 import { useDebounce } from "@/hooks/useDebounce";
-import SiteSearchPreloader from "@/components/Common/SiteSearchPreloader";
+import dynamic from "next/dynamic";
+
+const SiteSearchPreloader = dynamic(
+  () => import("@/components/Common/SiteSearchPreloader"),
+  { ssr: false }
+);
 import { setSearchProgress, startSearchProgress } from "@/lib/shop/searchProgress";
 import { chromeBgStyle, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SHOP_QUERY_EVENT, applyShopQuery } from "@/lib/shop/shopQuery";
@@ -311,7 +316,7 @@ const MainHeader = ({
 
         {/* Main Header */}
         <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
-          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:py-2" suppressHydrationWarning>
+          <div className="relative flex min-h-[52px] items-center justify-between py-2 xl:min-h-14 xl:py-2" suppressHydrationWarning>
             {/* Left: mobile menu + search | desktop logo + nav */}
             <div className="z-10 flex min-w-[5rem] shrink-0 items-center gap-2 xl:min-w-0 xl:gap-8" suppressHydrationWarning>
               <div className="flex items-center gap-2 xl:hidden" suppressHydrationWarning>
@@ -329,8 +334,8 @@ const MainHeader = ({
                   <Image
                     src={headerData?.headerLogo || DEFAULT_HEADER_LOGO}
                     alt="Site logo"
-                    width={100}
-                    height={100}
+                    width={110}
+                    height={44}
                     className="h-10 w-auto max-h-10 object-contain xl:h-11 xl:max-h-11"
                     loading="eager"
                     sizes="110px"
@@ -353,7 +358,7 @@ const MainHeader = ({
                   src={headerData?.headerLogo || DEFAULT_HEADER_LOGO}
                   alt="Site logo"
                   width={88}
-                  height={88}
+                  height={36}
                   className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
                   loading="eager"
                   sizes="88px"

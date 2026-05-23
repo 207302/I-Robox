@@ -19,6 +19,7 @@ import {
   type ShopQueryState,
 } from "@/lib/shop/shopQuery";
 import { useDebounce } from "@/hooks/useDebounce";
+import { throttle } from "@/lib/perf/throttle";
 import { filterAndSortProducts, type ProductSearchItem } from "@/lib/search/productSearch";
 import {
   completeSearchProgress,
@@ -584,7 +585,7 @@ export default function ShopLiveExperience({
           }}
           key={item.id}
           cardImageSizes={SHOP_GRID_CARD_SIZES}
-          shopListingImage="lazy"
+          shopListingImage={index === 0 ? "lcp" : "lazy"}
         />
       )),
     [products]
@@ -622,6 +623,7 @@ export default function ShopLiveExperience({
     };
 
     const scheduleSync = () => requestAnimationFrame(syncSidebarHeight);
+    const onResize = throttle(scheduleSync, 100);
 
     scheduleSync();
     const ro = new ResizeObserver(scheduleSync);
@@ -633,10 +635,10 @@ export default function ShopLiveExperience({
       if (!img.complete) img.addEventListener("load", onImgLoad, { once: true });
     });
 
-    window.addEventListener("resize", scheduleSync);
+    window.addEventListener("resize", onResize);
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("resize", onResize);
       imgs.forEach((img) => img.removeEventListener("load", onImgLoad));
       clearSidebarHeight();
     };

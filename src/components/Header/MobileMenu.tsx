@@ -107,8 +107,8 @@ const MobileMenu = ({
                     DEFAULT_HEADER_LOGO
                   }
                   alt="Site logo"
-                  width={100}
-                  height={100}
+                  width={110}
+                  height={44}
                   className="h-10 w-auto max-h-10 object-contain"
                   sizes="100px"
                   loading="lazy"

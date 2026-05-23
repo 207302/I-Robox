@@ -78,7 +78,10 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
   return segments.length > 0 ? `${prefix}${segments.join("/")}` : url;
 }
 
-/** Layout widths for hero srcSet — physical pixels via dpr_2.0 (not extra q/f changes). */
+/**
+ * Layout widths for hero srcSet — physical pixels via dpr_2.0 (not extra q/f changes).
+ * Full-bleed hero uses 100vw; w_854 is not used because render width tracks viewport, not a fixed box.
+ */
 const HERO_SRCSET_LAYOUT_WIDTHS = [640, 828, 1080, 1280, 1920] as const;
 
 /** Responsive hero srcSet for direct Cloudinary delivery (mobile LCP sizing). */

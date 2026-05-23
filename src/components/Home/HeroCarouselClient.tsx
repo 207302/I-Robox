@@ -38,6 +38,8 @@ export default function HeroCarouselClient({ slides }: Props) {
   const slideCount = slides.length;
   const slidesKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
   const [activeIndex, setActiveIndex] = useState(0);
+  /** Do not auto-advance until the first slide has painted (stable LCP). */
+  const [heroReady, setHeroReady] = useState(false);
   /** After first paint, prefetch prev/next slides for smooth carousel transitions. */
   const [prefetchAdjacent, setPrefetchAdjacent] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -72,6 +74,7 @@ export default function HeroCarouselClient({ slides }: Props) {
   useEffect(() => {
     startTransition(() => setActiveIndex(0));
     setPrefetchAdjacent(false);
+    setHeroReady(false);
   }, [slidesKey]);
 
   useEffect(() => {
@@ -80,12 +83,12 @@ export default function HeroCarouselClient({ slides }: Props) {
   }, [slidesKey, activeIndex]);
 
   useEffect(() => {
-    if (slideCount <= 1) return undefined;
+    if (slideCount <= 1 || !heroReady) return undefined;
     const timer = window.setInterval(() => {
       goToNext();
     }, AUTO_ROTATE_INTERVAL);
     return () => window.clearInterval(timer);
-  }, [goToNext, slideCount]);
+  }, [goToNext, slideCount, heroReady]);
 
   useEffect(() => {
     return () => {
@@ -138,7 +141,11 @@ export default function HeroCarouselClient({ slides }: Props) {
               aria-hidden={!isActive}
             >
               {mountImage ? (
-                <HeroSlideImage slide={slide} isLcp={index === 0} />
+                <HeroSlideImage
+                  slide={slide}
+                  isLcp={index === 0}
+                  onLcpLoaded={index === 0 ? () => setHeroReady(true) : undefined}
+                />
               ) : null}
             </div>
           );

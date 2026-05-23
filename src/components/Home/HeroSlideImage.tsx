@@ -8,16 +8,19 @@ import type { HeroSlide } from "./heroTypes";
 type Props = {
   slide: HeroSlide;
   isLcp: boolean;
+  /** Fired when the LCP slide has decoded — used to delay carousel auto-advance. */
+  onLcpLoaded?: () => void;
 };
 
-/** Server-rendered hero slide image (LCP candidate when isLcp). */
-export default function HeroSlideImage({ slide, isLcp }: Props) {
+/** Hero slide image (LCP candidate when isLcp). */
+export default function HeroSlideImage({ slide, isLcp, onLcpLoaded }: Props) {
   const img = (
     <Image
       {...heroSlideImageProps(slide.image_url, slide.image_srcSet, isLcp)}
       alt={slide.title ?? "Hero banner"}
       fill
       className="object-cover"
+      onLoadingComplete={isLcp ? onLcpLoaded : undefined}
     />
   );
 

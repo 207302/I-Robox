@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 import type { HomeCategoryTile } from "./index";
 import { ScrollRailNext, ScrollRailPrev } from "./shared/ScrollRailButtons";
 
@@ -53,6 +54,7 @@ export default function HomeCategoryTilesSection({ categories }: HomeCategoryTil
                 <Link
                   key={cat.id}
                   href={`/shop?category=${encodeURIComponent(cat.slug)}`}
+                  prefetch={false}
                   className={TILE_CLASS}
                 >
                   {cat.image ? (

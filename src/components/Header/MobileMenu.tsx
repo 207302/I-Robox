@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { MenuItem } from "./types";
 import { CloseIcon, SearchIcon } from "./icons";
 import Image from "next/image";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
 
@@ -206,6 +207,7 @@ const MobileMenu = ({
                                 <Link
                                   key={subItem.path ?? subItem.title}
                                   href={subItem.path || "#"}
+                                  prefetch={shouldPrefetchHref(subItem.path || "#")}
                                   className="block px-4 py-3 text-sm rounded-lg hover:bg-gray-2 text-dark border-gray-3 hover:text-blue "
                                   onClick={onClose}
                                 >
@@ -224,6 +226,7 @@ const MobileMenu = ({
                                     <Link
                                       key={subItem.path ?? subItem.title}
                                       href={subItem.path || "#"}
+                                      prefetch={shouldPrefetchHref(subItem.path || "#")}
                                       className="block px-4 py-2.5 text-sm rounded-lg hover:bg-gray-2 text-dark hover:text-blue"
                                       onClick={onClose}
                                     >
@@ -238,6 +241,7 @@ const MobileMenu = ({
                       ) : (
                         <Link
                           href={menuItem.path || "#"}
+                          prefetch={shouldPrefetchHref(menuItem.path || "#")}
                           className="block px-4 py-3 text-sm font-medium rounded-lg hover:text-blue text-dark hover:bg-gray-2"
                           onClick={onClose}
                         >
@@ -256,6 +260,7 @@ const MobileMenu = ({
             <div className="flex items-center gap-3" suppressHydrationWarning>
               <Link
                 href="/login"
+                prefetch={false}
                 className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
                 onClick={onClose}
               >

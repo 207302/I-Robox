@@ -7,7 +7,7 @@ type Props = {
   overlay?: HeroOverlayProps;
 };
 
-/** Multi-slide hero: first slide is LCP; other slides mount only when the carousel shows them. */
+/** Multi-slide hero: horizontal slide track; first slide is LCP. */
 export default function HeroBannerMulti({ slides, overlay }: Props) {
   return (
     <div className="relative w-full">

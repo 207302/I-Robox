@@ -96,6 +96,7 @@ const CartSidebarModal = () => {
             <Link
               onClick={() => handleCartClick()}
               href="/cart"
+              prefetch={false}
               className="flex justify-center w-full px-6 py-3 text-base font-medium text-white duration-200 ease-out rounded-lg bg-blue hover:bg-blue-dark"
             >
               View Cart

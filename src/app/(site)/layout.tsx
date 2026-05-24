@@ -1,12 +1,12 @@
 import Footer from "../../components/Footer";
 import ScrollOnNavigate from "@/components/Common/ScrollOnNavigate";
 import ScrollToTop from "@/components/Common/ScrollToTop";
-import { Toaster } from "react-hot-toast";
 import Providers from "./Providers";
 import SiteTopLoaderDeferred from "@/components/Common/SiteTopLoaderDeferred";
+import ToasterDeferred from "@/components/Common/ToasterDeferred";
+import BreadcrumbDeferred from "@/components/Common/BreadcrumbDeferred";
 import { Suspense } from "react";
 import MainHeader from "@/components/Header/MainHeader";
-import Breadcrumb from "@/components/Common/Breadcrumb";
 import WhatsAppFloatingDeferred from "@/components/Common/WhatsAppFloatingDeferred";
 import { getGuestPublicMarketingPayload } from "@/lib/marketing/publicMarketingPayload";
 import { getSiteLayoutShell } from "@/lib/siteLayoutShell";
@@ -54,8 +54,8 @@ export default async function SiteLayout({
               chromeColors={chromeColors}
             />
           </Suspense>
-          <Breadcrumb />
-          <Toaster position="top-center" reverseOrder={false} />
+          <BreadcrumbDeferred />
+          <ToasterDeferred position="top-center" reverseOrder={false} />
           {children}
         </Providers>
 

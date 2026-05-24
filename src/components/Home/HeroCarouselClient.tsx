@@ -20,12 +20,7 @@ type Props = {
   slides: HeroSlide[];
 };
 
-/** Only mount the visible slide so non-LCP images do not compete for bandwidth on load. */
-function shouldMountSlideImage(index: number, activeIndex: number): boolean {
-  return index === activeIndex;
-}
-
-/** Opacity carousel — mounts one slide image at a time (LCP first; others on advance). */
+/** Horizontal slide track — non-LCP slides use lazy loading via HeroSlideImage. */
 export default function HeroCarouselClient({ slides }: Props) {
   const slideCount = slides.length;
   const slidesKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
@@ -121,29 +116,31 @@ export default function HeroCarouselClient({ slides }: Props) {
       onTouchEnd={handleTouchEnd}
     >
       <div className="absolute inset-0 overflow-hidden bg-gray-2">
-        {slides.map((slide, index) => {
-          const isActive = index === activeIndex;
-          const mountImage = shouldMountSlideImage(index, activeIndex);
-          return (
-            <div
-              key={slide.id}
-              ref={index === 0 ? lcpPaneRef : undefined}
-              data-hero-lcp={index === 0 ? "true" : undefined}
-              className={`absolute inset-0 transition-opacity duration-500 ease-out will-change-[opacity] ${
-                isActive ? "z-[1] opacity-100" : "z-0 opacity-0 pointer-events-none"
-              }`}
-              aria-hidden={!isActive}
-            >
-              {mountImage ? (
+        <div
+          className="flex h-full transition-transform duration-500 ease-out will-change-transform"
+          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+        >
+          {slides.map((slide, index) => {
+            const isActive = index === activeIndex;
+            return (
+              <div
+                key={slide.id}
+                ref={index === 0 ? lcpPaneRef : undefined}
+                data-hero-lcp={index === 0 ? "true" : undefined}
+                className={`relative h-full min-w-full flex-shrink-0 ${
+                  isActive ? "" : "pointer-events-none"
+                }`}
+                aria-hidden={!isActive}
+              >
                 <HeroSlideImage
                   slide={slide}
                   isLcp={index === 0}
                   onLcpLoaded={index === 0 ? markHeroReady : undefined}
                 />
-              ) : null}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {showArrows ? (

@@ -41,6 +41,7 @@ const nextConfig = {
   },
   serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
+    browsersListForSwc: true,
     workerThreads: false,
     /** Fewer SSG workers = less Neon connection churn during `next build`. Override with STATIC_GENERATION_CPUS=2 */
     cpus: Number(process.env.STATIC_GENERATION_CPUS ?? 1),
@@ -99,7 +100,7 @@ const nextConfig = {
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=86400, stale-while-revalidate=604800",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },
@@ -135,6 +136,18 @@ const nextConfig = {
   },
   redirects: async () => {
     return [
+      {
+        source: "/:path*",
+        has: [{ type: "header", key: "x-forwarded-proto", value: "http" }],
+        destination: "https://i-robox.com/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.i-robox.com" }],
+        destination: "https://i-robox.com/:path*",
+        permanent: true,
+      },
       {
         source: "/admin",
         destination: "/admin/dashboard",

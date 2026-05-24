@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 import type { HomeBrandRailItem } from "./index";
 import { ScrollRailNext, ScrollRailPrev } from "./shared/ScrollRailButtons";
 
@@ -48,6 +49,7 @@ export default function HomeBrandRailSection({ items }: HomeBrandRailSectionProp
                 <Link
                   key={item.id}
                   href={item.href}
+                  prefetch={shouldPrefetchHref(item.href)}
                   className="min-w-[200px] sm:min-w-[240px] flex flex-col shrink-0 snap-start text-left"
                 >
                   <div className="relative aspect-square overflow-hidden">

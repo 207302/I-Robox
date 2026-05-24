@@ -37,10 +37,6 @@ type Props = {
   };
 };
 
-function shouldMountSlideImage(index: number, activeIndex: number): boolean {
-  return index === activeIndex;
-}
-
 const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   const slides = slidesProp && slidesProp.length > 0 ? slidesProp : [];
   const overlayCopy = {
@@ -155,47 +151,50 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
       onTouchEnd={handleTouchEnd}
     >
       <div className="absolute inset-0 overflow-hidden bg-gray-2">
-        {slides.map((banner, index) => {
-          const isActive = index === activeIndex;
-          const mountImage = shouldMountSlideImage(index, activeIndex);
-          return (
-            <div
-              key={banner.id}
-              className={`absolute inset-0 transition-opacity duration-500 ease-out will-change-[opacity] ${
-                isActive ? "z-[1] opacity-100" : "z-0 opacity-0 pointer-events-none"
-              }`}
-              aria-hidden={!isActive}
-            >
-              {mountImage ? (
-                banner.link_url ? (
-                  <Link href={banner.link_url} className="relative block h-full w-full">
-                    <Image
-                      src={banner.image_url}
-                      alt={banner.title ?? "Hero banner"}
-                      fill
-                      priority={index === 0}
-                      fetchPriority={index === 0 ? "high" : "low"}
-                      sizes={HERO_IMAGE_SIZES}
-                      className="object-cover"
-                      loading={index === 0 ? "eager" : "lazy"}
-                    />
-                  </Link>
-                ) : (
-                  <Image
-                    src={banner.image_url}
-                    alt={banner.title ?? "Hero banner"}
-                    fill
-                    priority={index === 0}
-                    fetchPriority={index === 0 ? "high" : "low"}
-                    sizes={HERO_IMAGE_SIZES}
-                    className="object-cover"
-                    loading={index === 0 ? "eager" : "lazy"}
-                  />
-                )
-              ) : null}
-            </div>
-          );
-        })}
+        <div
+          className="flex h-full transition-transform duration-500 ease-out will-change-transform"
+          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+        >
+          {slides.map((banner, index) => {
+            const isActive = index === activeIndex;
+            const image = banner.link_url ? (
+              <Link href={banner.link_url} className="relative block h-full w-full">
+                <Image
+                  src={banner.image_url}
+                  alt={banner.title ?? "Hero banner"}
+                  fill
+                  priority={index === 0}
+                  fetchPriority={index === 0 ? "high" : "low"}
+                  sizes={HERO_IMAGE_SIZES}
+                  className="object-cover"
+                  loading={index === 0 ? "eager" : "lazy"}
+                />
+              </Link>
+            ) : (
+              <Image
+                src={banner.image_url}
+                alt={banner.title ?? "Hero banner"}
+                fill
+                priority={index === 0}
+                fetchPriority={index === 0 ? "high" : "low"}
+                sizes={HERO_IMAGE_SIZES}
+                className="object-cover"
+                loading={index === 0 ? "eager" : "lazy"}
+              />
+            );
+            return (
+              <div
+                key={banner.id}
+                className={`relative h-full min-w-full flex-shrink-0 ${
+                  isActive ? "" : "pointer-events-none"
+                }`}
+                aria-hidden={!isActive}
+              >
+                {image}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {hasOverlayCopy || showCta ? (

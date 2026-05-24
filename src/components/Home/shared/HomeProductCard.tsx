@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/utils/formatePrice";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 export type HomeProductCardItem = {
   id: string;
@@ -21,6 +22,7 @@ export default function HomeProductCard({
   return (
     <Link
       href={`/shop/${item.slug}`}
+      prefetch={shouldPrefetchHref(`/shop/${item.slug}`)}
       className="group block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white hover:border-blue/40"
     >
       <div className="relative aspect-square bg-gray-2">

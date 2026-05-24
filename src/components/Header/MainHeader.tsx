@@ -21,6 +21,7 @@ import { useAppSelector } from "@/redux/store";
 import toast from "react-hot-toast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/shop/shopConstants";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 import dynamic from "next/dynamic";
 
 const SiteSearchPreloader = dynamic(
@@ -230,6 +231,7 @@ const MainHeader = ({
                   utilityAnnouncement.linkUrl ? (
                     <Link
                       href={utilityAnnouncement.linkUrl}
+                      prefetch={shouldPrefetchHref(utilityAnnouncement.linkUrl)}
                       className="text-white underline-offset-2 hover:underline"
                       {...(utilityAnnouncement.linkLabel
                         ? { "aria-label": utilityAnnouncement.linkLabel }
@@ -257,6 +259,7 @@ const MainHeader = ({
                 ) : (
                   <Link
                     href="/login"
+                    prefetch={false}
                     className="text-xs sm:text-sm font-semibold text-[#ff3d3d] hover:text-[#ff6b6b] hover:underline"
                   >
                     Sign in
@@ -299,6 +302,7 @@ const MainHeader = ({
                           {item.linkUrl ? (
                             <Link
                               href={item.linkUrl}
+                              prefetch={shouldPrefetchHref(item.linkUrl)}
                               className="text-white underline-offset-2 hover:underline hover:text-white"
                             >
                               {item.body}
@@ -410,6 +414,7 @@ const MainHeader = ({
 
               <Link
                 href="/wishlist"
+                prefetch={false}
                 className="relative inline-flex h-9 w-9 items-center justify-center text-gray-700 transition hover:text-blue focus:outline-none"
                 aria-label="Wishlist"
               >
@@ -454,6 +459,7 @@ const MainHeader = ({
                 >
                   <Link
                     href={userName ? "/account" : "/login"}
+                    prefetch={false}
                     onClick={() => setAccountOpen(false)}
                     className="block rounded-md px-3 py-2 text-sm font-medium text-dark hover:bg-gray-1 hover:text-blue"
                   >
@@ -463,6 +469,7 @@ const MainHeader = ({
                     <>
                       <Link
                         href="/wishlist"
+                        prefetch={false}
                         onClick={() => setAccountOpen(false)}
                         className="mt-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-dark hover:bg-gray-1 hover:text-blue"
                       >

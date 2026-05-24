@@ -8,7 +8,7 @@ const dm_sans = DM_Sans({
   weight: ["400", "700"],
   variable: "--font-dm-sans",
   subsets: ["latin"],
-  display: "optional",
+  display: "swap",
   preload: true,
   adjustFontFallback: true,
 });
@@ -37,6 +37,8 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+        <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
       </head>
       <body suppressHydrationWarning={true} className={`${dm_sans.className} ${dm_sans.variable}`}>
         {children}

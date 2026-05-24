@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { heroOverlayTextStyle } from "@/lib/marketing/heroOverlayColors";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 export type HeroOverlayProps = {
   eyebrow?: string;
@@ -67,6 +68,7 @@ export default function HeroBannerOverlay({ overlay }: { overlay?: HeroOverlayPr
               <div className="pointer-events-auto mt-5">
                 <Link
                   href={overlayCopy.ctaHref}
+                  prefetch={shouldPrefetchHref(overlayCopy.ctaHref)}
                   style={ctaLabelStyle}
                   className={`inline-flex items-center rounded-lg bg-red px-5 py-2.5 text-sm font-semibold shadow-lg shadow-black/25 transition hover:bg-red-dark sm:px-6 sm:py-3 sm:text-base ${ctaLabelStyle ? "" : "text-white"}`}
                 >

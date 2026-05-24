@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 const quickLinks = [
   {
@@ -51,6 +52,7 @@ export default function QuickLinks({ textStyle, linkStyle }: Props) {
               className={`text-base duration-200 ease-out ${linkStyle ? "hover:opacity-80" : "hover:text-blue"}`}
               style={linkStyle ?? textStyle}
               href={link.href}
+              prefetch={shouldPrefetchHref(link.href)}
             >
               {link.label}
             </Link>

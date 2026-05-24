@@ -36,14 +36,19 @@ const highlightsIncludeFallback = {
 } as const;
 
 async function loadHomepageHighlights() {
+  const base = {
+    where: { is_active: true },
+    orderBy: { sort_order: "asc" as const },
+    take: 50,
+  };
   try {
     return await prisma.homepage_highlights.findMany({
-      orderBy: { sort_order: "asc" },
+      ...base,
       include: highlightsIncludeFull,
     });
   } catch {
     return prisma.homepage_highlights.findMany({
-      orderBy: { sort_order: "asc" },
+      ...base,
       include: highlightsIncludeFallback,
     });
   }
@@ -83,18 +88,53 @@ async function loadHomePageRawBundle() {
     }),
     getNewArrivalsProduct(),
     getBestSellingProducts(),
-    prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }).catch(() => []),
+    prisma.homepage_hero_slides
+      .findMany({
+        where: { is_active: true },
+        orderBy: { sort_order: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          image_url: true,
+          title: true,
+          link_url: true,
+          is_active: true,
+          active_from: true,
+          active_until: true,
+        },
+      })
+      .catch(() => []),
     loadHomepageHighlights().catch(() => []),
     prisma.homepage_brand_rail
       .findMany({
+        where: { is_active: true },
         orderBy: { sort_order: "asc" },
-        include: { brands: { select: { slug: true, name: true } } },
+        take: 20,
+        select: {
+          id: true,
+          image_url: true,
+          label_override: true,
+          is_active: true,
+          active_from: true,
+          active_until: true,
+          brands: { select: { slug: true, name: true } },
+        },
       })
       .catch(() => []),
     prisma.homepage_category_tiles
       .findMany({
+        where: { is_active: true },
         orderBy: { sort_order: "asc" },
-        include: { categories: { select: { id: true, name: true, slug: true } } },
+        take: 20,
+        select: {
+          id: true,
+          image_url: true,
+          label_override: true,
+          is_active: true,
+          active_from: true,
+          active_until: true,
+          categories: { select: { id: true, name: true, slug: true } },
+        },
       })
       .catch(() => []),
   ]);

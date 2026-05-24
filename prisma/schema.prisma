@@ -421,6 +421,11 @@ model products {
   @@index([subtype_id], map: "idx_products_subtype_id")
   @@index([collection_id], map: "idx_products_collection_id")
   @@index([is_active], map: "idx_products_is_active")
+  @@index([created_at], map: "idx_products_created_at")
+  @@index([updated_at], map: "idx_products_updated_at")
+  @@index([category_id, brand_id], map: "idx_products_category_brand")
+  @@index([category_id, is_active], map: "idx_products_category_active")
+  @@index([brand_id, is_active], map: "idx_products_brand_active")
   @@index([search_vector], map: "idx_products_search_vector", type: Gin)
 }
 
@@ -653,6 +658,9 @@ model homepage_hero_slides {
   active_until DateTime? @db.Timestamptz(6)
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
   updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "idx_homepage_hero_slides_is_active")
+  @@index([sort_order], map: "idx_homepage_hero_slides_sort_order")
 }
 
 model homepage_highlights {
@@ -679,6 +687,8 @@ model homepage_highlights {
   @@index([category_id], map: "idx_homepage_highlights_category_id")
   @@index([product_id], map: "idx_homepage_highlights_product_id")
   @@index([brand_id], map: "idx_homepage_highlights_brand_id")
+  @@index([is_active], map: "idx_homepage_highlights_is_active")
+  @@index([sort_order], map: "idx_homepage_highlights_sort_order")
 }
 
 /// Homepage horizontal “Shop by brand” tiles (image + label, links to brand filter).
@@ -697,6 +707,9 @@ model homepage_brand_rail {
   brands          brands    @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([brand_id], map: "idx_homepage_brand_rail_brand_id")
+  @@index([is_active], map: "idx_homepage_brand_rail_is_active")
+  @@index([sort_order], map: "idx_homepage_brand_rail_sort_order")
+  @@index([is_active, sort_order], map: "idx_homepage_brand_rail_active_sort")
 }
 
 /// Homepage “Discover by category” grid: pick categories, image per tile, order.
@@ -715,6 +728,8 @@ model homepage_category_tiles {
   categories      categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([category_id], map: "idx_homepage_category_tiles_category_id")
+  @@index([is_active], map: "idx_homepage_category_tiles_is_active")
+  @@index([sort_order], map: "idx_homepage_category_tiles_sort_order")
 }
 
 model announcement_entries {
@@ -765,6 +780,10 @@ model flash_sale_products {
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
   updated_at   DateTime  @default(now()) @db.Timestamptz(6)
   products     products  @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([is_active], map: "idx_flash_sale_is_active")
+  @@index([active_until], map: "idx_flash_sale_active_until")
+  @@index([is_active, product_id], map: "idx_flash_sale_active_product")
 }
 
 /// Singleton-style settings row (use fixed id in app / seed).

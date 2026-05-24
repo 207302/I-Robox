@@ -5,6 +5,7 @@ export async function loadShopProductSearchIndex(): Promise<ProductSearchItem[]>
   const rows = await prisma.products.findMany({
     where: { is_active: true },
     orderBy: { updated_at: "desc" },
+    take: 10_000, // index ceiling — fuzzy search covers top 10k active products by recency
     select: {
       id: true,
       name: true,

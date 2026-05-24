@@ -45,7 +45,7 @@ const loadCategoryTreeRows = unstable_cache(
     }
   }),
   ["shop-category-tree"],
-  { revalidate: 120, tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG, CATEGORIES_TAG] }
+  { revalidate: 300, tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG, CATEGORIES_TAG] }
 );
 
 export async function getCategoryTree(): Promise<CategoryTreeNode[]> {

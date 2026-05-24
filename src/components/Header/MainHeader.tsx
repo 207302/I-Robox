@@ -20,6 +20,7 @@ import {
 import { useAppSelector } from "@/redux/store";
 import toast from "react-hot-toast";
 import { useDebounce } from "@/hooks/useDebounce";
+import { SEARCH_DEBOUNCE_MS } from "@/lib/shop/shopConstants";
 import dynamic from "next/dynamic";
 
 const SiteSearchPreloader = dynamic(
@@ -80,7 +81,7 @@ const MainHeader = ({
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [stickyMenu, setStickyMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const debouncedSearchQuery = useDebounce(searchQuery, 350);
+  const debouncedSearchQuery = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
   const [searchPreloaderOpen, setSearchPreloaderOpen] = useState(false);
   const { displayName: userName } = useSession();
   const [accountOpen, setAccountOpen] = useState(false);

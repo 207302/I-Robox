@@ -284,16 +284,27 @@ export async function loadListingFacets(
 }
 
 /** Batch-resolve brand slugs → ids (one query instead of N findFirst). */
+async function fetchBrandsForSlugKey(slugKey: string) {
+  const brandSlugs = slugKey.split("|").filter(Boolean);
+  if (brandSlugs.length === 0) return [];
+  return prisma.brands.findMany({
+    where: { OR: brandSlugs.flatMap((s) => slugMatchOrClause(s)) },
+    select: { id: true, slug: true },
+  });
+}
+
 export async function resolveBrandIdsForSlugs(
   brandSlugs: string[],
   profile: ShopListingProfile
 ): Promise<string[]> {
   if (brandSlugs.length === 0) return [];
+  const slugKey = [...new Set(brandSlugs.map((s) => s.trim()).filter(Boolean))].sort().join("|");
   const rows = await profiledQuery(profile, "brands.resolveSlugs", () =>
-    prisma.brands.findMany({
-      where: { OR: brandSlugs.flatMap((s) => slugMatchOrClause(s)) },
-      select: { id: true, slug: true },
-    })
+    unstable_cache(
+      onCacheMiss(`brand-slugs-resolve:${slugKey}`, () => fetchBrandsForSlugKey(slugKey)),
+      ["brand-slugs-resolve", slugKey],
+      { revalidate: 300, tags: [BRANDS_TAG, PRODUCT_CATALOG_TAG] }
+    )()
   );
   const ids: string[] = [];
   for (const slug of brandSlugs) {

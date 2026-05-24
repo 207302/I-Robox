@@ -68,7 +68,7 @@ async function resolveNormalizedIlikeSearchIds(rawQ: string, profile: ShopListin
           OR LOWER(COALESCE(st.name, '')) ILIKE ${spacedPattern}
           ${extraClauses}
         )
-      LIMIT 200
+      LIMIT 500 -- raised from 200; aligns closer to fuzzy index result set size
     `)
   );
   return rows.map((r) => r.id);
@@ -88,7 +88,7 @@ async function resolveFtsSearchIds(rawQ: string, profile: ShopListingProfile): P
           WHERE p.is_active = true
             AND p.search_vector @@ plainto_tsquery('english', ${term})
           ORDER BY ts_rank(p.search_vector, plainto_tsquery('english', ${term})) DESC
-          LIMIT 200
+          LIMIT 500 -- raised from 200; aligns closer to fuzzy index result set size
         `)
       );
       for (const row of rows) {
@@ -125,7 +125,7 @@ async function resolveTrigramSearchIds(rawQ: string, profile: ShopListingProfile
         similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}),
         similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact})
       ) DESC
-      LIMIT 200
+      LIMIT 500 -- raised from 200; aligns closer to fuzzy index result set size
     `)
   );
   return rows.map((r) => r.id);

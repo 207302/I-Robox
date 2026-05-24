@@ -38,6 +38,7 @@ export const getFlashSaleProducts = unstable_cache(
   async () => {
     try {
       return await prisma.flash_sale_products.findMany({
+        where: { is_active: true },
         orderBy: { updated_at: "desc" },
         include: { products: { select: { name: true, slug: true } } },
       });

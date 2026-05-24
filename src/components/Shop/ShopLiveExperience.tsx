@@ -7,6 +7,7 @@ import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import {
   SHOP_LISTING_FACETS_PARAM,
+  SHOP_LISTING_KNOWN_TOTAL_PARAM,
   listingFilterFingerprint,
   listingFilterFingerprintFromState,
 } from "@/lib/shop/shopListingParams";
@@ -19,6 +20,7 @@ import {
   type ShopQueryState,
 } from "@/lib/shop/shopQuery";
 import { useDebounce } from "@/hooks/useDebounce";
+import { SEARCH_DEBOUNCE_MS } from "@/lib/shop/shopConstants";
 import { throttle } from "@/lib/perf/throttle";
 import type { ProductSearchItem } from "@/lib/search/productSearch";
 import {
@@ -96,9 +98,15 @@ function hasActiveListingSearch(
   return Boolean(usp.get("q")?.trim() || usp.get("ids")?.trim());
 }
 
-function prefetchProductsApi(queryString: string, opts?: { facetsOnly?: boolean }) {
+function prefetchProductsApi(
+  queryString: string,
+  opts?: { facetsOnly?: boolean; knownTotal?: number }
+) {
   const params = new URLSearchParams(queryString);
   if (opts?.facetsOnly) params.set(SHOP_LISTING_FACETS_PARAM, "0");
+  if (opts?.knownTotal != null && opts.knownTotal > 0) {
+    params.set(SHOP_LISTING_KNOWN_TOTAL_PARAM, String(opts.knownTotal));
+  }
   const qs = params.toString();
   void fetch(qs ? `/api/products?${qs}` : "/api/products", { cache: "default" });
 }
@@ -182,6 +190,8 @@ export default function ShopLiveExperience({
   );
   const prefetchHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefetchedUrlsRef = useRef<Set<string>>(new Set());
+  const listingRef = useRef(initialListing);
+  listingRef.current = listing;
   const prevPageScrollRef = useRef(parseShopQueryString(queryStringFromWindow(initialQueryString)).page);
   const clientQueryRef = useRef(queryStringFromWindow(initialQueryString || urlQueryString));
   const [minPriceInput, setMinPriceInput] = useState(
@@ -247,14 +257,14 @@ export default function ShopLiveExperience({
       const prevQs = buildListingQueryString({ ...state, page: current - 1 });
       if (!prefetchedUrlsRef.current.has(prevQs)) {
         prefetchedUrlsRef.current.add(prevQs);
-        prefetchProductsApi(prevQs, { facetsOnly: true });
+        prefetchProductsApi(prevQs, { facetsOnly: true, knownTotal: data.total });
       }
     }
     if (current < totalPages) {
       const nextQs = buildListingQueryString({ ...state, page: current + 1 });
       if (!prefetchedUrlsRef.current.has(nextQs)) {
         prefetchedUrlsRef.current.add(nextQs);
-        prefetchProductsApi(nextQs, { facetsOnly: true });
+        prefetchProductsApi(nextQs, { facetsOnly: true, knownTotal: data.total });
       }
     }
   }, []);
@@ -326,8 +336,8 @@ export default function ShopLiveExperience({
       maxPrice: maxPriceInput.trim(),
     });
   }, [commitQuery, maxPriceInput, minPriceInput, query, searchInput]);
-  /** 250ms debounce for URL sync when index not ready (server search fallback). */
-  const debouncedSearchInput = useDebounce(searchInput, 250);
+  /** Debounce for URL sync when index not ready (server search fallback). */
+  const debouncedSearchInput = useDebounce(searchInput, SEARCH_DEBOUNCE_MS);
 
   /** Client fuzzy ids (instant, same algorithm as admin products). */
   const clientFuzzyIds = useMemo(() => {
@@ -350,11 +360,12 @@ export default function ShopLiveExperience({
     return buildListingQueryString({ ...parsed, q: debouncedSearchInput });
   }, [queryString, clientFuzzyIds, debouncedSearchInput]);
 
-  const debouncedFetchQs = useDebounce(effectiveQueryString, 250);
+  const debouncedFetchQs = useDebounce(effectiveQueryString, SEARCH_DEBOUNCE_MS);
   /** Client fuzzy ids are instant — skip debounce so the grid matches the match count. */
   const listingFetchQs =
     clientFuzzyIds !== null ? effectiveQueryString : debouncedFetchQs;
-  const debouncedFilterFpExclQ = useDebounce(filterFingerprintExcludingSearch(queryString), 300);
+  const filterFpExclQ = filterFingerprintExcludingSearch(queryString);
+  const debouncedFilterFpExclQ = useDebounce(filterFpExclQ, 300);
   const fetchQsRef = useRef(listingFetchQs);
   fetchQsRef.current = listingFetchQs;
   const listingFetchKey = useMemo(
@@ -370,7 +381,7 @@ export default function ShopLiveExperience({
     maxPriceInput.trim() !== query.maxPrice.trim();
   const filtersPending =
     priceFiltersPending ||
-    listingFilterFingerprint(queryString) !== debouncedFilterFpExclQ;
+    filterFpExclQ !== debouncedFilterFpExclQ;
   const gridBusy = searchPending || filtersPending || isLoading;
 
   const fetchListing = useCallback(async (qs: string) => {
@@ -383,6 +394,7 @@ export default function ShopLiveExperience({
     abortRef.current = controller;
     inflightQsRef.current = qs;
     const params = new URLSearchParams(qs);
+    const requestedState = parseShopQueryString(qs);
     const fingerprint = listingFilterFingerprint(qs);
     const paginationOnly =
       fingerprint === filterFingerprintRef.current && params.has("page");
@@ -394,6 +406,9 @@ export default function ShopLiveExperience({
     try {
       if (paginationOnly) {
         params.set(SHOP_LISTING_FACETS_PARAM, "0");
+        if (listingRef.current.total > 0) {
+          params.set(SHOP_LISTING_KNOWN_TOTAL_PARAM, String(listingRef.current.total));
+        }
       } else {
         filterFingerprintRef.current = fingerprint;
       }
@@ -406,6 +421,16 @@ export default function ShopLiveExperience({
       const data = (await res.json()) as ShopListingData & { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to load products");
       if (!controller.signal.aborted) {
+        const responsePage = data.page ?? requestedState.page;
+        if (responsePage !== requestedState.page && (data.total ?? 0) > 0) {
+          const correctedQs = buildListingQueryString({
+            ...requestedState,
+            page: responsePage,
+          });
+          clientQueryRef.current = correctedQs;
+          applyShopQuery(pathname, correctedQs);
+          return;
+        }
         setListing((prev) => {
           const next = !paginationOnly
             ? data
@@ -440,7 +465,7 @@ export default function ShopLiveExperience({
         inflightQsRef.current = null;
       }
     }
-  }, [prefetchAdjacentPages]);
+  }, [pathname, prefetchAdjacentPages]);
 
   useEffect(() => {
     return () => cancelHoverPrefetch();
@@ -485,15 +510,15 @@ export default function ShopLiveExperience({
     setSearchInput((prev) => (prev === q ? prev : q));
   }, [queryString]);
 
+  /** Sidebar search: sync debounced q into URL (page 1) so deep links and back/forward stay correct. */
   useEffect(() => {
-    startTransition(() => {
-      setQueryString((prev) => {
-        const parsed = parseShopQueryString(prev);
-        if (parsed.q === debouncedSearchInput) return prev;
-        return buildListingQueryString({ ...parsed, q: debouncedSearchInput, page: 1 });
-      });
-    });
-  }, [debouncedSearchInput]);
+    const parsed = parseShopQueryString(clientQueryRef.current);
+    if (parsed.q === debouncedSearchInput) return;
+    const next = buildListingQueryString({ ...parsed, q: debouncedSearchInput, page: 1 });
+    clientQueryRef.current = next;
+    setQueryString(next);
+    applyShopQuery(pathname, next);
+  }, [debouncedSearchInput, pathname]);
 
   useEffect(() => {
     if (!isSearchProgressPending()) return;
@@ -560,12 +585,15 @@ export default function ShopLiveExperience({
     productsPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [query.page]);
 
+  const totalPages = Math.max(1, listing.totalPages ?? 1);
+
   const goToPage = useCallback(
     (page: number) => {
-      const nextState: ShopQueryState = { ...query, q: searchInput, page };
+      const safePage = Math.max(1, Math.min(page, totalPages));
+      const nextState: ShopQueryState = { ...query, q: searchInput, page: safePage };
       applyShopQuery(pathname, buildListingQueryString(nextState));
     },
-    [pathname, query, searchInput]
+    [pathname, query, searchInput, totalPages]
   );
 
   const clearFilters = useCallback(() => {
@@ -584,7 +612,6 @@ export default function ShopLiveExperience({
   }, [pathname, query]);
 
   const products = listing.items ?? [];
-  const totalPages = Math.max(1, listing.totalPages ?? 1);
   const currentPage = listing.page ?? query.page;
   const gridResultsLoading = gridBusy && products.length > 0;
 

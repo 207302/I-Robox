@@ -140,7 +140,8 @@ const emptyFacetsBundle: ListingFacetsBundle = {
 };
 
 async function executeShopListingFromState(
-  state: ShopListingReadyState
+  state: ShopListingReadyState,
+  requestOptions?: Pick<ShopListingRequestOptions, "knownTotal">
 ): Promise<Pick<ShopListingData, "page" | "pageSize" | "total" | "totalPages" | "items">> {
   const {
     where,
@@ -247,11 +248,16 @@ async function executeShopListingFromState(
       products = reordered;
     }
   } else {
-    const [c, prows] = await Promise.all([
-      profiledQuery(profile, "listing.count", () =>
-        prisma.products.count({ where: where as never })
-      ),
-      profiledQuery(profile, "listing.page", () =>
+    const skipCount =
+      requestOptions?.knownTotal != null &&
+      requestOptions.knownTotal >= 0 &&
+      page > 1 &&
+      discountParams.length === 0 &&
+      !searchIdOrder?.length;
+
+    if (skipCount) {
+      total = requestOptions.knownTotal!;
+      products = await profiledQuery(profile, "listing.page", () =>
         prisma.products.findMany({
           where: where as never,
           orderBy,
@@ -259,10 +265,98 @@ async function executeShopListingFromState(
           take: pageSize,
           select: listingSelect,
         })
-      ),
-    ]);
-    total = c;
-    products = prows;
+      );
+    } else {
+      const [c, prows] = await Promise.all([
+        profiledQuery(profile, "listing.count", () =>
+          prisma.products.count({ where: where as never })
+        ),
+        profiledQuery(profile, "listing.page", () =>
+          prisma.products.findMany({
+            where: where as never,
+            orderBy,
+            skip,
+            take: pageSize,
+            select: listingSelect,
+          })
+        ),
+      ]);
+      total = c;
+      products = prows;
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  let effectivePage = page;
+  if (total > 0 && page > totalPages) {
+    effectivePage = totalPages;
+    const correctedSkip = (effectivePage - 1) * pageSize;
+    if (discountParams.length > 0) {
+      const candidateRows = await profiledQuery(profile, "listing.discountCandidates", () =>
+        prisma.products.findMany({
+          where: where as never,
+          select: { id: true },
+        })
+      );
+      const candidateIds = candidateRows.map((r) => r.id);
+      const sortPriceKey =
+        sortPrice === "price_asc" ? "price_asc" : sortPrice === "price_desc" ? "price_desc" : null;
+      const { ids: pageIds } = await profiledQuery(profile, "listing.discountPaginate", () =>
+        paginateDiscountFilteredProductIds({
+          candidateIds,
+          discountKeys: discountParams,
+          skip: correctedSkip,
+          take: pageSize,
+          sortPrice: sortPriceKey,
+        })
+      );
+      if (pageIds.length === 0) {
+        products = [];
+      } else {
+        const reordered = await profiledQuery(profile, "listing.discountPage", () =>
+          prisma.products.findMany({
+            where: { id: { in: pageIds } },
+            select: listingSelect,
+          })
+        );
+        const order = new Map(pageIds.map((id, i) => [id, i] as const));
+        reordered.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+        products = reordered;
+      }
+    } else if (searchIdOrder?.length && !sortPrice) {
+      const candidateRows = await profiledQuery(profile, "listing.fuzzyIdFilter", () =>
+        prisma.products.findMany({
+          where: where as never,
+          select: { id: true },
+        })
+      );
+      const allowed = new Set(candidateRows.map((r) => r.id));
+      const ordered = searchIdOrder.filter((id) => allowed.has(id));
+      const pageIds = ordered.slice(correctedSkip, correctedSkip + pageSize);
+      if (pageIds.length === 0) {
+        products = [];
+      } else {
+        const reordered = await profiledQuery(profile, "listing.fuzzyIdPage", () =>
+          prisma.products.findMany({
+            where: { id: { in: pageIds } },
+            select: listingSelect,
+          })
+        );
+        const order = new Map(pageIds.map((id, i) => [id, i] as const));
+        reordered.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+        products = reordered;
+      }
+    } else {
+      products = await profiledQuery(profile, "listing.page", () =>
+        prisma.products.findMany({
+          where: where as never,
+          orderBy,
+          skip: correctedSkip,
+          take: pageSize,
+          select: listingSelect,
+        })
+      );
+    }
   }
 
   const productIds = products.map((p) => p.id);
@@ -288,10 +382,10 @@ async function executeShopListingFromState(
   const finalItems = mapProductsToItems(products, flashMap);
 
   return {
-    page,
+    page: effectivePage,
     pageSize,
     total,
-    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    totalPages,
     items: finalItems,
   };
 }
@@ -317,7 +411,9 @@ export async function getShopListing(
     ? await loadListingFacets(state.facetCacheParams, state.facetCtx)
     : emptyFacetsBundle;
 
-  const listing = await executeShopListingFromState(state);
+  const listing = await executeShopListingFromState(state, {
+    knownTotal: requestOptions?.knownTotal,
+  });
 
   finishShopListingProfile(profile, {
     ok: true,

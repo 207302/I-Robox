@@ -162,7 +162,7 @@ const Home = ({
                 Latest drops in store.
               </h2>
             </div>
-            <Link href="/shop" className="text-sm font-medium text-blue hover:underline">
+            <Link href="/shop" prefetch={false} className="text-sm font-medium text-blue hover:underline">
               View all
             </Link>
           </div>
@@ -181,7 +181,7 @@ const Home = ({
                 Most-loved picks.
               </h2>
             </div>
-            <Link href="/shop" className="text-sm font-medium text-blue hover:underline">
+            <Link href="/shop" prefetch={false} className="text-sm font-medium text-blue hover:underline">
               View all
             </Link>
           </div>

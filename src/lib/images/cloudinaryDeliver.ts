@@ -80,11 +80,11 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
 
 /**
  * Layout widths for hero srcSet — physical pixels via dpr_2.0 (not extra q/f changes).
- * w_1920 is the delivery ceiling; browser picks smaller descriptors via sizes + srcSet.
+ * w_1440 is the delivery ceiling; browser picks smaller descriptors via sizes + srcSet.
  */
-const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1920] as const;
+const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 
-export const HERO_WIDTH_CEILING = 1920;
+export const HERO_WIDTH_CEILING = 1440;
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).

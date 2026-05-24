@@ -28,6 +28,7 @@ const Error = () => {
 
               <Link
                 href="/"
+                prefetch={false}
                 className="inline-flex items-center gap-2 px-6 py-3 font-medium text-white duration-200 ease-out rounded-md bg-blue hover:bg-blue-dark"
               >
                 <ArrowLeftIcon />

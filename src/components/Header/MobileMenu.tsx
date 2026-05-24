@@ -5,9 +5,8 @@ import Link from "next/link";
 import type { MenuItem } from "./types";
 import { CloseIcon, SearchIcon } from "./icons";
 import Image from "next/image";
-import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
-const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
+const DEFAULT_HEADER_LOGO = "/images/logo/logo1.webp";
 
 interface MobileMenuProps {
   headerLogo: string | null;
@@ -108,8 +107,10 @@ const MobileMenu = ({
                     DEFAULT_HEADER_LOGO
                   }
                   alt="Site logo"
-                  width={110}
-                  height={44}
+                  width={88}
+                  height={88}
+                  quality={90}
+                  unoptimized={(headerLogo || DEFAULT_HEADER_LOGO).endsWith(".svg")}
                   className="h-10 w-auto max-h-10 object-contain"
                   sizes="100px"
                   loading="lazy"
@@ -207,7 +208,7 @@ const MobileMenu = ({
                                 <Link
                                   key={subItem.path ?? subItem.title}
                                   href={subItem.path || "#"}
-                                  prefetch={shouldPrefetchHref(subItem.path || "#")}
+                                  prefetch={false}
                                   className="block px-4 py-3 text-sm rounded-lg hover:bg-gray-2 text-dark border-gray-3 hover:text-blue "
                                   onClick={onClose}
                                 >
@@ -226,7 +227,7 @@ const MobileMenu = ({
                                     <Link
                                       key={subItem.path ?? subItem.title}
                                       href={subItem.path || "#"}
-                                      prefetch={shouldPrefetchHref(subItem.path || "#")}
+                                      prefetch={false}
                                       className="block px-4 py-2.5 text-sm rounded-lg hover:bg-gray-2 text-dark hover:text-blue"
                                       onClick={onClose}
                                     >
@@ -241,7 +242,7 @@ const MobileMenu = ({
                       ) : (
                         <Link
                           href={menuItem.path || "#"}
-                          prefetch={shouldPrefetchHref(menuItem.path || "#")}
+                          prefetch={false}
                           className="block px-4 py-3 text-sm font-medium rounded-lg hover:text-blue text-dark hover:bg-gray-2"
                           onClick={onClose}
                         >

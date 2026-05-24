@@ -57,6 +57,7 @@ const Breadcrumb = ({
                         <>
                           <Link
                             href={item.href}
+                            prefetch={false}
                             className="text-custom-sm font-medium leading-none text-gray-600 transition-colors hover:text-blue"
                           >
                             {item.label}

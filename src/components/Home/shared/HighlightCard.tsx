@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 export type HighlightCardItem = {
   id: string;
@@ -18,7 +17,7 @@ export default function HighlightCard({ item }: { item: HighlightCardItem }) {
   return (
     <Link
       href={item.href}
-      prefetch={shouldPrefetchHref(item.href)}
+      prefetch={false}
       className={`group relative block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white shadow-md shadow-black/10 transition-[transform,box-shadow,border-color,ring-color] duration-300 active:scale-[0.98] active:translate-y-0 text-left ${cardHoverClass}`}
     >
       <div className="relative aspect-[4/3] w-full md:aspect-[5/4]">
@@ -26,7 +25,7 @@ export default function HighlightCard({ item }: { item: HighlightCardItem }) {
           src={item.image}
           alt={item.alt}
           fill
-          sizes="(max-width: 640px) calc(100vw - 2rem), (max-width: 1024px) calc(50vw - 2rem), 380px"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 384px"
           className="object-cover"
           loading="lazy"
         />

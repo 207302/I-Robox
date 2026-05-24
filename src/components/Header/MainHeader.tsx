@@ -38,7 +38,7 @@ export type SiteHeaderData = {
   headerLogo?: string | null;
 };
 
-const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
+const DEFAULT_HEADER_LOGO = "/images/logo/logo1.webp";
 
 export type UtilityAnnouncement = {
   body: string;
@@ -220,7 +220,7 @@ const MainHeader = ({
       >
         {/* Announcement bar */}
         <div
-          className={`py-2.5 border-b border-white/[0.08] ${utilityBarStyle ? "" : "bg-[#0c1220]"}`}
+          className={`py-2.5 min-h-[2.75rem] border-b border-white/[0.08] ${utilityBarStyle ? "" : "bg-[#0c1220]"}`}
           style={utilityBarStyle}
           suppressHydrationWarning
         >
@@ -342,6 +342,8 @@ const MainHeader = ({
                     alt="Site logo"
                     width={88}
                     height={88}
+                    quality={90}
+                    unoptimized={headerLogoSrc.endsWith(".svg")}
                     className="h-10 w-auto max-h-10 object-contain xl:h-11 xl:max-h-11"
                     style={{ width: "auto", height: "auto" }}
                     loading="eager"
@@ -367,6 +369,8 @@ const MainHeader = ({
                   alt="Site logo"
                   width={88}
                   height={88}
+                  quality={90}
+                  unoptimized={headerLogoSrc.endsWith(".svg")}
                   className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
                   style={{ width: "auto", height: "auto" }}
                   loading="eager"

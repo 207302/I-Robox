@@ -83,7 +83,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       />
     <section className="overflow-x-hidden overflow-y-visible py-6 pb-14 sm:py-10 sm:pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-        <Link href="/shop" className="text-sm font-medium text-blue hover:underline">
+        <Link href="/shop" prefetch={false} className="text-sm font-medium text-blue hover:underline">
           Back to shop
         </Link>
 

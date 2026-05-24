@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { MenuItem } from "./types";
 import { usePathname } from "next/navigation";
-import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
+import { isMainNavShopHref } from "@/lib/navigation/linkPrefetch";
 
 interface DesktopMenuProps {
   menuData: MenuItem[];
@@ -87,7 +87,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                       <Link
                         key={`${subItem.path ?? subItem.title}-${j}`}
                         href={subItem.path || "#"}
-                        prefetch={shouldPrefetchHref(subItem.path || "#")}
+                        prefetch={false}
                         className={`block px-4 py-2 text-sm font-medium rounded-lg hover:text-blue hover:bg-gray-2 ${pathBaseActive(pathname, subItem.path) ? "text-blue" : "text-dark"}`}
                       >
                         {subItem.title}
@@ -105,7 +105,7 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
                           <Link
                             key={subItem.path ?? subItem.title}
                             href={subItem.path || "#"}
-                            prefetch={shouldPrefetchHref(subItem.path || "#")}
+                            prefetch={false}
                             className={`block px-4 py-2 text-sm font-medium rounded-lg hover:text-blue hover:bg-gray-2 ${pathBaseActive(pathname, subItem.path) ? "text-blue" : "text-dark"}`}
                           >
                             {subItem.title}
@@ -119,7 +119,9 @@ const DesktopMenu = ({ menuData }: DesktopMenuProps) => {
               ) : (
                 <Link
                   href={menuItem.path || "#"}
-                  prefetch={shouldPrefetchHref(menuItem.path || "#")}
+                  {...(isMainNavShopHref(menuItem.path || "#")
+                    ? {}
+                    : { prefetch: false as const })}
                   className={`hover:text-blue font-medium py-4 block relative text-sm ${menuItem.path && pathBaseActive(pathname, menuItem.path) ? "text-blue" : "text-dark"}`}
                 >
                   {menuItem.title}

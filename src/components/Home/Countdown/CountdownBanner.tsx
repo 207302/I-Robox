@@ -31,6 +31,7 @@ const CountdownBanner = ({ data }: CountdownBannerProps) => {
 
             <Link
               href="/shop"
+              prefetch={false}
               className="inline-flex font-medium text-custom-sm text-white bg-blue py-3 px-9.5 rounded-lg ease-out duration-200 hover:bg-blue-dark mt-8"
             >
               Check it Out!

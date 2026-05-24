@@ -7,7 +7,7 @@ export { isCloudinaryDeliveryUrl };
 
 /** Matches hero `fill` layout — next/image picks srcset width from this + deviceSizes. */
 export const HERO_IMAGE_SIZES =
-  "(max-width: 640px) 100vw, (max-width: 1280px) 100vw, 1536px";
+  "(max-width: 640px) 100vw, (max-width: 1024px) 100vw, (max-width: 1280px) 1280px, 1440px";
 
 /** Preload href for shop/LCP helpers — ceiling URL; next/image handles responsive widths. */
 export function heroLcpPreloadHref(rawUrl: string): string | null {

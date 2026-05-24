@@ -60,6 +60,7 @@ export default function CartPage() {
             <p className="text-sm text-meta-3">Your cart is empty.</p>
             <Link
               href="/shop"
+              prefetch={false}
               className="mt-4 inline-flex rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition"
             >
               Continue shopping

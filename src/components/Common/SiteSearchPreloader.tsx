@@ -8,7 +8,7 @@ import {
   type SearchProgressDetail,
 } from "@/lib/shop/searchProgress";
 
-const LOGO = "/images/logo/logo1-removebg-preview.png";
+const LOGO = "/images/logo/logo1.webp";
 
 type Props = {
   onDone: () => void;
@@ -49,8 +49,9 @@ export default function SiteSearchPreloader({ onDone }: Props) {
       <Image
         src={LOGO}
         alt="i-Robox"
-        width={160}
-        height={160}
+        width={88}
+        height={88}
+        quality={90}
         className="mb-10 h-20 w-auto sm:h-24"
         style={{ width: "auto" }}
         loading="eager"

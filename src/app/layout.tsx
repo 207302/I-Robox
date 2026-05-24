@@ -12,7 +12,6 @@ const dm_sans = DM_Sans({
   preload: true,
   adjustFontFallback: true,
 });
-const defaultFavicon = "/ChatGPT Image Mar 3, 2026, 09_17_53 PM.png";
 const siteTitle = process.env.SITE_NAME ?? "i-Robox";
 
 /** Static metadata — avoids blocking TTFB on a cached DB round-trip for env-only SEO fields. */
@@ -21,9 +20,9 @@ export const metadata: Metadata = {
   description: "i-Robox – diecast models, collectibles & play. Shop online.",
   keywords: "diecast, collectibles, toys, i-Robox, hot wheels",
   icons: {
-    icon: defaultFavicon,
-    shortcut: defaultFavicon,
-    apple: defaultFavicon,
+    icon: "/images/logo/logo-icon.svg",
+    shortcut: "/images/logo/logo-icon.svg",
+    apple: "/images/logo/logo1-removebg-preview.png",
   },
 };
 

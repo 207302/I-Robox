@@ -1,6 +1,5 @@
 import HeroBannerLcp from "./HeroBannerLcp";
 import HeroBannerMulti from "./HeroBannerMulti";
-import HeroLcpPreload from "./HeroLcpPreload";
 import type { HeroSlide } from "./heroTypes";
 import type { HeroOverlayProps } from "./HeroBannerOverlay";
 
@@ -29,21 +28,15 @@ export default function HeroBannerSection({ slides = [], overlay }: Props) {
 
   if (slides.length === 1) {
     return (
-      <>
-        <HeroLcpPreload slide={slides[0]} />
-        <div className="relative w-full">
-          <HeroBannerLcp slide={slides[0]} overlay={overlay} />
-        </div>
-      </>
+      <div className="relative w-full">
+        <HeroBannerLcp slide={slides[0]} overlay={overlay} />
+      </div>
     );
   }
 
   return (
-    <>
-      <HeroLcpPreload slide={slides[0]} />
-      <div className="relative w-full">
-        <HeroBannerMulti slides={slides} overlay={overlay} />
-      </div>
-    </>
+    <div className="relative w-full">
+      <HeroBannerMulti slides={slides} overlay={overlay} />
+    </div>
   );
 }

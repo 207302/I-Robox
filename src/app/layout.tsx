@@ -8,7 +8,7 @@ const dm_sans = DM_Sans({
   weight: ["400", "700"],
   variable: "--font-dm-sans",
   subsets: ["latin"],
-  display: "swap",
+  display: "optional",
   preload: true,
   adjustFontFallback: true,
 });

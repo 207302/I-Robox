@@ -86,6 +86,18 @@ const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1920] as const;
 
 export const HERO_WIDTH_CEILING = 1920;
 
+/**
+ * Single hero source URL for next/image — width ceiling only (no dpr).
+ * Next.js generates responsive /_next/image srcset from sizes + deviceSizes.
+ */
+export function cloudinaryHeroSourceUrl(url: string): string {
+  return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(url), {
+    width: HERO_WIDTH_CEILING,
+    quality: "auto:best",
+    crop: "limit",
+  });
+}
+
 /** Hero delivery URL for a layout width (dpr_2.0, q_auto:best unchanged). */
 export function cloudinaryHeroDeliverUrlForLayout(url: string, layoutWidth: number): string {
   return cloudinaryHeroDeliverUrl(cloudinaryUrlWithoutTransforms(url), layoutWidth);

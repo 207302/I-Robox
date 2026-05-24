@@ -10,8 +10,9 @@ import Home, {
 import type { HeroSlide } from "@/components/Home/heroTypes";
 import {
   cloudinaryCardUrl,
-  cloudinaryHeroSrcSet,
+  cloudinaryHeroSourceUrl,
   cloudinaryProductCardUrl,
+  isCloudinaryDeliveryUrl,
 } from "@/lib/images/cloudinaryDeliver";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
@@ -62,16 +63,14 @@ export default async function HomePage() {
 
   const heroSlides: HeroSlide[] = slidesRaw
     .filter((s) => isActiveInWindow(s.is_active, s.active_from, s.active_until, now))
-    .map((s) => {
-      const responsive = cloudinaryHeroSrcSet(s.image_url);
-      return {
-        id: s.id,
-        image_url: responsive.src,
-        image_srcSet: responsive.srcSet,
-        title: s.title,
-        link_url: s.link_url,
-      };
-    });
+    .map((s) => ({
+      id: s.id,
+      image_url: isCloudinaryDeliveryUrl(s.image_url)
+        ? cloudinaryHeroSourceUrl(s.image_url)
+        : s.image_url,
+      title: s.title,
+      link_url: s.link_url,
+    }));
 
   const highlights: HomeHighlightCard[] = highlightsRaw
     .filter((h) => isActiveInWindow(h.is_active, h.active_from, h.active_until, now))

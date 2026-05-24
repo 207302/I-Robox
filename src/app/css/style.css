@@ -6,7 +6,7 @@
 
 @theme {
   --font-*: initial;
-  --font-body: "DM Sans", sans-serif;
+  --font-body: var(--font-dm-sans, ui-sans-serif, system-ui, sans-serif);
 
   --color-*: initial;
   --color-current: currentColor;

@@ -6,7 +6,7 @@ import GtmLazy from "@/components/Analytics/GtmLazy";
 import { DM_Sans } from "next/font/google";
 const dm_sans = DM_Sans({
   weight: ["400", "700"],
-  variable: "--font-body",
+  variable: "--font-dm-sans",
   subsets: ["latin"],
   display: "swap",
   preload: true,
@@ -39,7 +39,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
       </head>
-      <body suppressHydrationWarning={true} className={dm_sans.variable}>
+      <body suppressHydrationWarning={true} className={`${dm_sans.className} ${dm_sans.variable}`}>
         {children}
         {gtmId ? <GtmLazy gtmId={gtmId} /> : null}
       </body>

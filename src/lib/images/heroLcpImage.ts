@@ -47,6 +47,7 @@ export function heroSlideImageProps(
   if (isLcp) {
     return {
       ...shared,
+      ...(srcSet ? { srcSet } : {}),
       priority: true as const,
       fetchPriority: "high" as const,
       loading: "eager" as const,

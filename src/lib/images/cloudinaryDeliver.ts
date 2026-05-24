@@ -80,9 +80,11 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
 
 /**
  * Layout widths for hero srcSet — physical pixels via dpr_2.0 (not extra q/f changes).
- * Full-bleed hero uses 100vw; w_854 is not used because render width tracks viewport, not a fixed box.
+ * w_1920 is the delivery ceiling; browser picks smaller descriptors via sizes + srcSet.
  */
-const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1536] as const;
+const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1920] as const;
+
+export const HERO_WIDTH_CEILING = 1920;
 
 /** Hero delivery URL for a layout width (dpr_2.0, q_auto:best unchanged). */
 export function cloudinaryHeroDeliverUrlForLayout(url: string, layoutWidth: number): string {
@@ -96,7 +98,7 @@ export function cloudinaryHeroSrcSet(url: string): { src: string; srcSet: string
     (w) => `${cloudinaryHeroDeliverUrl(base, w)} ${w}w`
   ).join(", ");
   return {
-    src: cloudinaryHeroDeliverUrl(base, 1280),
+    src: cloudinaryHeroDeliverUrl(base, 640),
     srcSet,
   };
 }

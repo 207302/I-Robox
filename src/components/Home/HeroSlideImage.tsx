@@ -2,7 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
+import { useCallback } from "react";
+import {
+  HERO_IMAGE_SIZES,
+  heroSlideImageProps,
+  isCloudinaryDeliveryUrl,
+} from "@/lib/images/heroLcpImage";
 import type { HeroSlide } from "./heroTypes";
 
 type Props = {
@@ -12,16 +17,54 @@ type Props = {
   onLcpLoaded?: () => void;
 };
 
+const FILL_IMG_STYLE = {
+  position: "absolute" as const,
+  height: "100%",
+  width: "100%",
+  left: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  color: "transparent",
+};
+
 /** Hero slide image (LCP candidate when isLcp). */
 export default function HeroSlideImage({ slide, isLcp, onLcpLoaded }: Props) {
-  const img = (
+  const notifyLcpReady = useCallback(() => {
+    onLcpLoaded?.();
+  }, [onLcpLoaded]);
+
+  const imageUrl = slide.image_url?.trim();
+  if (!imageUrl) return null;
+
+  const srcSet = slide.image_srcSet?.trim();
+  const useResponsiveNativeImg =
+    Boolean(srcSet) && isCloudinaryDeliveryUrl(imageUrl);
+
+  const img = useResponsiveNativeImg ? (
+    // next/image ignores custom srcSet on unoptimized Cloudinary URLs — native img keeps sizes/srcSet in HTML.
+    <img
+      alt={slide.title ?? "Hero banner"}
+      src={imageUrl}
+      srcSet={srcSet}
+      sizes={HERO_IMAGE_SIZES}
+      decoding="async"
+      fetchPriority={isLcp ? "high" : "auto"}
+      loading={isLcp ? "eager" : "lazy"}
+      className="object-cover"
+      style={FILL_IMG_STYLE}
+      onLoad={isLcp ? notifyLcpReady : undefined}
+      onError={isLcp ? notifyLcpReady : undefined}
+    />
+  ) : (
     <Image
-      {...heroSlideImageProps(slide.image_url, slide.image_srcSet, isLcp)}
+      {...heroSlideImageProps(imageUrl, srcSet, isLcp)}
       alt={slide.title ?? "Hero banner"}
       fill
       className="object-cover"
-      onLoad={isLcp ? onLcpLoaded : undefined}
-      onError={isLcp ? onLcpLoaded : undefined}
+      onLoad={isLcp ? notifyLcpReady : undefined}
+      onLoadingComplete={isLcp ? notifyLcpReady : undefined}
+      onError={isLcp ? notifyLcpReady : undefined}
     />
   );
 

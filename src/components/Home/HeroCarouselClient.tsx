@@ -45,6 +45,11 @@ export default function HeroCarouselClient({ slides }: Props) {
   const touchStartX = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const [mobileControlsActive, setMobileControlsActive] = useState(false);
+  const lcpPaneRef = useRef<HTMLDivElement>(null);
+
+  const markHeroReady = useCallback(() => {
+    setHeroReady(true);
+  }, []);
 
   const goToNext = useCallback(() => {
     startTransition(() => {
@@ -76,6 +81,14 @@ export default function HeroCarouselClient({ slides }: Props) {
     setPrefetchAdjacent(false);
     setHeroReady(false);
   }, [slidesKey]);
+
+  useEffect(() => {
+    if (heroReady || slideCount === 0) return undefined;
+    const img = lcpPaneRef.current?.querySelector("img");
+    if (img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0) {
+      markHeroReady();
+    }
+  }, [heroReady, slideCount, slidesKey, markHeroReady]);
 
   useEffect(() => {
     if (!heroReady) return undefined;
@@ -136,6 +149,8 @@ export default function HeroCarouselClient({ slides }: Props) {
           return (
             <div
               key={slide.id}
+              ref={index === 0 ? lcpPaneRef : undefined}
+              data-hero-lcp={index === 0 ? "true" : undefined}
               className={`absolute inset-0 transition-opacity duration-500 ease-out will-change-[opacity] ${
                 isActive ? "z-[1] opacity-100" : "z-0 opacity-0 pointer-events-none"
               }`}
@@ -145,7 +160,7 @@ export default function HeroCarouselClient({ slides }: Props) {
                 <HeroSlideImage
                   slide={slide}
                   isLcp={index === 0}
-                  onLcpLoaded={index === 0 ? () => setHeroReady(true) : undefined}
+                  onLcpLoaded={index === 0 ? markHeroReady : undefined}
                 />
               ) : null}
             </div>

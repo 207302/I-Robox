@@ -1,7 +1,6 @@
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHomePageData } from "@/lib/queries/homePage";
 import { withPagePerf } from "@/lib/observability/route";
-import LcpImagePrelink from "@/components/Common/LcpImagePrelink";
 import Home, {
   type HomeBrandRailItem,
   type HomeCategoryTile,
@@ -161,13 +160,8 @@ export default async function HomePage() {
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
   }));
 
-  const heroLcpRaw = slidesRaw.find((s) =>
-    isActiveInWindow(s.is_active, s.active_from, s.active_until, now)
-  )?.image_url;
-
   return (
     <>
-      <LcpImagePrelink imageUrl={heroLcpRaw ?? ""} />
       <Home
         heroSlides={heroSlides}
         heroOverlay={heroOverlay}

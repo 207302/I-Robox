@@ -1,3 +1,8 @@
+import { pickDefaultVariant } from "@/lib/cart/cartLine";
+import {
+  cloudinaryProductCardUrl,
+  isCloudinaryDeliveryUrl,
+} from "@/lib/images/cloudinaryDeliver";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
 export { PRODUCT_IMAGE_PLACEHOLDER };
@@ -14,10 +19,29 @@ type ProductImageSource = {
   }[];
 };
 
-/** Card/thumbnail URL — same rules as `ProductItem` (default variant, then any variant image, then gallery). */
-export function getProductCardImageUrl(item: ProductImageSource): string {
-  const gallery = getProductGalleryImages(item);
-  return gallery[0] === PRODUCT_IMAGE_PLACEHOLDER ? "" : gallery[0];
+/** Same image pick order as `ProductItem` card thumbnail. */
+export function resolveShopCardImage(item: ProductImageSource): string {
+  const defaultVariant = pickDefaultVariant(item.productVariants ?? []);
+  const firstVariantWithImage = item.productVariants?.find((variant) =>
+    Boolean(variant.image)
+  );
+  return (
+    item.image ||
+    defaultVariant?.image ||
+    firstVariantWithImage?.image ||
+    item.product_images?.[0]?.url ||
+    ""
+  );
+}
+
+/** LCP preload URL for the first shop grid card (matches ProductItem w_380 src). */
+export function getShopListingLcpImageUrl(item: ProductImageSource): string {
+  const raw = resolveShopCardImage(item);
+  if (!raw || raw === PRODUCT_IMAGE_PLACEHOLDER) return "";
+  if (isCloudinaryDeliveryUrl(raw)) {
+    return cloudinaryProductCardUrl(raw, 380);
+  }
+  return raw;
 }
 
 /** Deduped gallery URLs for quick view / fullscreen preview (product + variant images). */
@@ -45,6 +69,11 @@ export function getProductGalleryImages(item: ProductImageSource): string[] {
   }
 
   return urls.length > 0 ? urls : [PRODUCT_IMAGE_PLACEHOLDER];
+}
+
+/** @deprecated Use getShopListingLcpImageUrl for shop LCP preload. */
+export function getProductCardImageUrl(item: ProductImageSource): string {
+  return getShopListingLcpImageUrl(item);
 }
 
 /** Index into `getProductGalleryImages` for the default / first available variant image. */

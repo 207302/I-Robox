@@ -38,10 +38,6 @@ export type SiteHeaderData = {
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
 
-function isLocalHeaderLogo(src: string) {
-  return src.startsWith("/images/") || src.startsWith("/icons/");
-}
-
 export type UtilityAnnouncement = {
   body: string;
   linkUrl?: string | null;
@@ -75,7 +71,6 @@ const MainHeader = ({
   const utilityBarStyle = chromeBgStyle(chromeColors?.utilityBarBg);
   const marqueeBarStyle = chromeBgStyle(chromeColors?.marqueeBarBg);
   const headerLogoSrc = headerData?.headerLogo || DEFAULT_HEADER_LOGO;
-  const headerLogoUnoptimized = isLocalHeaderLogo(headerLogoSrc);
   const menuData = useMemo(() => buildHeaderMenuData(headerNav), [headerNav]);
   const pathname = usePathname();
   const router = useRouter();
@@ -345,8 +340,8 @@ const MainHeader = ({
                     className="h-10 w-auto max-h-10 object-contain xl:h-11 xl:max-h-11"
                     style={{ width: "auto", height: "auto" }}
                     loading="eager"
+                    fetchPriority="low"
                     sizes="88px"
-                    unoptimized={headerLogoUnoptimized}
                   />
                 </Link>
                 <DesktopMenu
@@ -370,8 +365,8 @@ const MainHeader = ({
                   className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
                   style={{ width: "auto", height: "auto" }}
                   loading="eager"
+                  fetchPriority="low"
                   sizes="88px"
-                  unoptimized={headerLogoUnoptimized}
                 />
               </Link>
             </div>

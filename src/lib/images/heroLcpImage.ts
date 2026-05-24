@@ -40,7 +40,6 @@ export function heroSlideImageProps(
   const unoptimized = isCloudinaryDeliveryUrl(src);
   const shared = {
     src,
-    ...(srcSet ? { srcSet } : {}),
     unoptimized,
     sizes: HERO_IMAGE_SIZES,
   };
@@ -55,6 +54,7 @@ export function heroSlideImageProps(
   }
   return {
     ...shared,
+    ...(srcSet ? { srcSet } : {}),
     loading: "lazy" as const,
   };
 }

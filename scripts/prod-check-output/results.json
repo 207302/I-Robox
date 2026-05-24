@@ -1,0 +1,55 @@
+{
+  "check16": {
+    "check": 16,
+    "edwardmartinCount": 0,
+    "gtmCount": 0,
+    "first3sCount": 0,
+    "edwardTimingsMs": [],
+    "gtmTimingsMs": [],
+    "ttiProxyMs": 14873,
+    "pass": "INCONCLUSIVE (no GTM/edwardmartin in headless — verify in Chrome DevTools)",
+    "note": "Site owner: set nb-collector tag trigger to Window Loaded in GTM dashboard."
+  },
+  "check17": {
+    "check": 17,
+    "attrs": {
+      "fetchpriority": "high",
+      "loading": "eager",
+      "src": "https://res.cloudinary.com/dgsyup3zw/image/upload/f_auto,q_auto,w_380/v1779479625/irobox/products/grjxqgyf3j752os1new5.webp",
+      "decoding": "async"
+    },
+    "pass": "PASS"
+  },
+  "check20shop": {
+    "path": "/shop",
+    "errors": [],
+    "preloadWarnings": [],
+    "pass": "PASS"
+  },
+  "check20home": {
+    "path": "/",
+    "errors": [],
+    "preloadWarnings": [],
+    "pass": "PASS"
+  },
+  "check18": {
+    "check": 18,
+    "advancedBeforeLoad": false,
+    "activeIndex": 0,
+    "complete": false,
+    "timedOut": true,
+    "pass": "PASS"
+  },
+  "check19": {
+    "check": 19,
+    "files": [
+      "D:\\Vishakh\\Projects\\9. Tron Play World\\scripts\\prod-check-output\\check19-home-375.png",
+      "D:\\Vishakh\\Projects\\9. Tron Play World\\scripts\\prod-check-output\\check19-shop-375.png",
+      "D:\\Vishakh\\Projects\\9. Tron Play World\\scripts\\prod-check-output\\check19-home-768.png",
+      "D:\\Vishakh\\Projects\\9. Tron Play World\\scripts\\prod-check-output\\check19-shop-768.png",
+      "D:\\Vishakh\\Projects\\9. Tron Play World\\scripts\\prod-check-output\\check19-home-1440.png",
+      "D:\\Vishakh\\Projects\\9. Tron Play World\\scripts\\prod-check-output\\check19-shop-1440.png"
+    ],
+    "pass": "PASS (screenshots saved — visual review required)"
+  }
+}

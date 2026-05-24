@@ -78,9 +78,10 @@ export default function HeroCarouselClient({ slides }: Props) {
   }, [slidesKey]);
 
   useEffect(() => {
+    if (!heroReady) return undefined;
     const id = requestAnimationFrame(() => setPrefetchAdjacent(true));
     return () => cancelAnimationFrame(id);
-  }, [slidesKey, activeIndex]);
+  }, [slidesKey, activeIndex, heroReady]);
 
   useEffect(() => {
     if (slideCount <= 1 || !heroReady) return undefined;

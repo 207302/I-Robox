@@ -3,6 +3,9 @@
  * `scripts/run-prisma-build.mjs`. Do not use fs/path here — Turbopack NFT traces the repo.
  */
 
+// TODO: Legacy polyfills (18KB) in 0p.tczh1i.rg1.js persist due to Turbopack not
+// honouring browserslist in Next.js 16. Re-check when Next.js 17 or Turbopack stable ships.
+
 const nextConfig = {
   /** SSG pages (PDPs, ISR shells) — Neon cold queries can exceed 60s default. */
   staticPageGenerationTimeout: Number(process.env.STATIC_PAGE_GENERATION_TIMEOUT ?? 180),
@@ -56,6 +59,24 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: "/images/payment/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/images/icons/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/:all*(svg|jpg|jpeg|png|gif|ico|webp|avif|woff|woff2)",
         headers: [
           {
@@ -66,15 +87,6 @@ const nextConfig = {
       },
       {
         source: "/icons/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        source: "/images/icons/:path*",
         headers: [
           {
             key: "Cache-Control",

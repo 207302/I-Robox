@@ -110,3 +110,14 @@ export function cloudinaryCardUrl(url: string, width = 640): string {
 export function cloudinaryProductCardUrl(url: string, width = 220): string {
   return cloudinaryDeliverUrl(url, { width, quality: "auto" });
 }
+
+/** Shop grid srcSet — 280w desktop column, 380w mobile (matches PRODUCT_CARD_GRID_SIZES). */
+export function cloudinaryProductCardSrcSet(url: string): { src: string; srcSet: string } {
+  const base = cloudinaryUrlWithoutTransforms(url);
+  const w280 = cloudinaryProductCardUrl(base, 280);
+  const w380 = cloudinaryProductCardUrl(base, 380);
+  return {
+    src: w380,
+    srcSet: `${w280} 280w, ${w380} 380w`,
+  };
+}

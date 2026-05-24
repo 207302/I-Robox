@@ -16,6 +16,7 @@ import WishlistButton from "../Wishlist/AddWishlistButton";
 import { PRODUCT_CARD_GRID_SIZES } from "@/lib/shop/productCardGridSizes";
 import {
   cloudinaryProductCardUrl,
+  cloudinaryProductCardSrcSet,
   isCloudinaryDeliveryUrl,
 } from "@/lib/images/cloudinaryDeliver";
 import { calculateDiscountPercentage } from "@/utils/calculateDiscountPercentage";
@@ -69,6 +70,16 @@ function ProductItemInner({
     if (!cardImage || !isCloudinaryDeliveryUrl(cardImage)) return cardImage;
     return cloudinaryProductCardUrl(cardImage, shopListingImage !== undefined ? 380 : 220);
   }, [cardImage, shopListingImage]);
+  const cardImageDelivery = useMemo(() => {
+    if (!cardImage || !isCloudinaryDeliveryUrl(cardImage)) {
+      return { src: cardImageSrc, srcSet: undefined as string | undefined };
+    }
+    if (shopListingImage !== undefined) {
+      const { src, srcSet } = cloudinaryProductCardSrcSet(cardImage);
+      return { src, srcSet };
+    }
+    return { src: cardImageSrc, srcSet: undefined as string | undefined };
+  }, [cardImage, cardImageSrc, shopListingImage]);
   const variantPreview = useMemo(
     () =>
       item.productVariants
@@ -164,9 +175,11 @@ function ProductItemInner({
         <Link
           href={`/shop/${item?.slug}`}
           className="relative block h-full w-full"
+          prefetch={shopListingImage !== undefined ? false : undefined}
         >
           <SafeProductImage
-            src={cardImageSrc}
+            src={cardImageDelivery.src}
+            {...(cardImageDelivery.srcSet ? { srcSet: cardImageDelivery.srcSet } : {})}
             alt={item.title || "product-image"}
             width={640}
             height={640}
@@ -175,7 +188,7 @@ function ProductItemInner({
             priority={mainImagePriority}
             {...(shopListingImage === "lcp" ? { fetchPriority: "high" as const } : {})}
             {...(listingLoadingProp ? { loading: listingLoadingProp } : {})}
-            unoptimized={isCloudinaryDeliveryUrl(cardImageSrc)}
+            unoptimized={isCloudinaryDeliveryUrl(cardImageDelivery.src)}
           />
         </Link>
         <div className="pointer-events-none absolute right-2 top-2 z-10 flex h-[26px] w-[4.5rem] shrink-0 items-center justify-end">

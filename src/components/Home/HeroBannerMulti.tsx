@@ -7,7 +7,7 @@ type Props = {
   overlay?: HeroOverlayProps;
 };
 
-/** Multi-slide hero: first slide is LCP; adjacent slides mount on demand to limit Cloudinary burst. */
+/** Multi-slide hero: first slide is LCP; other slides mount only when the carousel shows them. */
 export default function HeroBannerMulti({ slides, overlay }: Props) {
   return (
     <div className="relative w-full">

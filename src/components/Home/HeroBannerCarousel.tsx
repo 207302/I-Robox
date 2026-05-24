@@ -14,6 +14,7 @@ import {
 } from "react";
 import { heroOverlayTextStyle } from "@/lib/marketing/heroOverlayColors";
 
+import { HERO_IMAGE_SIZES } from "@/lib/images/heroLcpImage";
 import type { HeroSlide } from "./heroTypes";
 
 export type { HeroSlide };
@@ -36,11 +37,8 @@ type Props = {
   };
 };
 
-function shouldMountSlideImage(index: number, activeIndex: number, total: number): boolean {
-  if (total <= 1) return index === 0;
-  const prev = (activeIndex - 1 + total) % total;
-  const next = (activeIndex + 1) % total;
-  return index === activeIndex || index === prev || index === next;
+function shouldMountSlideImage(index: number, activeIndex: number): boolean {
+  return index === activeIndex;
 }
 
 const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
@@ -159,7 +157,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
       <div className="absolute inset-0 overflow-hidden bg-gray-2">
         {slides.map((banner, index) => {
           const isActive = index === activeIndex;
-          const mountImage = shouldMountSlideImage(index, activeIndex, slides.length);
+          const mountImage = shouldMountSlideImage(index, activeIndex);
           return (
             <div
               key={banner.id}
@@ -176,8 +174,8 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                       alt={banner.title ?? "Hero banner"}
                       fill
                       priority={index === 0}
-                      fetchPriority={index === 0 ? "high" : undefined}
-                      sizes="100vw"
+                      fetchPriority={index === 0 ? "high" : "low"}
+                      sizes={HERO_IMAGE_SIZES}
                       className="object-cover"
                       loading={index === 0 ? "eager" : "lazy"}
                     />
@@ -188,8 +186,8 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                     alt={banner.title ?? "Hero banner"}
                     fill
                     priority={index === 0}
-                    fetchPriority={index === 0 ? "high" : undefined}
-                    sizes="100vw"
+                    fetchPriority={index === 0 ? "high" : "low"}
+                    sizes={HERO_IMAGE_SIZES}
                     className="object-cover"
                     loading={index === 0 ? "eager" : "lazy"}
                   />

@@ -35,6 +35,8 @@ export function heroSlideImageProps(src: string, isLcp: boolean) {
   }
   return {
     ...shared,
+    priority: false as const,
     loading: "lazy" as const,
+    fetchPriority: "low" as const,
   };
 }

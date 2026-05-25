@@ -31,6 +31,14 @@ export async function register() {
     console.error("[instrumentation] Neon wake-up ping failed:", err);
   }
 
+  try {
+    const { warmShopListingCache } = await import("./lib/shop/shopCacheWarm");
+    await warmShopListingCache();
+    console.info("[instrumentation] Shop listing cache warm OK");
+  } catch (err) {
+    console.warn("[instrumentation] Shop listing cache warm skipped:", err);
+  }
+
   let disconnecting = false;
   const disconnect = async () => {
     if (disconnecting) return;

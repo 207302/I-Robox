@@ -426,6 +426,8 @@ model products {
   @@index([category_id, brand_id], map: "idx_products_category_brand")
   @@index([category_id, is_active], map: "idx_products_category_active")
   @@index([brand_id, is_active], map: "idx_products_brand_active")
+  @@index([is_active, updated_at(sort: Desc)], map: "idx_products_active_updated_desc")
+  @@index([is_active, base_price], map: "idx_products_active_base_price")
   @@index([search_vector], map: "idx_products_search_vector", type: Gin)
 }
 

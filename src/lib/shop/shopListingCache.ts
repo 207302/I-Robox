@@ -15,7 +15,7 @@ import {
 import { getShopListingFacetsOnly } from "@/lib/shop/shopListingPrepare";
 
 /** Align with `GET /api/products` and shop ISR. */
-export const SHOP_LISTING_API_REVALIDATE_SECONDS = 60;
+export const SHOP_LISTING_API_REVALIDATE_SECONDS = 300;
 
 export type ShopListingCacheSource = "edge" | "live";
 
@@ -48,6 +48,16 @@ export async function getShopListingForApi(
   const listingKey = buildListingCacheKey(normalized);
 
   if (!listingKey) {
+    const result = await getShopListing(normalized, options);
+    return envelope(result, "live");
+  }
+
+  /**
+   * `noFlash` skips listing.flashSales — the result would be partial vs. cached entries
+   * for the same normalized key. Bypass the data cache to avoid poisoning future reads.
+   * CDN cache still applies via Cache-Control headers (URL-keyed, includes noFlash).
+   */
+  if (options.skipFlashSales) {
     const result = await getShopListing(normalized, options);
     return envelope(result, "live");
   }

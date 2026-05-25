@@ -13,7 +13,7 @@ export const metadata = {
 };
 
 /** ISR — default listing is server-rendered; filters refetch via /api/products. */
-export const revalidate = 120;
+export const revalidate = 300;
 
 const EMPTY_LISTING: ShopListingData = {
   items: [],

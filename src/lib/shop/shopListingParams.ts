@@ -23,17 +23,22 @@ export function listingSearchParamsFromRecord(
 export const SHOP_LISTING_FACETS_PARAM = "facets";
 /** Client hint on pagination-only fetches — skip redundant COUNT (same filters, total unchanged). */
 export const SHOP_LISTING_KNOWN_TOTAL_PARAM = "knownTotal";
+/** Client hint on pagination-only fetches — skip listing.flashSales when prior page had none. */
+export const SHOP_LISTING_NO_FLASH_PARAM = "noFlash";
 
 const SHOP_LISTING_CONTROL_PARAMS = new Set([
   SHOP_LISTING_FACETS_PARAM,
   SHOP_LISTING_KNOWN_TOTAL_PARAM,
+  SHOP_LISTING_NO_FLASH_PARAM,
 ]);
 
 export type ShopListingRequestOptions = {
   /** When false, skip facet aggregation (pagination-only API calls). Default true. */
   includeFacets: boolean;
-  /** When set with page > 1, skip COUNT on default listing path (client already has total). */
+  /** When set, skip COUNT on default listing path (client already has total). */
   knownTotal?: number | null;
+  /** When true, skip the per-page `listing.flashSales` query (no flash items expected on this page). */
+  skipFlashSales?: boolean;
 };
 
 /** Stable key for listing-only `unstable_cache` (sorted multi-values). Returns null when search `q` is set. */
@@ -66,7 +71,9 @@ export function parseListingRequestOptions(usp: URLSearchParams): ShopListingReq
   const knownN = knownRaw != null && knownRaw !== "" ? Number(knownRaw) : NaN;
   const knownTotal =
     Number.isFinite(knownN) && knownN >= 0 ? Math.trunc(knownN) : null;
-  return { includeFacets, knownTotal };
+  const noFlashRaw = usp.get(SHOP_LISTING_NO_FLASH_PARAM);
+  const skipFlashSales = noFlashRaw === "1" || noFlashRaw === "true";
+  return { includeFacets, knownTotal, skipFlashSales };
 }
 
 /** Fingerprint of all filters except page (for client pagination-only detection). */

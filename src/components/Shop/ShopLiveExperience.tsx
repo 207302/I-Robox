@@ -8,6 +8,7 @@ import type { ShopListingData } from "@/lib/shop/shopListing";
 import {
   SHOP_LISTING_FACETS_PARAM,
   SHOP_LISTING_KNOWN_TOTAL_PARAM,
+  SHOP_LISTING_NO_FLASH_PARAM,
   listingFilterFingerprint,
   listingFilterFingerprintFromState,
 } from "@/lib/shop/shopListingParams";
@@ -100,15 +101,26 @@ function hasActiveListingSearch(
 
 function prefetchProductsApi(
   queryString: string,
-  opts?: { facetsOnly?: boolean; knownTotal?: number }
+  opts?: {
+    facetsOnly?: boolean;
+    knownTotal?: number;
+    noFlash?: boolean;
+    signal?: AbortSignal;
+  }
 ) {
   const params = new URLSearchParams(queryString);
   if (opts?.facetsOnly) params.set(SHOP_LISTING_FACETS_PARAM, "0");
   if (opts?.knownTotal != null && opts.knownTotal > 0) {
     params.set(SHOP_LISTING_KNOWN_TOTAL_PARAM, String(opts.knownTotal));
   }
+  if (opts?.noFlash) params.set(SHOP_LISTING_NO_FLASH_PARAM, "1");
   const qs = params.toString();
-  void fetch(qs ? `/api/products?${qs}` : "/api/products", { cache: "default" });
+  void fetch(qs ? `/api/products?${qs}` : "/api/products", {
+    cache: "default",
+    signal: opts?.signal,
+  }).catch(() => {
+    /* prefetch is best-effort; abort + network failures are non-fatal */
+  });
 }
 
 type ShopListFilterKey =
@@ -249,24 +261,50 @@ export default function ShopLiveExperience({
     [cancelHoverPrefetch]
   );
 
+  /** Adjacent prefetches share a single AbortController so unmount cancels in-flight bg requests. */
+  const adjacentPrefetchAbortRef = useRef<AbortController | null>(null);
+
   const prefetchAdjacentPages = useCallback((data: ShopListingData, qs: string) => {
+    /** Mobile: viewport too narrow for free RTT; skip background prefetch to save data. */
+    if (typeof window !== "undefined" && window.innerWidth < 768) return;
+
     const state = parseShopQueryString(qs);
     const totalPages = Math.max(1, data.totalPages ?? 1);
     const current = data.page ?? state.page;
+
+    adjacentPrefetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    adjacentPrefetchAbortRef.current = controller;
+
+    /**
+     * Always send noFlash=1 on prefetch — if the prefetched page truly has flash items,
+     * the main on-demand fetch (without noFlash) will re-run and overwrite. Background-only.
+     */
+    const baseOpts = {
+      facetsOnly: true as const,
+      knownTotal: data.total,
+      noFlash: true as const,
+      signal: controller.signal,
+    };
+
     if (current > 1) {
       const prevQs = buildListingQueryString({ ...state, page: current - 1 });
       if (!prefetchedUrlsRef.current.has(prevQs)) {
         prefetchedUrlsRef.current.add(prevQs);
-        prefetchProductsApi(prevQs, { facetsOnly: true, knownTotal: data.total });
+        prefetchProductsApi(prevQs, baseOpts);
       }
     }
     if (current < totalPages) {
       const nextQs = buildListingQueryString({ ...state, page: current + 1 });
       if (!prefetchedUrlsRef.current.has(nextQs)) {
         prefetchedUrlsRef.current.add(nextQs);
-        prefetchProductsApi(nextQs, { facetsOnly: true, knownTotal: data.total });
+        prefetchProductsApi(nextQs, baseOpts);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    return () => adjacentPrefetchAbortRef.current?.abort();
   }, []);
 
   const query = parseShopQueryString(queryString);
@@ -408,6 +446,17 @@ export default function ShopLiveExperience({
         params.set(SHOP_LISTING_FACETS_PARAM, "0");
         if (listingRef.current.total > 0) {
           params.set(SHOP_LISTING_KNOWN_TOTAL_PARAM, String(listingRef.current.total));
+        }
+        /**
+         * Skip listing.flashSales (~3s cold) when nothing on the current page is discounted.
+         * Server's `discountedPrice` collapses flash and static discounts, so any non-null
+         * value is treated conservatively — only skip when the current page is fully un-discounted.
+         */
+        const currentHasAnyDiscount = listingRef.current.items.some(
+          (it) => it.discountedPrice != null
+        );
+        if (!currentHasAnyDiscount) {
+          params.set(SHOP_LISTING_NO_FLASH_PARAM, "1");
         }
       } else {
         filterFingerprintRef.current = fingerprint;

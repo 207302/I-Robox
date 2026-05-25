@@ -141,7 +141,7 @@ const emptyFacetsBundle: ListingFacetsBundle = {
 
 async function executeShopListingFromState(
   state: ShopListingReadyState,
-  requestOptions?: Pick<ShopListingRequestOptions, "knownTotal">
+  requestOptions?: Pick<ShopListingRequestOptions, "knownTotal" | "skipFlashSales">
 ): Promise<Pick<ShopListingData, "page" | "pageSize" | "total" | "totalPages" | "items">> {
   const {
     where,
@@ -251,7 +251,6 @@ async function executeShopListingFromState(
     const skipCount =
       requestOptions?.knownTotal != null &&
       requestOptions.knownTotal >= 0 &&
-      page > 1 &&
       discountParams.length === 0 &&
       !searchIdOrder?.length;
 
@@ -360,22 +359,24 @@ async function executeShopListingFromState(
   }
 
   const productIds = products.map((p) => p.id);
-  const flashRows = await profiledQuery(profile, "listing.flashSales", () =>
-    prisma.flash_sale_products.findMany({
-      where: { product_id: { in: productIds }, is_active: true },
-      select: {
-        product_id: true,
-        sale_price: true,
-        is_active: true,
-        active_from: true,
-        active_until: true,
-      },
-    })
-  );
   const flashMap = new Map<string, number>();
-  for (const row of flashRows) {
-    if (isActiveInWindow(row.is_active, row.active_from, row.active_until, now)) {
-      flashMap.set(row.product_id, Number(row.sale_price));
+  if (!requestOptions?.skipFlashSales && productIds.length > 0) {
+    const flashRows = await profiledQuery(profile, "listing.flashSales", () =>
+      prisma.flash_sale_products.findMany({
+        where: { product_id: { in: productIds }, is_active: true },
+        select: {
+          product_id: true,
+          sale_price: true,
+          is_active: true,
+          active_from: true,
+          active_until: true,
+        },
+      })
+    );
+    for (const row of flashRows) {
+      if (isActiveInWindow(row.is_active, row.active_from, row.active_until, now)) {
+        flashMap.set(row.product_id, Number(row.sale_price));
+      }
     }
   }
 
@@ -413,6 +414,7 @@ export async function getShopListing(
 
   const listing = await executeShopListingFromState(state, {
     knownTotal: requestOptions?.knownTotal,
+    skipFlashSales: requestOptions?.skipFlashSales,
   });
 
   finishShopListingProfile(profile, {

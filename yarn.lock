@@ -284,7 +284,7 @@
   resolved "https://registry.npmjs.org/@discoveryjs/json-ext/-/json-ext-0.5.7.tgz"
   integrity sha512-dBVuXR082gk3jsFp7Rd/JI4kytwGHecnCoTtXFb7DB6CNHp4rg5k1bhg0nWdLGLnOV71lmDzGQaLMy8iPLY0pw==
 
-"@emotion/is-prop-valid@1.4.0":
+"@emotion/is-prop-valid@*", "@emotion/is-prop-valid@1.4.0":
   version "1.4.0"
   resolved "https://registry.npmjs.org/@emotion/is-prop-valid/-/is-prop-valid-1.4.0.tgz"
   integrity sha512-QgD4fyscGcbbKwJmqNvUMSE02OsHUa+lAWKdEUIJKgqe5IwRSKd7+KhibEWdaKwgjLj0DRSHA9biAIqGBk05lw==
@@ -2477,6 +2477,15 @@ frac@~1.1.2:
   resolved "https://registry.npmjs.org/frac/-/frac-1.1.2.tgz"
   integrity sha512-w/XBfkibaTl3YDqASwfDUqkna4Z2p9cFSr1aHDt0WoMTECnRfBOv2WArlZILlqgWlmdIlALXGpM2AOhEk5W3IA==
 
+framer-motion@^12.40.0:
+  version "12.40.0"
+  resolved "https://registry.npmjs.org/framer-motion/-/framer-motion-12.40.0.tgz"
+  integrity sha512-uaBd3qC1v3KQqBEjwTUd183K6PbS+j0yR9w9VmEOLWA/tnUcSn8Xa3uck7t4dgpDoUss8xQTcj8W2L07lrnLFg==
+  dependencies:
+    motion-dom "^12.40.0"
+    motion-utils "^12.39.0"
+    tslib "^2.4.0"
+
 function-bind@^1.1.2:
   version "1.1.2"
   resolved "https://registry.npmjs.org/function-bind/-/function-bind-1.1.2.tgz"
@@ -3249,6 +3258,18 @@ mkdirp@0.3.0:
   resolved "https://registry.npmjs.org/mkdirp/-/mkdirp-0.3.0.tgz"
   integrity sha512-OHsdUcVAQ6pOtg5JYWpCBo9W/GySVuwvP9hueRMW7UqshC0tbfzLv8wjySTPm3tfUZ/21CE9E1pJagOA91Pxew==
 
+motion-dom@^12.40.0:
+  version "12.40.0"
+  resolved "https://registry.npmjs.org/motion-dom/-/motion-dom-12.40.0.tgz"
+  integrity sha512-HxU3ZaBwNPVQUBQf1xxgq+7JrPNZvjLVxgbpEZL7RrWJnsxOf0/OM+yrHG9ogLQ31Do/r57Oz2gQWPK+6q62mg==
+  dependencies:
+    motion-utils "^12.39.0"
+
+motion-utils@^12.39.0:
+  version "12.39.0"
+  resolved "https://registry.npmjs.org/motion-utils/-/motion-utils-12.39.0.tgz"
+  integrity sha512-8nadJAJjTtqRkmRF36FoJTrywK9nnFmnPwnSMyxaOCU7GDjN9RTMJIxx9De8ErM+vpPhMccr/6fo5WciyQLnMQ==
+
 mrmime@^2.0.0:
   version "2.0.1"
   resolved "https://registry.npmjs.org/mrmime/-/mrmime-2.0.1.tgz"
@@ -3637,20 +3658,6 @@ pkg-types@^2.2.0:
     exsolve "^1.0.8"
     pathe "^2.0.3"
 
-playwright-core@1.52.0:
-  version "1.52.0"
-  resolved "https://registry.npmjs.org/playwright-core/-/playwright-core-1.52.0.tgz"
-  integrity sha512-l2osTgLXSMeuLZOML9qYODUQoPPnUsKsb5/P6LJ2e6uPKXUdPK5WYhN4z03G+YNbWmGDY4YENauNu4ZKczreHg==
-
-playwright@1.52.0:
-  version "1.52.0"
-  resolved "https://registry.npmjs.org/playwright/-/playwright-1.52.0.tgz"
-  integrity sha512-JAwMNMBlxJ2oD1kce4KPtMkDeKGHQstdpFPcPH3maElAXon/QZeTvtsfXmTMRyO9TslfoYOXkSsvao2nE1ilTw==
-  dependencies:
-    playwright-core "1.52.0"
-  optionalDependencies:
-    fsevents "2.3.2"
-
 possible-typed-array-names@^1.0.0:
   version "1.1.0"
   resolved "https://registry.npmjs.org/possible-typed-array-names/-/possible-typed-array-names-1.1.0.tgz"
@@ -3798,7 +3805,7 @@ react-chartjs-2@^5.3.0:
   resolved "https://registry.npmjs.org/react-chartjs-2/-/react-chartjs-2-5.3.0.tgz"
   integrity sha512-UfZZFnDsERI3c3CZGxzvNJd02SHjaSJ8kgW1djn65H1KK8rehwTjyrRKOG3VTMG8wtHZ5rgAO5oTHtHi9GCCmw==
 
-"react-dom@^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom@^18.0 || ^19.0 || ^19.0.0-rc", "react-dom@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0", "react-dom@^19.0.0 || ^18.0.0 || ^17.0.1 || ^16.7.0", react-dom@^19.2.0, "react-dom@>= 16.0.0", "react-dom@>= 16.8.0", "react-dom@>= 16.8.0 < 20", react-dom@>=16, react-dom@>=16.14.0, react-dom@>=16.8, "react-dom@>=16.8.0 <20.0.0":
+"react-dom@^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom@^18.0 || ^19.0 || ^19.0.0-rc", "react-dom@^18.0.0 || ^19.0.0", "react-dom@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0", "react-dom@^19.0.0 || ^18.0.0 || ^17.0.1 || ^16.7.0", react-dom@^19.2.0, "react-dom@>= 16.0.0", "react-dom@>= 16.8.0", "react-dom@>= 16.8.0 < 20", react-dom@>=16, react-dom@>=16.14.0, react-dom@>=16.8, "react-dom@>=16.8.0 <20.0.0":
   version "19.2.0"
   resolved "https://registry.npmjs.org/react-dom/-/react-dom-19.2.0.tgz"
   integrity sha512-UlbRu4cAiGaIewkPyiRGJk0imDN2T3JjieT6spoL2UeSf5od4n5LB/mQ4ejmxhCFT1tYe8IvaFulzynWovsEFQ==
@@ -3875,7 +3882,7 @@ react-tooltip@^5.28.1:
     "@floating-ui/dom" "^1.6.1"
     classnames "^2.3.0"
 
-"react@^16 || ^17 || ^18 || ^19", "react@^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react@^16.8.0 || ^17 || ^18 || ^19", "react@^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react@^16.9.0 || ^17.0.0 || ^18 || ^19", "react@^18.0 || ^19", "react@^18.0 || ^19.0", "react@^18.0 || ^19.0 || ^19.0.0-rc", "react@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0", "react@^19.0.0 || ^18.0.0 || ^17.0.1 || ^16.7.0", react@^19.2.0, "react@>= 0.14.0", "react@>= 16.0.0", "react@>= 16.8.0", "react@>= 16.8.0 < 20", "react@>= 16.8.0 || 17.x.x || ^18.0.0-0 || ^19.0.0-0", react@>=16, react@>=16.14.0, react@>=16.8, "react@>=16.8.0 <20.0.0", react@>=17.0.2:
+"react@^16 || ^17 || ^18 || ^19", "react@^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react@^16.8.0 || ^17 || ^18 || ^19", "react@^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react@^16.9.0 || ^17.0.0 || ^18 || ^19", "react@^18.0 || ^19", "react@^18.0 || ^19.0", "react@^18.0 || ^19.0 || ^19.0.0-rc", "react@^18.0.0 || ^19.0.0", "react@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0", "react@^19.0.0 || ^18.0.0 || ^17.0.1 || ^16.7.0", react@^19.2.0, "react@>= 0.14.0", "react@>= 16.0.0", "react@>= 16.8.0", "react@>= 16.8.0 < 20", "react@>= 16.8.0 || 17.x.x || ^18.0.0-0 || ^19.0.0-0", react@>=16, react@>=16.14.0, react@>=16.8, "react@>=16.8.0 <20.0.0", react@>=17.0.2:
   version "19.2.0"
   resolved "https://registry.npmjs.org/react/-/react-19.2.0.tgz"
   integrity sha512-tmbWg6W31tQLeB5cdIBOicJDJRR2KzXsV7uSK9iNfLWQ5bIZfxuPEHp7M8wiHyHnn0DD1i7w3Zmin0FtkrwoCQ==

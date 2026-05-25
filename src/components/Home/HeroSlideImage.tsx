@@ -29,7 +29,6 @@ export default function HeroSlideImage({ slide, isLcp, onLcpLoaded }: Props) {
       fill
       className="object-cover"
       onLoad={isLcp ? notifyLcpReady : undefined}
-      onLoadingComplete={isLcp ? notifyLcpReady : undefined}
       onError={isLcp ? notifyLcpReady : undefined}
     />
   );

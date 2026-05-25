@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import ProductItem from "@/components/Common/ProductItem";
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
 import { ChevronDown } from "@/components/Header/icons";
@@ -40,6 +41,21 @@ import {
 } from "react";
 
 const DIECAST_ONLY_CATEGORY = "toy cars, trains & vehicles";
+
+/** Directional slide for product-grid page transitions. */
+const slideVariants = {
+  enterFromRight: { x: "100%", opacity: 0 },
+  enterFromLeft: { x: "-100%", opacity: 0 },
+  center: { x: 0, opacity: 1 },
+  exitToLeft: { x: "-100%", opacity: 0 },
+  exitToRight: { x: "100%", opacity: 0 },
+};
+
+/** 0.3s tween — short enough not to feel laggy on slow networks. */
+const slideTransition = {
+  x: { type: "tween" as const, ease: "easeInOut" as const, duration: 0.3 },
+  opacity: { duration: 0.2 },
+};
 
 function countActiveShopFilters(q: ShopQueryState): number {
   let n = 0;
@@ -634,6 +650,44 @@ export default function ShopLiveExperience({
     productsPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [query.page]);
 
+  /**
+   * Directional page-transition state.
+   *  - "left"  → next page  (exit left,  enter from right)
+   *  - "right" → prev page  (exit right, enter from left)
+   * `isPageChangeOnlyRef` gates animation to *pure pagination*; filter/search
+   * changes (which may also reset page→1) skip the slide.
+   */
+  const prevPageDirectionRef = useRef({
+    page: query.page,
+    fp: listingFilterFingerprint(queryString),
+  });
+  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
+  const isPageChangeOnlyRef = useRef(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    /** Snapshot only after hydration to avoid SSR/client output divergence. */
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const currentFp = listingFilterFingerprint(queryString);
+    const prev = prevPageDirectionRef.current;
+    if (prev.page !== query.page && prev.fp === currentFp) {
+      isPageChangeOnlyRef.current = true;
+      setSlideDirection(query.page > prev.page ? "left" : "right");
+    } else {
+      isPageChangeOnlyRef.current = false;
+      setSlideDirection(null);
+    }
+    prevPageDirectionRef.current = { page: query.page, fp: currentFp };
+  }, [query.page, queryString]);
+
   const totalPages = Math.max(1, listing.totalPages ?? 1);
 
   const goToPage = useCallback(
@@ -1184,8 +1238,34 @@ export default function ShopLiveExperience({
                 }
               >
               {products.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9">
-                  {productGrid}
+                <div className="relative overflow-hidden">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={listing.page}
+                      variants={slideVariants}
+                      initial={
+                        prefersReducedMotion || !isPageChangeOnlyRef.current
+                          ? false
+                          : slideDirection === "left"
+                            ? "enterFromRight"
+                            : slideDirection === "right"
+                              ? "enterFromLeft"
+                              : false
+                      }
+                      animate="center"
+                      exit={
+                        prefersReducedMotion || !isPageChangeOnlyRef.current
+                          ? undefined
+                          : slideDirection === "left"
+                            ? "exitToLeft"
+                            : "exitToRight"
+                      }
+                      transition={slideTransition}
+                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9"
+                    >
+                      {productGrid}
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               ) : gridBusy ? (
                 <ShopProductGridSkeleton count={listing.pageSize || 12} />

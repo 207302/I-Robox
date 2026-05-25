@@ -20,6 +20,7 @@ const nextConfig = {
     minimumCacheTTL: 31536000,
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    qualities: [75, 90],
     remotePatterns: [
       {
         protocol: "https",
@@ -41,7 +42,7 @@ const nextConfig = {
   },
   serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
-    browsersListForSwc: true,
+    // browsersListForSwc was removed in Next.js 16; legacy polyfill drop now depends on Turbopack honouring browserslist (see TODO at top of file).
     workerThreads: false,
     /** Fewer SSG workers = less Neon connection churn during `next build`. Override with STATIC_GENERATION_CPUS=2 */
     cpus: Number(process.env.STATIC_GENERATION_CPUS ?? 1),

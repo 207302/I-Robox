@@ -411,7 +411,10 @@ const MainHeader = ({
                 aria-label="Cart"
               >
                 <CartIcon />
-                <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-normal text-white">
+                <span
+                  className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-normal text-white"
+                  suppressHydrationWarning
+                >
                   {cartCount || 0}
                 </span>
               </button>

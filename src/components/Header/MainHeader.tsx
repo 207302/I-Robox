@@ -426,11 +426,14 @@ const MainHeader = ({
                 aria-label="Wishlist"
               >
                 <HeartIcon />
-                {wishlistCount ? (
-                  <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-normal text-white">
-                    {wishlistCount}
-                  </span>
-                ) : null}
+                <span
+                  className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-normal text-white"
+                  style={{ visibility: wishlistCount > 0 ? "visible" : "hidden" }}
+                  aria-hidden={wishlistCount > 0 ? undefined : true}
+                  suppressHydrationWarning
+                >
+                  {wishlistCount || 0}
+                </span>
               </Link>
 
               <div

@@ -118,7 +118,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
             {product.shortDescription ? (
               <p className="mt-4 text-base text-meta-3">{product.shortDescription}</p>
             ) : null}
-            {product.ageGroup || product.diecastScale ? (
+            {product.ageGroup ||
+            product.diecastScale ||
+            product.brand ||
+            product.category ||
+            product.subcategory ||
+            product.collection ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {product.ageGroup ? (
                   <span className="inline-flex rounded-full border border-gray-3 bg-gray-1 px-3 py-1 text-xs font-medium text-meta-3">
@@ -128,6 +133,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 {product.diecastScale ? (
                   <span className="inline-flex rounded-full border border-gray-3 bg-gray-1 px-3 py-1 text-xs font-medium text-meta-3">
                     Scale: {product.diecastScale}
+                  </span>
+                ) : null}
+                {product.brand ? (
+                  <span className="inline-flex rounded-full border border-gray-3 bg-gray-1 px-3 py-1 text-xs font-medium text-meta-3">
+                    Brand: {product.brand.name}
+                  </span>
+                ) : null}
+                {product.category ? (
+                  <span className="inline-flex rounded-full border border-gray-3 bg-gray-1 px-3 py-1 text-xs font-medium text-meta-3">
+                    Category: {product.category.title}
+                  </span>
+                ) : null}
+                {product.subcategory ? (
+                  <span className="inline-flex rounded-full border border-gray-3 bg-gray-1 px-3 py-1 text-xs font-medium text-meta-3">
+                    Sub category: {product.subcategory.name}
+                  </span>
+                ) : null}
+                {product.collection ? (
+                  <span className="inline-flex rounded-full border border-gray-3 bg-gray-1 px-3 py-1 text-xs font-medium text-meta-3">
+                    Collection: {product.collection.name}
                   </span>
                 ) : null}
               </div>

@@ -224,6 +224,24 @@ async function loadProductBySlug(slug: string) {
           name: true,
         },
       },
+      brands: {
+        select: {
+          slug: true,
+          name: true,
+        },
+      },
+      product_subtypes: {
+        select: {
+          slug: true,
+          name: true,
+        },
+      },
+      product_collections: {
+        select: {
+          slug: true,
+          name: true,
+        },
+      },
       product_variants: {
         orderBy: [{ is_default: "desc" }, { created_at: "asc" }],
         select: {
@@ -273,6 +291,15 @@ async function loadProductBySlug(slug: string) {
     updatedAt: product.updated_at,
     category: product.categories
       ? { title: product.categories.name, slug: product.categories.slug }
+      : null,
+    brand: product.brands
+      ? { name: product.brands.name, slug: product.brands.slug }
+      : null,
+    subcategory: product.product_subtypes
+      ? { name: product.product_subtypes.name, slug: product.product_subtypes.slug }
+      : null,
+    collection: product.product_collections
+      ? { name: product.product_collections.name, slug: product.product_collections.slug }
       : null,
     product_images: product.product_images,
     productVariants: product.product_variants.map((v) => {

@@ -784,9 +784,9 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({
                       kind,
-                      category_id: kind === "CATEGORY" ? fd.get("category_id") : null,
-                      product_id: kind === "PRODUCT" ? fd.get("product_id") : null,
-                      brand_id: kind === "BRAND" ? fd.get("brand_id") : null,
+                      category_id: fd.get("category_id") || null,
+                      product_id: fd.get("product_id") || null,
+                      brand_id: fd.get("brand_id") || null,
                       title: fd.get("title"),
                       subtitle: fd.get("subtitle") || null,
                       image_url: imageUrl || null,
@@ -819,26 +819,29 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               </select>
             </label>
             <label>
-              <span className="text-sm font-medium">Category (for CATEGORY)</span>
+              <span className="text-sm font-medium">Category (link target)</span>
               <select name="category_id" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm">
                 <option value="">—</option>
                 {categoryOptions}
               </select>
             </label>
             <label>
-              <span className="text-sm font-medium">Product (for PRODUCT)</span>
+              <span className="text-sm font-medium">Product (link target)</span>
               <select name="product_id" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm">
                 <option value="">—</option>
                 {productOptions}
               </select>
             </label>
             <label>
-              <span className="text-sm font-medium">Brand (for BRAND)</span>
+              <span className="text-sm font-medium">Brand (link target)</span>
               <select name="brand_id" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm">
                 <option value="">—</option>
                 {brandOptions}
               </select>
             </label>
+            <p className="sm:col-span-2 -mt-1 text-xs text-meta-3">
+              Pick one link target. Priority: Link override → Product → Brand → Category. Falls back to /shop if none set.
+            </p>
             <label className="sm:col-span-2">
               <span className="text-sm font-medium">Title</span>
               <input name="title" required className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />

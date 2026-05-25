@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
     if (kind === "BRAND" && !brand_id) {
       return NextResponse.json({ error: "brand_id required for BRAND" }, { status: 400 });
     }
+    // Link target is independent of `kind`: any highlight can carry any
+    // combination of category/product/brand IDs. The homepage resolves the
+    // link in priority order (link_url > product > brand > category).
   
     const title = cleanText(body.title, 255);
     if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
@@ -89,9 +92,9 @@ export async function POST(req: NextRequest) {
     const created = await prisma.homepage_highlights.create({
       data: {
         kind,
-        category_id: kind === "CATEGORY" ? category_id : null,
-        product_id: kind === "PRODUCT" ? product_id : null,
-        brand_id: kind === "BRAND" ? brand_id : null,
+        category_id,
+        product_id,
+        brand_id,
         title,
         subtitle: subtitle ?? null,
         image_url: image_url ?? null,

@@ -75,31 +75,40 @@ export default async function HomePage() {
   const highlights: HomeHighlightCard[] = highlightsRaw
     .filter((h) => isActiveInWindow(h.is_active, h.active_from, h.active_until, now))
     .map((h) => {
-      let href = h.link_url ?? "";
-      let image = h.image_url ?? "";
-      const label = h.title;
-      const alt = h.title;
+      // Link target priority (independent of `kind`):
+      //   1) link_url override
+      //   2) products  → /shop/<slug>
+      //   3) brands    → /shop?brand=<slug>
+      //   4) categories→ /shop?category=<slug>
+      //   5) /shop
+      const product = "products" in h ? h.products : undefined;
+      const brand = "brands" in h ? h.brands : undefined;
+      const category = "categories" in h ? h.categories : undefined;
 
-      if (h.kind === "CATEGORY" && h.categories) {
-        if (!href) href = `/shop?category=${encodeURIComponent(h.categories.slug)}`;
-        if (!image) image = FALLBACK_HIGHLIGHT_IMAGE;
-      } else if (h.kind === "BRAND" && "brands" in h && h.brands) {
-        if (!href) href = `/shop?brand=${encodeURIComponent(h.brands.slug)}`;
-        if (!image) image = FALLBACK_HIGHLIGHT_IMAGE;
-      } else if (h.kind === "PRODUCT" && h.products) {
-        if (!href) href = `/shop/${h.products.slug}`;
-        if (!image) image = h.products.product_images[0]?.url ?? FALLBACK_HIGHLIGHT_IMAGE;
-      } else {
-        if (!href) href = "/shop";
-        if (!image) image = FALLBACK_HIGHLIGHT_IMAGE;
+      let href = (h.link_url ?? "").trim();
+      if (!href) {
+        if (product?.slug) {
+          href = `/shop/${product.slug}`;
+        } else if (brand?.slug) {
+          href = `/shop?brand=${encodeURIComponent(brand.slug)}`;
+        } else if (category?.slug) {
+          href = `/shop?category=${encodeURIComponent(category.slug)}`;
+        } else {
+          href = "/shop";
+        }
+      }
+
+      let image = h.image_url ?? "";
+      if (!image) {
+        image = product?.product_images?.[0]?.url ?? FALLBACK_HIGHLIGHT_IMAGE;
       }
 
       return {
         id: h.id,
         href,
         image: image.startsWith("http") ? cloudinaryCardUrl(image, 384) : image,
-        label,
-        alt,
+        label: h.title,
+        alt: h.title,
         subtitle: h.subtitle,
       };
     });

@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   description: "i-Robox – diecast models, collectibles & play. Shop online.",
   keywords: "diecast, collectibles, toys, i-Robox, hot wheels",
   icons: {
-    icon: "/images/logo/logo-icon.svg",
-    shortcut: "/images/logo/logo-icon.svg",
+    icon: "/images/logo/logo1-removebg-preview.png",
+    shortcut: "/images/logo/logo1-removebg-preview.png",
     apple: "/images/logo/logo1-removebg-preview.png",
   },
 };

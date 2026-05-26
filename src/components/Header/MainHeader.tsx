@@ -38,7 +38,7 @@ export type SiteHeaderData = {
   headerLogo?: string | null;
 };
 
-const DEFAULT_HEADER_LOGO = "/images/logo/logo1.webp";
+const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
 
 export type UtilityAnnouncement = {
   body: string;

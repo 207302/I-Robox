@@ -21,12 +21,18 @@ export async function proxy(request: NextRequest) {
    * HTTP → HTTPS via Hostinger's `x-forwarded-proto`. Must precede header work
    * so we return early on the 301 (Hostinger CDN strips `next.config.js`
    * `redirects()` before they apply — proxy enforces it at the Node edge).
+   *
+   * Gated to production: Next.js dev (Turbopack) sends `x-forwarded-proto: http`
+   * on every request, which would 301-loop `localhost:3000` to itself over HTTPS
+   * and trip ERR_SSL_PROTOCOL_ERROR.
    */
-  const proto = request.headers.get("x-forwarded-proto");
-  if (proto === "http") {
-    const httpsUrl = request.nextUrl.clone();
-    httpsUrl.protocol = "https:";
-    return NextResponse.redirect(httpsUrl, { status: 301 });
+  if (process.env.NODE_ENV === "production") {
+    const proto = request.headers.get("x-forwarded-proto");
+    if (proto === "http") {
+      const httpsUrl = request.nextUrl.clone();
+      httpsUrl.protocol = "https:";
+      return NextResponse.redirect(httpsUrl, { status: 301 });
+    }
   }
 
   const response = NextResponse.next();

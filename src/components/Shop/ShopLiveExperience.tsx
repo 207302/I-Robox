@@ -870,14 +870,6 @@ export default function ShopLiveExperience({
     return (
     <div className="rounded-xl border border-gray-3 bg-white p-5">
       <form id={formId} className="mb-5 space-y-3" onSubmit={(e) => e.preventDefault()}>
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search name, brand, category, SKU…"
-          autoComplete="off"
-          className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
-        />
         <div className="grid grid-cols-2 gap-2">
           <input
             value={minPriceInput}
@@ -1144,6 +1136,18 @@ export default function ShopLiveExperience({
           {gridResultsLoading ? (
             <span className="text-xs font-medium text-meta-3 animate-pulse">Updating results…</span>
           ) : null}
+        </div>
+
+        <div className="mb-4">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search name, brand, category, SKU…"
+            autoComplete="off"
+            aria-label="Search products"
+            className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+          />
         </div>
 
         <div className="shop-mobile-filters-wrap">

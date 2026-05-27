@@ -129,7 +129,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   if (slides.length === 0) {
     return (
       <div
-        className="relative flex w-full aspect-[3/2] lg:aspect-[2.7/1] items-center justify-center bg-gray-1 border-b border-gray-3"
+        className="relative flex w-full aspect-[7/5] lg:aspect-[2.7/1] items-center justify-center bg-gray-1 border-b border-gray-3"
         aria-label="Hero banner area"
       >
         <p className="max-w-md px-4 text-center text-sm leading-relaxed text-meta-3">
@@ -144,7 +144,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
 
   return (
     <div
-      className="relative w-full touch-pan-y aspect-[3/2] lg:aspect-[2.7/1]"
+      className="relative w-full touch-pan-y aspect-[7/5] lg:aspect-[2.7/1]"
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}

@@ -109,7 +109,7 @@ export default function HeroCarouselClient({ slides }: Props) {
 
   return (
     <div
-      className="relative w-full touch-pan-y aspect-[3/2] lg:aspect-[2.7/1]"
+      className="relative w-full touch-pan-y aspect-[7/5] lg:aspect-[2.7/1]"
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}

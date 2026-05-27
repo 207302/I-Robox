@@ -6,7 +6,7 @@ import type { MenuItem } from "./types";
 import { CloseIcon, SearchIcon } from "./icons";
 import Image from "next/image";
 
-const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
+const DEFAULT_HEADER_LOGO = "/images/logo/logo.png";
 
 interface MobileMenuProps {
   headerLogo: string | null;

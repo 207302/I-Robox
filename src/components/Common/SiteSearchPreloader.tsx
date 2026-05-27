@@ -8,7 +8,7 @@ import {
   type SearchProgressDetail,
 } from "@/lib/shop/searchProgress";
 
-const LOGO = "/images/logo/logo1-removebg-preview.png";
+const LOGO = "/images/logo/logo.png";
 
 type Props = {
   onDone: () => void;

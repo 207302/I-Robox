@@ -38,7 +38,7 @@ export type SiteHeaderData = {
   headerLogo?: string | null;
 };
 
-const DEFAULT_HEADER_LOGO = "/images/logo/logo1-removebg-preview.png";
+const DEFAULT_HEADER_LOGO = "/images/logo/logo.png";
 
 export type UtilityAnnouncement = {
   body: string;

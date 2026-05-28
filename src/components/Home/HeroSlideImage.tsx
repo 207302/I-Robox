@@ -20,7 +20,7 @@ export default function HeroSlideImage({ slide, isLcp }: Props) {
       {...heroSlideImageProps(imageUrl, isLcp)}
       alt={slide.title ?? "Hero banner"}
       fill
-      className="object-cover object-center"
+      className="object-cover object-top"
       quality={isLcp ? 90 : 85}
     />
   );

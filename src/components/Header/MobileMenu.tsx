@@ -8,6 +8,10 @@ import Image from "next/image";
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo.png";
 
+function isLocalPublicImage(src: string) {
+  return src.startsWith("/images/");
+}
+
 interface MobileMenuProps {
   headerLogo: string | null;
   isOpen: boolean;
@@ -110,7 +114,10 @@ const MobileMenu = ({
                   width={88}
                   height={88}
                   quality={90}
-                  unoptimized={(headerLogo || DEFAULT_HEADER_LOGO).endsWith(".svg")}
+                  unoptimized={
+                    isLocalPublicImage(headerLogo || DEFAULT_HEADER_LOGO) ||
+                    (headerLogo || DEFAULT_HEADER_LOGO).endsWith(".svg")
+                  }
                   className="h-10 w-auto max-h-10 object-contain"
                   sizes="100px"
                   loading="lazy"

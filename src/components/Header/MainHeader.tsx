@@ -40,6 +40,11 @@ export type SiteHeaderData = {
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo.png";
 
+/** Static files in /public — skip `next/image` optimizer (same as favicon; avoids 404/broken on some hosts). */
+function isLocalPublicImage(src: string) {
+  return src.startsWith("/images/");
+}
+
 export type UtilityAnnouncement = {
   body: string;
   linkUrl?: string | null;
@@ -343,9 +348,8 @@ const MainHeader = ({
                     width={88}
                     height={88}
                     quality={90}
-                    unoptimized={headerLogoSrc.endsWith(".svg")}
+                    unoptimized={isLocalPublicImage(headerLogoSrc) || headerLogoSrc.endsWith(".svg")}
                     className="h-10 w-auto max-h-10 object-contain xl:h-11 xl:max-h-11"
-                    style={{ width: "auto", height: "auto" }}
                     loading="eager"
                     fetchPriority="low"
                     sizes="88px"
@@ -370,9 +374,8 @@ const MainHeader = ({
                   width={88}
                   height={88}
                   quality={90}
-                  unoptimized={headerLogoSrc.endsWith(".svg")}
+                  unoptimized={isLocalPublicImage(headerLogoSrc) || headerLogoSrc.endsWith(".svg")}
                   className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
-                  style={{ width: "auto", height: "auto" }}
                   loading="eager"
                   fetchPriority="low"
                   sizes="88px"

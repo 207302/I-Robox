@@ -52,8 +52,8 @@ export default function SiteSearchPreloader({ onDone }: Props) {
         width={88}
         height={88}
         quality={90}
+        unoptimized
         className="mb-10 h-20 w-auto sm:h-24"
-        style={{ width: "auto" }}
         loading="eager"
       />
       <p className="mb-6 text-center text-lg font-semibold text-dark sm:text-xl">Searching....</p>

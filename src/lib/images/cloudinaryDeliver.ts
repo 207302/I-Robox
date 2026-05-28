@@ -23,7 +23,7 @@ export function cloudinaryDeliverUrl(
     dpr?: number;
     quality?: CloudinaryQuality;
     crop?: "limit" | "fill";
-    gravity?: "auto";
+    gravity?: "auto" | "north";
   }
 ): string {
   const trimmed = url?.trim();
@@ -37,7 +37,7 @@ export function cloudinaryDeliverUrl(
   const q = opts?.quality ?? "auto";
   const transforms = [
     opts?.crop === "limit" ? "c_limit" : opts?.crop === "fill" ? "c_fill" : null,
-    opts?.gravity === "auto" ? "g_auto" : null,
+    opts?.gravity === "auto" ? "g_auto" : opts?.gravity === "north" ? "g_north" : null,
     "f_auto",
     qualityTransform(q),
     w ? `w_${w}` : null,
@@ -64,7 +64,7 @@ function cloudinaryHeroDeliverUrl(url: string, layoutWidth: number): string {
     dpr: 2,
     quality: "auto:best",
     crop: "fill",
-    gravity: "auto",
+    gravity: "north",
   });
 }
 
@@ -114,7 +114,7 @@ export function cloudinaryHeroSlideUrl(url: string, isLcp: boolean): string {
     height: HERO_HEIGHT_CEILING,
     quality: isLcp ? "auto:best" : "auto:good",
     crop: "fill",
-    gravity: "auto",
+    gravity: "north",
   });
 }
 

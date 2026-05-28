@@ -25,16 +25,9 @@ export default function HeroCarouselClient({ slides }: Props) {
   const slideCount = slides.length;
   const slidesKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
   const [activeIndex, setActiveIndex] = useState(0);
-  /** Do not auto-advance until the first slide has painted (stable LCP). */
-  const [heroReady, setHeroReady] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const [mobileControlsActive, setMobileControlsActive] = useState(false);
-  const lcpPaneRef = useRef<HTMLDivElement>(null);
-
-  const markHeroReady = useCallback(() => {
-    setHeroReady(true);
-  }, []);
 
   const goToNext = useCallback(() => {
     startTransition(() => {
@@ -63,24 +56,15 @@ export default function HeroCarouselClient({ slides }: Props) {
 
   useEffect(() => {
     startTransition(() => setActiveIndex(0));
-    setHeroReady(false);
   }, [slidesKey]);
 
   useEffect(() => {
-    if (heroReady || slideCount === 0) return undefined;
-    const img = lcpPaneRef.current?.querySelector("img");
-    if (img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0) {
-      markHeroReady();
-    }
-  }, [heroReady, slideCount, slidesKey, markHeroReady]);
-
-  useEffect(() => {
-    if (slideCount <= 1 || !heroReady) return undefined;
+    if (slideCount <= 1) return undefined;
     const timer = window.setInterval(() => {
       goToNext();
     }, AUTO_ROTATE_INTERVAL);
     return () => window.clearInterval(timer);
-  }, [goToNext, slideCount, heroReady]);
+  }, [goToNext, slideCount]);
 
   useEffect(() => {
     return () => {
@@ -125,8 +109,6 @@ export default function HeroCarouselClient({ slides }: Props) {
             return (
               <div
                 key={slide.id}
-                ref={index === 0 ? lcpPaneRef : undefined}
-                data-hero-lcp={index === 0 ? "true" : undefined}
                 className={`relative h-full min-w-full flex-shrink-0 ${
                   isActive ? "" : "pointer-events-none"
                 }`}
@@ -135,7 +117,6 @@ export default function HeroCarouselClient({ slides }: Props) {
                 <HeroSlideImage
                   slide={slide}
                   isLcp={index === 0}
-                  onLcpLoaded={index === 0 ? markHeroReady : undefined}
                 />
               </div>
             );

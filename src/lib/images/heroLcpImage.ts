@@ -1,4 +1,5 @@
 import {
+  cloudinaryHeroSlideUrl,
   cloudinaryHeroSourceUrl,
   isCloudinaryDeliveryUrl,
 } from "@/lib/images/cloudinaryDeliver";
@@ -7,7 +8,7 @@ export { isCloudinaryDeliveryUrl };
 
 /** Matches hero `fill` layout — next/image picks srcset width from this + deviceSizes. */
 export const HERO_IMAGE_SIZES =
-  "(max-width: 640px) 100vw, (max-width: 1024px) 100vw, (max-width: 1280px) 1280px, 1440px";
+  "(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 1440px";
 
 /** Preload href for shop/LCP helpers — ceiling URL; next/image handles responsive widths. */
 export function heroLcpPreloadHref(rawUrl: string): string | null {
@@ -20,8 +21,11 @@ export function heroLcpPreloadHref(rawUrl: string): string | null {
 }
 
 export function heroSlideImageProps(src: string, isLcp: boolean) {
+  const resolvedSrc = isCloudinaryDeliveryUrl(src)
+    ? cloudinaryHeroSlideUrl(src, isLcp)
+    : src;
   const shared = {
-    src,
+    src: resolvedSrc,
     sizes: HERO_IMAGE_SIZES,
   };
 
@@ -35,8 +39,7 @@ export function heroSlideImageProps(src: string, isLcp: boolean) {
   }
   return {
     ...shared,
-    priority: false as const,
     loading: "lazy" as const,
-    fetchPriority: "low" as const,
+    fetchPriority: "auto" as const,
   };
 }

@@ -17,7 +17,14 @@ function qualityTransform(quality: CloudinaryQuality): string {
 
 export function cloudinaryDeliverUrl(
   url: string,
-  opts?: { width?: number; dpr?: number; quality?: CloudinaryQuality; crop?: "limit" }
+  opts?: {
+    width?: number;
+    height?: number;
+    dpr?: number;
+    quality?: CloudinaryQuality;
+    crop?: "limit" | "fill";
+    gravity?: "auto";
+  }
 ): string {
   const trimmed = url?.trim();
   if (!trimmed) return trimmed;
@@ -29,10 +36,12 @@ export function cloudinaryDeliverUrl(
   const dpr = opts?.dpr;
   const q = opts?.quality ?? "auto";
   const transforms = [
-    opts?.crop === "limit" ? "c_limit" : null,
+    opts?.crop === "limit" ? "c_limit" : opts?.crop === "fill" ? "c_fill" : null,
+    opts?.gravity === "auto" ? "g_auto" : null,
     "f_auto",
     qualityTransform(q),
     w ? `w_${w}` : null,
+    opts?.height ? `h_${opts.height}` : null,
     dpr != null && dpr > 0 ? `dpr_${dpr}` : null,
   ]
     .filter(Boolean)
@@ -46,13 +55,16 @@ export function cloudinaryHeroUrl(url: string): string {
   return cloudinaryHeroDeliverUrl(url, 1280);
 }
 
-/** High-quality hero transform — limit upscale, best auto quality per width. */
+/** High-quality hero transform — fixed crop with auto gravity per width. */
 function cloudinaryHeroDeliverUrl(url: string, layoutWidth: number): string {
+  const layoutHeight = Math.round((layoutWidth * HERO_HEIGHT_CEILING) / HERO_WIDTH_CEILING);
   return cloudinaryDeliverUrl(url, {
     width: layoutWidth,
+    height: layoutHeight,
     dpr: 2,
     quality: "auto:best",
-    crop: "limit",
+    crop: "fill",
+    gravity: "auto",
   });
 }
 
@@ -85,16 +97,24 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
 const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 
 export const HERO_WIDTH_CEILING = 1440;
+export const HERO_HEIGHT_CEILING = 534;
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).
  * Next.js generates responsive /_next/image srcset from sizes + deviceSizes.
  */
 export function cloudinaryHeroSourceUrl(url: string): string {
+  return cloudinaryHeroSlideUrl(url, true);
+}
+
+/** Hero slide source: fixed crop to banner frame with auto gravity. */
+export function cloudinaryHeroSlideUrl(url: string, isLcp: boolean): string {
   return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(url), {
     width: HERO_WIDTH_CEILING,
-    quality: "auto:best",
-    crop: "limit",
+    height: HERO_HEIGHT_CEILING,
+    quality: isLcp ? "auto:best" : "auto:good",
+    crop: "fill",
+    gravity: "auto",
   });
 }
 

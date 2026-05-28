@@ -12,6 +12,7 @@ import {
 } from "react";
 import HeroSlideImage from "./HeroSlideImage";
 import type { HeroSlide } from "./heroTypes";
+import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
 
 const AUTO_ROTATE_INTERVAL = 7000;
 const SWIPE_THRESHOLD = 50;
@@ -93,7 +94,7 @@ export default function HeroCarouselClient({ slides }: Props) {
 
   return (
     <div
-      className="relative w-full touch-pan-y aspect-[7/5] lg:aspect-[2.7/1]"
+      className="relative w-full touch-pan-y overflow-hidden aspect-[7/5] lg:aspect-[16/5.5]"
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}
@@ -106,6 +107,7 @@ export default function HeroCarouselClient({ slides }: Props) {
         >
           {slides.map((slide, index) => {
             const isActive = index === activeIndex;
+            const { mobileSrc } = heroSlideImageProps(slide.image_url, index === 0);
             return (
               <div
                 key={slide.id}
@@ -117,6 +119,7 @@ export default function HeroCarouselClient({ slides }: Props) {
                 <HeroSlideImage
                   slide={slide}
                   isLcp={index === 0}
+                  mobileSrc={mobileSrc}
                 />
               </div>
             );

@@ -96,8 +96,12 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
  */
 const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 
+/** Desktop hero frame — matches lg:aspect-[16/5.5] (1440 / (16/5.5) ≈ 495). */
 export const HERO_WIDTH_CEILING = 1440;
-export const HERO_HEIGHT_CEILING = 534;
+export const HERO_HEIGHT_CEILING = 495;
+/** Mobile hero frame — matches aspect-[7/5] (750 × 5/7 = 536). */
+export const HERO_MOBILE_WIDTH = 750;
+export const HERO_MOBILE_HEIGHT = 536;
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).
@@ -107,11 +111,22 @@ export function cloudinaryHeroSourceUrl(url: string): string {
   return cloudinaryHeroSlideUrl(url, true);
 }
 
-/** Hero slide source: fixed crop to banner frame with auto gravity. */
+/** Hero slide source: fixed crop to desktop banner frame, top-anchored. */
 export function cloudinaryHeroSlideUrl(url: string, isLcp: boolean): string {
   return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(url), {
     width: HERO_WIDTH_CEILING,
     height: HERO_HEIGHT_CEILING,
+    quality: isLcp ? "auto:best" : "auto:good",
+    crop: "fill",
+    gravity: "north",
+  });
+}
+
+/** Mobile hero source: fixed crop to mobile banner frame, top-anchored. */
+export function cloudinaryHeroMobileUrl(src: string, isLcp: boolean = false): string {
+  return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(src), {
+    width: HERO_MOBILE_WIDTH,
+    height: HERO_MOBILE_HEIGHT,
     quality: isLcp ? "auto:best" : "auto:good",
     crop: "fill",
     gravity: "north",

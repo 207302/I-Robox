@@ -8,21 +8,44 @@ import type { HeroSlide } from "./heroTypes";
 type Props = {
   slide: HeroSlide;
   isLcp: boolean;
+  mobileSrc: string;
 };
 
 /** Hero slide image (LCP candidate when isLcp). */
-export default function HeroSlideImage({ slide, isLcp }: Props) {
+export default function HeroSlideImage({ slide, isLcp, mobileSrc }: Props) {
   const imageUrl = slide.image_url?.trim();
   if (!imageUrl) return null;
+  const {
+    src: desktopSrc,
+    loading,
+    fetchPriority,
+  } = heroSlideImageProps(imageUrl, isLcp);
 
   const img = (
-    <Image
-      {...heroSlideImageProps(imageUrl, isLcp)}
-      alt={slide.title ?? "Hero banner"}
-      fill
-      className="object-cover object-top"
-      quality={isLcp ? 90 : 85}
-    />
+    <>
+      <Image
+        src={mobileSrc}
+        alt={slide.title ?? "Hero banner"}
+        fill
+        className="object-cover object-top lg:hidden"
+        sizes="(max-width: 1023px) 100vw, 0vw"
+        priority={isLcp}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        quality={isLcp ? 90 : 85}
+      />
+      <Image
+        src={desktopSrc}
+        alt={slide.title ?? "Hero banner"}
+        fill
+        className="object-cover object-top hidden lg:block"
+        sizes="(max-width: 1023px) 0vw, 1440px"
+        priority={isLcp}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        quality={isLcp ? 90 : 85}
+      />
+    </>
   );
 
   if (slide.link_url) {

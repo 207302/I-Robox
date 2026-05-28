@@ -10,9 +10,7 @@ import Home, {
 import type { HeroSlide } from "@/components/Home/heroTypes";
 import {
   cloudinaryCardUrl,
-  cloudinaryHeroSourceUrl,
   cloudinaryProductCardUrl,
-  isCloudinaryDeliveryUrl,
 } from "@/lib/images/cloudinaryDeliver";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
@@ -65,9 +63,7 @@ export default async function HomePage() {
     .filter((s) => isActiveInWindow(s.is_active, s.active_from, s.active_until, now))
     .map((s) => ({
       id: s.id,
-      image_url: isCloudinaryDeliveryUrl(s.image_url)
-        ? cloudinaryHeroSourceUrl(s.image_url)
-        : s.image_url,
+      image_url: s.image_url,
       title: s.title,
       link_url: s.link_url,
     }));

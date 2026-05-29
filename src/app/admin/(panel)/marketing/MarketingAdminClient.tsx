@@ -5,7 +5,29 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
+import { cloudinaryCardUrl } from "@/lib/images/cloudinaryDeliver";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
+
+type HeroSlideRow = {
+  id: string;
+  image_url: string;
+  title: string | null;
+  link_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+};
+
+function sortHeroSlides(rows: HeroSlideRow[]): HeroSlideRow[] {
+  return [...rows].sort((a, b) => {
+    const bySort = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (bySort !== 0) return bySort;
+    const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
+    const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
+    if (aCreated !== bCreated) return aCreated - bCreated;
+    return a.id.localeCompare(b.id);
+  });
+}
 
 type SiteSettingsRow = {
   id?: string;
@@ -159,7 +181,9 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     | "flash"
     | "settings"
   >("hero");
-  const [slides, setSlides] = useState(initial.slides);
+  const [slides, setSlides] = useState(() =>
+    sortHeroSlides((initial.slides as HeroSlideRow[]) ?? [])
+  );
   const [highlights, setHighlights] = useState(initial.highlights);
   const [brandRailRows, setBrandRailRows] = useState(initial.brandRail);
   const [categoryGridRows, setCategoryGridRows] = useState(initial.categoryTiles);
@@ -264,6 +288,14 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [heroOverlaySaving, setHeroOverlaySaving] = useState(false);
   const [highlightsSectionSaving, setHighlightsSectionSaving] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
+  const [heroEditingId, setHeroEditingId] = useState<string | null>(null);
+  const [heroEditTitle, setHeroEditTitle] = useState("");
+  const [heroEditLinkUrl, setHeroEditLinkUrl] = useState("");
+  const [heroEditSortOrder, setHeroEditSortOrder] = useState(0);
+  const [heroEditOriginalSortOrder, setHeroEditOriginalSortOrder] = useState(0);
+  const [heroEditActive, setHeroEditActive] = useState(true);
+  const [heroEditImageUrl, setHeroEditImageUrl] = useState("");
+  const [heroEditSaving, setHeroEditSaving] = useState(false);
   const [highlightUploading, setHighlightUploading] = useState(false);
   const [brandRailUploading, setBrandRailUploading] = useState(false);
   const [categoryGridUploading, setCategoryGridUploading] = useState(false);
@@ -372,7 +404,26 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
 
   async function refreshHero() {
     const r = await fetch("/api/admin/marketing/hero-slides", { cache: "no-store" });
-    setSlides(await r.json());
+    setSlides(sortHeroSlides(await r.json()));
+  }
+
+  function heroSlideThumbUrl(url: string): string {
+    if (!url) return "";
+    return url.startsWith("http") ? cloudinaryCardUrl(url, 160) : url;
+  }
+
+  function startHeroEdit(row: HeroSlideRow) {
+    setHeroEditingId(row.id);
+    setHeroEditTitle(row.title ?? "");
+    setHeroEditLinkUrl(row.link_url ?? "");
+    setHeroEditSortOrder(row.sort_order ?? 0);
+    setHeroEditOriginalSortOrder(row.sort_order ?? 0);
+    setHeroEditActive(Boolean(row.is_active));
+    setHeroEditImageUrl(row.image_url ?? "");
+  }
+
+  function cancelHeroEdit() {
+    setHeroEditingId(null);
   }
   async function refreshHighlights() {
     const r = await fetch("/api/admin/marketing/highlights", { cache: "no-store" });
@@ -561,24 +612,196 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             </button>
           </div>
           <ul className="divide-y divide-gray-3 text-sm">
-            {slides.map((row: any) => (
-              <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-meta-3 font-mono text-xs">{row.id}</span>
-                <span className="flex-1 truncate">{row.image_url}</span>
-                <button
-                  type="button"
-                  className="text-red-600 text-sm"
-                  onClick={async () => {
-                    if (!confirm("Delete slide?")) return;
-                    await j(
-                      await fetch(`/api/admin/marketing/hero-slides/${row.id}`, { method: "DELETE" })
-                    );
-                    toast.success("Deleted");
-                    void refreshHero();
-                  }}
-                >
-                  Delete
-                </button>
+            {(slides as HeroSlideRow[]).map((row) => (
+              <li key={row.id} className="py-3">
+                {heroEditingId === row.id ? (
+                  <form
+                    className="grid gap-3 sm:grid-cols-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const formEl = e.currentTarget;
+                      const fd = new FormData(formEl);
+                      try {
+                        setHeroEditSaving(true);
+                        let imageUrl = String(fd.get("image_url") ?? heroEditImageUrl).trim();
+                        const heroFile = fd.get("image_file");
+                        if (heroFile instanceof File && heroFile.size > 0) {
+                          setHeroUploading(true);
+                          const uploadFd = new FormData();
+                          uploadFd.append("file", heroFile);
+                          const uploadRes = await j<{ url: string; public_id: string }>(
+                            await fetch("/api/admin/marketing/hero-slides/upload", {
+                              method: "POST",
+                              body: uploadFd,
+                            })
+                          );
+                          imageUrl = uploadRes.url;
+                        }
+                        if (!imageUrl) throw new Error("Image URL is required");
+
+                        const sortFromForm = Number(fd.get("sort_order"));
+                        const sortOrder = Number.isFinite(sortFromForm)
+                          ? sortFromForm
+                          : heroEditOriginalSortOrder;
+
+                        await j(
+                          await fetch(`/api/admin/marketing/hero-slides/${row.id}`, {
+                            method: "PATCH",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({
+                              image_url: imageUrl,
+                              title: String(fd.get("title") ?? "").trim() || null,
+                              link_url: String(fd.get("link_url") ?? "").trim() || null,
+                              sort_order: sortOrder,
+                              is_active: fd.get("is_active") === "on",
+                            }),
+                          })
+                        );
+                        toast.success("Slide updated");
+                        setHeroEditingId(null);
+                        void refreshHero();
+                        router.refresh();
+                      } catch (err: unknown) {
+                        toast.error(err instanceof Error ? err.message : "Failed");
+                      } finally {
+                        setHeroEditSaving(false);
+                        setHeroUploading(false);
+                      }
+                    }}
+                  >
+                    <div className="sm:col-span-2 flex items-center gap-3">
+                      <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded border border-gray-3 bg-gray-2">
+                        <Image
+                          src={heroSlideThumbUrl(heroEditImageUrl)}
+                          alt={heroEditTitle || "Hero slide"}
+                          fill
+                          className="object-cover"
+                          sizes="96px"
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-dark">Editing slide</span>
+                    </div>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Image URL</span>
+                      <input
+                        name="image_url"
+                        value={heroEditImageUrl}
+                        onChange={(e) => setHeroEditImageUrl(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Replace image (optional)</span>
+                      <input
+                        name="image_file"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Title</span>
+                      <input
+                        name="title"
+                        value={heroEditTitle}
+                        onChange={(e) => setHeroEditTitle(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Link URL</span>
+                      <input
+                        name="link_url"
+                        value={heroEditLinkUrl}
+                        onChange={(e) => setHeroEditLinkUrl(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Sort</span>
+                      <input
+                        name="sort_order"
+                        type="number"
+                        value={heroEditSortOrder}
+                        onChange={(e) => setHeroEditSortOrder(Number(e.target.value))}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm mt-6">
+                      <input
+                        name="is_active"
+                        type="checkbox"
+                        checked={heroEditActive}
+                        onChange={(e) => setHeroEditActive(e.target.checked)}
+                      />
+                      Active
+                    </label>
+                    <div className="sm:col-span-2 flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        disabled={heroEditSaving || heroUploading}
+                        className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                      >
+                        {heroEditSaving || heroUploading ? "Saving…" : "Save changes"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-gray-3 px-4 py-2 text-sm"
+                        onClick={cancelHeroEdit}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded border border-gray-3 bg-gray-2">
+                        <Image
+                          src={heroSlideThumbUrl(row.image_url)}
+                          alt={row.title ?? "Hero slide"}
+                          fill
+                          className="object-cover"
+                          sizes="96px"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-dark truncate">
+                          {row.title?.trim() || "Untitled slide"}
+                        </p>
+                        <p className="text-xs text-meta-3 mt-0.5">
+                          Sort {row.sort_order} · {row.is_active ? "Active" : "Inactive"}
+                        </p>
+                        {row.link_url ? (
+                          <p className="text-xs text-meta-4 truncate mt-0.5">{row.link_url}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        className="text-sm text-blue"
+                        onClick={() => startHeroEdit(row)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="text-red-600 text-sm"
+                        onClick={async () => {
+                          if (!confirm("Delete slide?")) return;
+                          await j(
+                            await fetch(`/api/admin/marketing/hero-slides/${row.id}`, { method: "DELETE" })
+                          );
+                          toast.success("Deleted");
+                          void refreshHero();
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

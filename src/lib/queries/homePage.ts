@@ -91,7 +91,7 @@ async function loadHomePageRawBundle() {
     prisma.homepage_hero_slides
       .findMany({
         where: { is_active: true },
-        orderBy: { sort_order: "asc" },
+        orderBy: [{ sort_order: "asc" }, { created_at: "asc" }],
         take: 20,
         select: {
           id: true,

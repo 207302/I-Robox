@@ -12,7 +12,9 @@ export async function GET() {
   return runApiRoute(async () => {
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const rows = await prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } });
+    const rows = await prisma.homepage_hero_slides.findMany({
+      orderBy: [{ sort_order: "asc" }, { created_at: "asc" }],
+    });
     return NextResponse.json(rows);
   
   });}

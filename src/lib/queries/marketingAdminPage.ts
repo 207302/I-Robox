@@ -56,7 +56,9 @@ export const getMarketingAdminWave1 = unstable_cache(
 export const getMarketingAdminWave2 = unstable_cache(
   async () => {
     const [slides, highlights, brandRail, categoryTiles, announcements] = await Promise.all([
-      prisma.homepage_hero_slides.findMany({ orderBy: { sort_order: "asc" } }).catch(() => []),
+      prisma.homepage_hero_slides
+        .findMany({ orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] })
+        .catch(() => []),
       loadHighlightsForAdmin().catch(() => []),
       prisma.homepage_brand_rail
         .findMany({

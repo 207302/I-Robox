@@ -150,7 +150,7 @@ export default async function HomePage() {
     id: p.id,
     slug: p.slug,
     title: p.title,
-    image: cloudinaryProductCardUrl(pickCardImage(p.product_images)),
+    image: cloudinaryProductCardUrl(pickCardImage(p.product_images), 380),
     price: Number(p.price),
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
   }));
@@ -159,7 +159,7 @@ export default async function HomePage() {
     id: p.id,
     slug: p.slug,
     title: p.title,
-    image: cloudinaryProductCardUrl(pickCardImage(p.product_images)),
+    image: cloudinaryProductCardUrl(pickCardImage(p.product_images), 380),
     price: Number(p.price),
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
   }));

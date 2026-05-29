@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { HOME_PRODUCT_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { formatPrice } from "@/utils/formatePrice";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
@@ -30,8 +31,9 @@ export default function HomeProductCard({
           src={item.image}
           alt={item.title}
           fill
-          sizes="(max-width: 640px) calc(50vw - 1rem), (max-width: 1024px) calc(33vw - 1rem), 220px"
+          sizes={HOME_PRODUCT_CARD_SIZES}
           className="object-cover"
+          quality={85}
           priority={priority}
           loading={priority ? undefined : "lazy"}
         />

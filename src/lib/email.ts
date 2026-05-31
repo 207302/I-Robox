@@ -1,7 +1,12 @@
 import nodemailer from "nodemailer";
 import type { AbandonedCartReminderLine } from "@/lib/email/abandonedCartReminder";
+import {
+  emailProductLinesTableHtml,
+  emailProductLinesText,
+  type EmailProductLine,
+} from "@/lib/email/emailProductLines";
 
-export type { AbandonedCartReminderLine };
+export type { AbandonedCartReminderLine, EmailProductLine };
 
 export function isEmailConfigured() {
   return Boolean(
@@ -47,14 +52,36 @@ export function orderEmailTemplate(input: {
   heading: string;
   message: string;
   orderId: string;
+  lines?: EmailProductLine[];
 }) {
+  const itemsHtml = input.lines?.length ? emailProductLinesTableHtml(input.lines) : "";
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
-    <h2>${input.heading}</h2>
-    <p>${input.message}</p>
-    <p><b>Order:</b> ${input.orderId}</p>
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5;color:#111">
+    <h2 style="margin:0 0 0.5em">${escapeHtmlText(input.heading)}</h2>
+    <p style="margin:0 0 1em">${escapeHtmlText(input.message)}</p>
+    <p style="margin:0 0 0.5em"><b>Order:</b> ${escapeHtmlText(input.orderId)}</p>
+    ${itemsHtml}
   </div>
   `;
+}
+
+function orderEmailTextBody(input: {
+  heading: string;
+  message: string;
+  orderId: string;
+  lines?: EmailProductLine[];
+}) {
+  const parts = [
+    input.heading,
+    "",
+    input.message,
+    "",
+    `Order id: ${input.orderId}`,
+  ];
+  if (input.lines?.length) {
+    parts.push("", "Items:", ...emailProductLinesText(input.lines));
+  }
+  return parts.join("\n");
 }
 
 function escapeHtmlAttr(s: string) {
@@ -93,31 +120,7 @@ export function abandonedCartReminderEmailHtml(input: {
   lines: AbandonedCartReminderLine[];
 }) {
   const safeUrl = escapeHtmlAttr(input.shopUrl);
-  const items = input.lines.slice(0, 6);
-  const itemsHtml =
-    items.length > 0
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0 20px;border-collapse:collapse;max-width:520px">
-  ${items
-    .map((line) => {
-      const safeName = escapeHtmlText(line.name);
-      const safeImg = escapeHtmlAttr(line.imageUrl);
-      const safeProductUrl = escapeHtmlAttr(line.productUrl);
-      const qty = Math.max(1, Math.floor(line.quantity));
-      return `<tr>
-    <td style="padding:10px 14px 10px 0;vertical-align:middle;width:76px">
-      <a href="${safeProductUrl}" style="text-decoration:none">
-        <img src="${safeImg}" alt="${escapeHtmlAttr(line.name)}" width="72" height="72" border="0" style="display:block;width:72px;height:72px;max-width:72px;border-radius:8px;border:1px solid #e5e7eb;background-color:#f9fafb;object-fit:cover" />
-      </a>
-    </td>
-    <td style="padding:10px 0;vertical-align:middle">
-      <a href="${safeProductUrl}" style="color:#111;text-decoration:none;font-weight:600">${safeName}</a>
-      <div style="margin:4px 0 0;font-size:14px;color:#555">Qty ${qty}</div>
-    </td>
-  </tr>`;
-    })
-    .join("")}
-</table>`
-      : "";
+  const itemsHtml = input.lines.length > 0 ? emailProductLinesTableHtml(input.lines) : "";
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">Still interested?</h2>
@@ -131,6 +134,7 @@ export function abandonedCartReminderEmailHtml(input: {
 /** Single email: pending order + optional set-password block (avoids losing a 2nd message to spam/threading). */
 export function orderPendingCustomerEmailHtml(input: {
   orderId: string;
+  lines?: EmailProductLine[];
   passwordSetup?: { email: string; setupUrl: string };
 }) {
   const orderPart = orderEmailTemplate({
@@ -138,6 +142,7 @@ export function orderPendingCustomerEmailHtml(input: {
     message:
       "Your order has been created in a pending state. Please complete payment to confirm it.",
     orderId: input.orderId,
+    lines: input.lines,
   });
   if (!input.passwordSetup) return orderPart;
   return `${orderPart}
@@ -147,11 +152,17 @@ export function orderPendingCustomerEmailHtml(input: {
 
 export function orderPendingCustomerEmailText(input: {
   orderId: string;
+  lines?: EmailProductLine[];
   passwordSetup?: { email: string; setupUrl: string };
 }) {
-  let t = `We received your order. It is pending until payment is completed.\n\nOrder id: ${input.orderId}\n`;
+  let t = orderEmailTextBody({
+    heading: "We received your order",
+    message: "Your order has been created in a pending state. Please complete payment to confirm it.",
+    orderId: input.orderId,
+    lines: input.lines,
+  });
   if (input.passwordSetup) {
-    t += `\n---\nWe created an account for ${input.passwordSetup.email}.\nSet your password (one-time link, 7 days):\n${input.passwordSetup.setupUrl}\n`;
+    t += `\n\n---\nWe created an account for ${input.passwordSetup.email}.\nSet your password (one-time link, 7 days):\n${input.passwordSetup.setupUrl}\n`;
   }
   return t;
 }
@@ -159,20 +170,28 @@ export function orderPendingCustomerEmailText(input: {
 /** Sent after a successful payment confirmation (e.g. Razorpay verified). */
 export function orderConfirmedCustomerEmailHtml(input: {
   orderId: string;
+  lines?: EmailProductLine[];
   passwordSetup?: { email: string; setupUrl: string };
 }) {
   return orderEmailTemplate({
     heading: "Order placed successfully",
     message: "Your payment was successful and your order is now confirmed.",
     orderId: input.orderId,
+    lines: input.lines,
   });
 }
 
 export function orderConfirmedCustomerEmailText(input: {
   orderId: string;
+  lines?: EmailProductLine[];
   passwordSetup?: { email: string; setupUrl: string };
 }) {
-  return `Order placed successfully. Payment received and order confirmed.\n\nOrder id: ${input.orderId}\n`;
+  return orderEmailTextBody({
+    heading: "Order placed successfully",
+    message: "Your payment was successful and your order is now confirmed.",
+    orderId: input.orderId,
+    lines: input.lines,
+  });
 }
 
 /** Dedicated email for guest checkout accounts — set password to sign in and view orders. */

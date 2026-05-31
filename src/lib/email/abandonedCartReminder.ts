@@ -1,13 +1,9 @@
 import { getProductCardImageUrl } from "@/lib/shop/productCardImage";
 import { PRODUCT_IMAGE_REMOTE_FALLBACK } from "@/lib/shop/productImagePlaceholder";
 import { getSiteBaseUrl, resolveAbsoluteUrl } from "@/lib/siteUrl";
+import type { EmailProductLine } from "@/lib/email/emailProductLines";
 
-export type AbandonedCartReminderLine = {
-  name: string;
-  quantity: number;
-  imageUrl: string;
-  productUrl: string;
-};
+export type AbandonedCartReminderLine = EmailProductLine;
 
 type ImageRow = { url: string; sort_order: number };
 

@@ -7,6 +7,7 @@ import {
   newGuestAccountPasswordEmailText,
 } from "@/lib/email";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
+import { loadOrderEmailLines } from "@/lib/email/orderEmailLines";
 import { notifyStoreNewOrder } from "@/lib/orders/storeOrderNotifications";
 import { bookShipmentForOrder } from "@/lib/shipping";
 import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
@@ -68,12 +69,19 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
 
   if (!checkoutEmail) return;
 
+  let orderLines: Awaited<ReturnType<typeof loadOrderEmailLines>> = [];
+  try {
+    orderLines = await loadOrderEmailLines(orderId);
+  } catch (err) {
+    console.error("[postOrderFulfillment] order line images failed", err);
+  }
+
   try {
     await sendEmail({
       to: checkoutEmail,
       subject: "Order placed successfully",
-      html: orderConfirmedCustomerEmailHtml({ orderId }),
-      text: orderConfirmedCustomerEmailText({ orderId }),
+      html: orderConfirmedCustomerEmailHtml({ orderId, lines: orderLines }),
+      text: orderConfirmedCustomerEmailText({ orderId, lines: orderLines }),
     });
   } catch (err) {
     console.error("[postOrderFulfillment] order email failed", err);

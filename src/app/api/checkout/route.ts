@@ -4,6 +4,7 @@ import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { getSession } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
 import { sendEmail, orderPendingCustomerEmailHtml, orderPendingCustomerEmailText } from "@/lib/email";
+import { loadOrderEmailLines } from "@/lib/email/orderEmailLines";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { createOrderAccessToken } from "@/lib/security/orderAccess";
@@ -369,6 +370,12 @@ export async function POST(req: NextRequest) {
         const passwordSetup = newAccountPasswordSetup
           ? { email: checkoutEmail, setupUrl: newAccountPasswordSetup.setupUrl }
           : undefined;
+        let orderLines: Awaited<ReturnType<typeof loadOrderEmailLines>> = [];
+        try {
+          orderLines = await loadOrderEmailLines(order.id);
+        } catch (lineErr) {
+          console.error("[checkout] order line images failed", lineErr);
+        }
         const mailResult = await sendEmail({
           to: checkoutEmail,
           subject: newAccountPasswordSetup
@@ -376,10 +383,12 @@ export async function POST(req: NextRequest) {
             : "Order created (pending payment)",
           html: orderPendingCustomerEmailHtml({
             orderId: order.id,
+            lines: orderLines,
             passwordSetup,
           }),
           text: orderPendingCustomerEmailText({
             orderId: order.id,
+            lines: orderLines,
             passwordSetup,
           }),
         });

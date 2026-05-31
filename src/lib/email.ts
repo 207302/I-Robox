@@ -161,26 +161,65 @@ export function orderConfirmedCustomerEmailHtml(input: {
   orderId: string;
   passwordSetup?: { email: string; setupUrl: string };
 }) {
-  const orderPart = orderEmailTemplate({
+  return orderEmailTemplate({
     heading: "Order placed successfully",
     message: "Your payment was successful and your order is now confirmed.",
     orderId: input.orderId,
   });
-  if (!input.passwordSetup) return orderPart;
-  return `${orderPart}
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0" />
-  ${passwordSetupInviteEmailHtml(input.passwordSetup)}`;
 }
 
 export function orderConfirmedCustomerEmailText(input: {
   orderId: string;
   passwordSetup?: { email: string; setupUrl: string };
 }) {
-  let t = `Order placed successfully. Payment received and order confirmed.\n\nOrder id: ${input.orderId}\n`;
-  if (input.passwordSetup) {
-    t += `\n---\nWe created an account for ${input.passwordSetup.email}.\nSet your password (one-time link, 7 days):\n${input.passwordSetup.setupUrl}\n`;
-  }
-  return t;
+  return `Order placed successfully. Payment received and order confirmed.\n\nOrder id: ${input.orderId}\n`;
+}
+
+/** Dedicated email for guest checkout accounts — set password to sign in and view orders. */
+export function newGuestAccountPasswordEmailHtml(input: {
+  email: string;
+  setupUrl: string;
+  orderId: string;
+  loginUrl: string;
+}) {
+  const safeEmail = escapeHtmlText(input.email);
+  const safeHref = escapeHtmlAttr(input.setupUrl);
+  const safeLogin = escapeHtmlAttr(input.loginUrl);
+  const safeOrderId = escapeHtmlText(input.orderId);
+  return `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.6;color:#111">
+    <h2 style="margin:0 0 0.5em">Set your password to view your orders</h2>
+    <p style="margin:0 0 1em">Thanks for shopping at i-Robox. We created an account for <strong>${safeEmail}</strong> when you checked out — no sign-up form needed.</p>
+    <p style="margin:0 0 1em">Your order <strong>${safeOrderId}</strong> is confirmed. To sign in anytime and view your order history, set a password using the button below.</p>
+    <p style="margin:0 0 1.5em">
+      <a href="${safeHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">
+        Set password
+      </a>
+    </p>
+    <p style="margin:0 0 1em">After setting your password, sign in here: <a href="${safeLogin}">${safeLogin}</a></p>
+    <p style="margin:0;font-size:13px;color:#555">This link works once and expires in 7 days. If the button does not work, copy and paste this URL into your browser:<br/>
+    <span style="word-break:break-all">${safeHref}</span></p>
+  </div>
+  `;
+}
+
+export function newGuestAccountPasswordEmailText(input: {
+  email: string;
+  setupUrl: string;
+  orderId: string;
+  loginUrl: string;
+}) {
+  return [
+    "Set your password to view your orders",
+    "",
+    `We created an i-Robox account for ${input.email} when you checked out.`,
+    `Your order ${input.orderId} is confirmed.`,
+    "",
+    "Set your password (one-time link, expires in 7 days):",
+    input.setupUrl,
+    "",
+    `Then sign in to view your orders: ${input.loginUrl}`,
+  ].join("\n");
 }
 
 export function passwordSetupInviteEmailHtml(input: { email: string; setupUrl: string }) {

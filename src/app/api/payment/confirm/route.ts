@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
 import { notifyCustomerOrderOrShipmentUpdate } from "@/lib/orders/customerOrderNotifications";
+import { notifyStoreNewOrder } from "@/lib/orders/storeOrderNotifications";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
@@ -183,15 +184,22 @@ export async function POST(req: NextRequest) {
         });
         recipient = row?.customers?.email ?? null;
       }
-  
-      if (!recipient || isSyntheticPhoneSignupEmail(recipient)) return;
-  
+
       try {
-        try {
-          await bookShipmentForOrder(orderId);
-        } catch (delErr) {
-          console.error("[payment/confirm] shipment booking failed", delErr);
-        }
+        await bookShipmentForOrder(orderId);
+      } catch (delErr) {
+        console.error("[payment/confirm] shipment booking failed", delErr);
+      }
+
+      try {
+        await notifyStoreNewOrder(orderId);
+      } catch (storeErr) {
+        console.error("[payment/confirm] store order email failed", storeErr);
+      }
+
+      if (!recipient || isSyntheticPhoneSignupEmail(recipient)) return;
+
+      try {
         await notifyCustomerOrderOrShipmentUpdate({
           to: recipient,
           orderId,

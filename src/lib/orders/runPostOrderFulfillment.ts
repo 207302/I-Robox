@@ -3,10 +3,14 @@ import {
   sendEmail,
   orderConfirmedCustomerEmailHtml,
   orderConfirmedCustomerEmailText,
+  newGuestAccountPasswordEmailHtml,
+  newGuestAccountPasswordEmailText,
 } from "@/lib/email";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
+import { notifyStoreNewOrder } from "@/lib/orders/storeOrderNotifications";
 import { bookShipmentForOrder } from "@/lib/shipping";
 import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
+import { getSiteBaseUrl } from "@/lib/siteUrl";
 
 export type PostOrderFulfillmentInput = {
   orderId: string;
@@ -56,21 +60,46 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
     }
   }
 
+  try {
+    await notifyStoreNewOrder(orderId);
+  } catch (err) {
+    console.error("[postOrderFulfillment] store order email failed", err);
+  }
+
   if (!checkoutEmail) return;
 
   try {
-    const passwordSetup = newAccountPasswordSetup
-      ? { email: checkoutEmail, setupUrl: newAccountPasswordSetup.setupUrl }
-      : undefined;
     await sendEmail({
       to: checkoutEmail,
-      subject: newAccountPasswordSetup
-        ? "Order placed — set your password (see email)"
-        : "Order placed successfully",
-      html: orderConfirmedCustomerEmailHtml({ orderId, passwordSetup }),
-      text: orderConfirmedCustomerEmailText({ orderId, passwordSetup }),
+      subject: "Order placed successfully",
+      html: orderConfirmedCustomerEmailHtml({ orderId }),
+      text: orderConfirmedCustomerEmailText({ orderId }),
     });
   } catch (err) {
     console.error("[postOrderFulfillment] order email failed", err);
+  }
+
+  if (newAccountPasswordSetup?.setupUrl) {
+    try {
+      const loginUrl = `${getSiteBaseUrl()}/login`;
+      await sendEmail({
+        to: checkoutEmail,
+        subject: "Set your password to view your orders | i-Robox",
+        html: newGuestAccountPasswordEmailHtml({
+          email: checkoutEmail,
+          setupUrl: newAccountPasswordSetup.setupUrl,
+          orderId,
+          loginUrl,
+        }),
+        text: newGuestAccountPasswordEmailText({
+          email: checkoutEmail,
+          setupUrl: newAccountPasswordSetup.setupUrl,
+          orderId,
+          loginUrl,
+        }),
+      });
+    } catch (err) {
+      console.error("[postOrderFulfillment] guest account password email failed", err);
+    }
   }
 }

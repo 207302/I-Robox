@@ -29,16 +29,9 @@ export default function HomeCategoryTilesSection({ categories }: HomeCategoryTil
             <h2 className="text-xl font-semibold text-dark xl:text-heading-5">
               Discover by category.
             </h2>
-            <p className="mt-1 text-sm text-meta-3">
-              Choose categories, order, and photos in Admin → Marketing → Discover by category. If none
-              are configured, the first eight catalog categories show here without images.
-            </p>
           </div>
           <p className="text-xs text-meta-4 sm:text-sm md:hidden">
             Scroll sideways on mobile to see more categories.
-          </p>
-          <p className="hidden text-xs text-meta-4 md:block">
-            Use the arrows to see more categories.
           </p>
         </div>
 

@@ -25,9 +25,6 @@ export default function HomeBrandRailSection({ items }: HomeBrandRailSectionProp
             <h2 className="text-xl font-semibold text-dark xl:text-heading-5">
               Browse by maker or universe.
             </h2>
-            <p className="mt-1 text-sm text-meta-3">
-              Tiles and images are managed in Admin → Marketing → Shop by brand.
-            </p>
           </div>
           <p className="text-xs text-meta-4 sm:text-sm md:hidden">
             Scroll sideways on mobile to see more brands.

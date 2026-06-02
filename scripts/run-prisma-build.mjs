@@ -56,7 +56,13 @@ function run(command, args) {
 
 run("npx", ["prisma", "generate"]);
 
-// Migrations: run manually before deploy — `npm run db:migrate` (uses DIRECT_URL via schema directUrl).
+// Apply pending migrations before static generation (build queries the live schema).
+if (process.env.DIRECT_URL || process.env.DATABASE_URL) {
+  console.log("[build] Applying pending Prisma migrations…");
+  run("npx", ["prisma", "migrate", "deploy"]);
+} else {
+  console.warn("[build] Skipping prisma migrate deploy: DATABASE_URL not set");
+}
 
 const pingUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
 if (pingUrl) {

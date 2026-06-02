@@ -13,16 +13,20 @@ import {
 import HeroSlideImage from "./HeroSlideImage";
 import type { HeroSlide } from "./heroTypes";
 import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
+import { DEFAULT_HERO_CAROUSEL_INTERVAL_MS } from "@/lib/marketing/heroCarousel";
 
-const AUTO_ROTATE_INTERVAL = 7000;
 const SWIPE_THRESHOLD = 50;
 
 type Props = {
   slides: HeroSlide[];
+  autoRotateIntervalMs?: number;
 };
 
 /** Horizontal slide track — non-LCP slides use lazy loading via HeroSlideImage. */
-export default function HeroCarouselClient({ slides }: Props) {
+export default function HeroCarouselClient({
+  slides,
+  autoRotateIntervalMs = DEFAULT_HERO_CAROUSEL_INTERVAL_MS,
+}: Props) {
   const slideCount = slides.length;
   const slidesKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -63,9 +67,9 @@ export default function HeroCarouselClient({ slides }: Props) {
     if (slideCount <= 1) return undefined;
     const timer = window.setInterval(() => {
       goToNext();
-    }, AUTO_ROTATE_INTERVAL);
+    }, autoRotateIntervalMs);
     return () => window.clearInterval(timer);
-  }, [goToNext, slideCount]);
+  }, [goToNext, slideCount, autoRotateIntervalMs]);
 
   useEffect(() => {
     return () => {

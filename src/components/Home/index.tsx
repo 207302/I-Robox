@@ -55,6 +55,8 @@ type HomeProps = {
     subheadingColor?: string;
     ctaLabelColor?: string;
   };
+  /** Auto-advance interval for multi-slide hero (ms). */
+  heroCarouselIntervalMs?: number;
   /** Small label above the highlights carousel (defaults if omitted). */
   highlightsSectionEyebrow?: string;
   /** Main heading under the label (defaults if omitted). */
@@ -92,6 +94,7 @@ const TRUST_BAR_ITEMS = [
 const Home = ({
   heroSlides,
   heroOverlay,
+  heroCarouselIntervalMs,
   highlightsSectionEyebrow = "Highlights",
   highlightsSectionHeading = "Featured collections and picks.",
   highlights,
@@ -108,7 +111,11 @@ const Home = ({
   return (
     <main className="bg-white">
       <section className="relative overflow-hidden pt-32">
-        <HeroBannerSection slides={heroSlides} overlay={heroOverlay} />
+        <HeroBannerSection
+          slides={heroSlides}
+          overlay={heroOverlay}
+          autoRotateIntervalMs={heroCarouselIntervalMs}
+        />
       </section>
 
       <section className="border-b border-gray-3 bg-white">

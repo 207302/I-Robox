@@ -12,6 +12,7 @@ import {
   cloudinaryCardUrl,
   cloudinaryProductCardUrl,
 } from "@/lib/images/cloudinaryDeliver";
+import { resolveHeroCarouselIntervalMs } from "@/lib/marketing/heroCarousel";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 
 /** ISR: keep in sync with `HOME_PAGE_REVALIDATE_SECONDS` in homePageCache.ts */
@@ -58,6 +59,9 @@ export default async function HomePage() {
     subheadingColor: siteMarketingSettings?.hero_overlay_subheading_color?.trim() ?? "",
     ctaLabelColor: siteMarketingSettings?.hero_overlay_cta_label_color?.trim() ?? "",
   };
+  const heroCarouselIntervalMs = resolveHeroCarouselIntervalMs(
+    siteMarketingSettings?.hero_carousel_interval_ms
+  );
 
   const heroSlides: HeroSlide[] = slidesRaw
     .filter((s) => isActiveInWindow(s.is_active, s.active_from, s.active_until, now))
@@ -169,6 +173,7 @@ export default async function HomePage() {
       <Home
         heroSlides={heroSlides}
         heroOverlay={heroOverlay}
+        heroCarouselIntervalMs={heroCarouselIntervalMs}
         highlightsSectionEyebrow={highlightsSectionEyebrow}
         highlightsSectionHeading={highlightsSectionHeading}
         highlights={highlights}

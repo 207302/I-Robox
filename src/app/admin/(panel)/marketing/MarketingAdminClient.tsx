@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
 import { cloudinaryCardUrl } from "@/lib/images/cloudinaryDeliver";
+import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
 
 type HeroSlideRow = {
@@ -42,6 +43,7 @@ type SiteSettingsRow = {
   hero_overlay_heading_color?: string | null;
   hero_overlay_subheading_color?: string | null;
   hero_overlay_cta_label_color?: string | null;
+  hero_carousel_interval_ms?: number | null;
   highlights_section_eyebrow?: string | null;
   highlights_section_heading?: string | null;
   privacy_page_title?: string | null;
@@ -242,6 +244,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [heroOverlayCtaLabelColor, setHeroOverlayCtaLabelColor] = useState(
     st0?.hero_overlay_cta_label_color ?? ""
   );
+  const [heroCarouselIntervalSeconds, setHeroCarouselIntervalSeconds] = useState(() =>
+    heroCarouselIntervalSecondsFromMs(st0?.hero_carousel_interval_ms)
+  );
+  const [heroCarouselTimerSaving, setHeroCarouselTimerSaving] = useState(false);
   const [utilityBarBgColor, setUtilityBarBgColor] = useState(st0?.utility_bar_bg_color ?? "");
   const [marqueeBarBgColor, setMarqueeBarBgColor] = useState(st0?.marquee_bar_bg_color ?? "");
   const [footerBgColor, setFooterBgColor] = useState(st0?.footer_bg_color ?? "");
@@ -490,6 +496,55 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
       {tab === "hero" ? (
         <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
           <h2 className="text-lg font-semibold">Hero slides</h2>
+          <div className="rounded-xl border border-gray-3 bg-gray-1/40 p-4 space-y-3 max-w-md">
+            <h3 className="text-sm font-semibold text-dark">Banner rotation timer</h3>
+            <p className="text-xs text-meta-3">
+              How long each hero banner stays visible before auto-advancing. Applies when there are
+              2 or more slides (2–60 seconds).
+            </p>
+            <label className="block">
+              <span className="text-sm font-medium">Seconds per slide</span>
+              <input
+                type="number"
+                min={2}
+                max={60}
+                step={1}
+                value={heroCarouselIntervalSeconds}
+                onChange={(e) => setHeroCarouselIntervalSeconds(Number(e.target.value))}
+                className="mt-1 w-full max-w-[8rem] rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={heroCarouselTimerSaving}
+              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setHeroCarouselTimerSaving(true);
+                  const row = await j<SiteSettingsRow>(
+                    await fetch("/api/admin/marketing/settings", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        hero_carousel_interval_seconds: heroCarouselIntervalSeconds,
+                      }),
+                    })
+                  );
+                  setHeroCarouselIntervalSeconds(
+                    heroCarouselIntervalSecondsFromMs(row.hero_carousel_interval_ms)
+                  );
+                  toast.success("Banner timer saved");
+                  router.refresh();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Failed");
+                } finally {
+                  setHeroCarouselTimerSaving(false);
+                }
+              }}
+            >
+              {heroCarouselTimerSaving ? "Saving…" : "Save timer"}
+            </button>
+          </div>
           <div className="rounded-xl border border-gray-3 bg-gray-1/40 p-4 space-y-3 max-w-2xl">
             <h3 className="text-sm font-semibold text-dark">Hero overlay text (homepage)</h3>
             <p className="text-xs text-meta-3">

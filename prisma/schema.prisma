@@ -812,6 +812,8 @@ model site_marketing_settings {
   hero_overlay_subheading_color   String? @db.VarChar(20)
   /// Optional CSS hex color for hero overlay CTA button label.
   hero_overlay_cta_label_color  String? @db.VarChar(20)
+  /// Milliseconds each hero banner stays visible before auto-advancing (2–60s enforced in app).
+  hero_carousel_interval_ms     Int      @default(7000)
   /// Homepage highlights block — small label above the carousel (CSS may uppercase).
   highlights_section_eyebrow  String? @db.VarChar(120)
   /// Homepage highlights block — main heading under the label.

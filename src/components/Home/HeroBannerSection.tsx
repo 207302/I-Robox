@@ -6,10 +6,15 @@ import type { HeroOverlayProps } from "./HeroBannerOverlay";
 type Props = {
   slides?: HeroSlide[];
   overlay?: HeroOverlayProps;
+  autoRotateIntervalMs?: number;
 };
 
 /** Server shell: LCP in HTML; multi-slide uses server images + thin client opacity shell. */
-export default function HeroBannerSection({ slides = [], overlay }: Props) {
+export default function HeroBannerSection({
+  slides = [],
+  overlay,
+  autoRotateIntervalMs,
+}: Props) {
   if (slides.length === 0) {
     return (
       <div className="relative w-full bg-gray-1">
@@ -36,7 +41,11 @@ export default function HeroBannerSection({ slides = [], overlay }: Props) {
 
   return (
     <div className="relative w-full bg-gray-1">
-      <HeroBannerMulti slides={slides} overlay={overlay} />
+      <HeroBannerMulti
+        slides={slides}
+        overlay={overlay}
+        autoRotateIntervalMs={autoRotateIntervalMs}
+      />
     </div>
   );
 }

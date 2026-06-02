@@ -79,6 +79,7 @@ async function loadHomePageRawBundle() {
         hero_overlay_heading_color: true,
         hero_overlay_subheading_color: true,
         hero_overlay_cta_label_color: true,
+        hero_carousel_interval_ms: true,
       },
     }),
     prisma.categories.findMany({

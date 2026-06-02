@@ -14,6 +14,10 @@ import {
   readJsonBody,
 } from "@/lib/validation/input";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+import {
+  heroCarouselIntervalMsFromSeconds,
+  resolveHeroCarouselIntervalMs,
+} from "@/lib/marketing/heroCarousel";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateMarketingSite } from "@/lib/cache/homePageCache";
 
@@ -99,6 +103,27 @@ export async function PATCH(req: NextRequest) {
     }
     if (body.hero_overlay_cta_label_color !== undefined) {
       data.hero_overlay_cta_label_color = cleanOptionalHexColor(body.hero_overlay_cta_label_color);
+    }
+    if (body.hero_carousel_interval_ms !== undefined) {
+      if (body.hero_carousel_interval_ms === null || body.hero_carousel_interval_ms === "") {
+        data.hero_carousel_interval_ms = resolveHeroCarouselIntervalMs(undefined);
+      } else {
+        data.hero_carousel_interval_ms = resolveHeroCarouselIntervalMs(
+          Number(body.hero_carousel_interval_ms)
+        );
+      }
+    }
+    if (body.hero_carousel_interval_seconds !== undefined) {
+      if (
+        body.hero_carousel_interval_seconds === null ||
+        body.hero_carousel_interval_seconds === ""
+      ) {
+        data.hero_carousel_interval_ms = resolveHeroCarouselIntervalMs(undefined);
+      } else {
+        data.hero_carousel_interval_ms = heroCarouselIntervalMsFromSeconds(
+          Number(body.hero_carousel_interval_seconds)
+        );
+      }
     }
   
     if (body.highlights_section_eyebrow !== undefined) {
@@ -225,6 +250,7 @@ export async function PATCH(req: NextRequest) {
       hero_overlay_heading_color: null,
       hero_overlay_subheading_color: null,
       hero_overlay_cta_label_color: null,
+      hero_carousel_interval_ms: resolveHeroCarouselIntervalMs(undefined),
       highlights_section_eyebrow: null,
       highlights_section_heading: null,
       privacy_page_title: null,

@@ -408,6 +408,13 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     [coupons]
   );
 
+  const nextHeroSortOrder = useMemo(() => {
+    if (slides.length === 0) return 1;
+    return Math.max(...(slides as HeroSlideRow[]).map((s) => s.sort_order ?? 0)) + 1;
+  }, [slides]);
+
+  const [addSlideFormKey, setAddSlideFormKey] = useState(0);
+
   async function refreshHero() {
     const r = await fetch("/api/admin/marketing/hero-slides", { cache: "no-store" });
     setSlides(sortHeroSlides(await r.json()));
@@ -666,9 +673,16 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               {heroOverlaySaving ? "Saving…" : "Save hero overlay"}
             </button>
           </div>
-          <ul className="divide-y divide-gray-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-meta-3">
+              {(slides as HeroSlideRow[]).length} banner
+              {(slides as HeroSlideRow[]).length === 1 ? "" : "s"} — all listed below (no pages).
+              Lower sort numbers show first on the homepage.
+            </p>
+          </div>
+          <ul className="divide-y divide-gray-3 text-sm max-h-[min(70vh,720px)] overflow-y-auto">
             {(slides as HeroSlideRow[]).map((row) => (
-              <li key={row.id} className="py-3">
+              <li key={row.id} id={`hero-slide-${row.id}`} className="py-3">
                 {heroEditingId === row.id ? (
                   <form
                     className="grid gap-3 sm:grid-cols-2"
@@ -861,6 +875,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             ))}
           </ul>
           <form
+            key={addSlideFormKey}
             className="grid gap-3 sm:grid-cols-2"
             onSubmit={async (e) => {
               e.preventDefault();
@@ -885,23 +900,33 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 }
                 if (!imageUrl) throw new Error("Provide an image URL or upload a banner image");
 
-                await j(
+                const title = String(fd.get("title") ?? "").trim();
+                if (!title) throw new Error("Title is required so you can find this banner in the list");
+
+                const created = await j<HeroSlideRow>(
                   await fetch("/api/admin/marketing/hero-slides", {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({
                       image_url: imageUrl,
                       image_public_id: imagePublicId,
-                      title: fd.get("title") || null,
-                      link_url: fd.get("link_url") || null,
-                      sort_order: Number(fd.get("sort_order") || 0),
+                      title,
+                      link_url: String(fd.get("link_url") ?? "").trim() || null,
+                      sort_order: Number(fd.get("sort_order") || nextHeroSortOrder),
                       is_active: fd.get("is_active") === "on",
                     }),
                   })
                 );
-                toast.success("Created");
+                toast.success(`Created “${title}”`);
                 formEl.reset();
-                void refreshHero();
+                setAddSlideFormKey((k) => k + 1);
+                await refreshHero();
+                router.refresh();
+                requestAnimationFrame(() => {
+                  document
+                    .getElementById(`hero-slide-${created.id}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
               } catch (err: any) {
                 toast.error(err?.message || "Failed");
               } finally {
@@ -925,7 +950,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             </label>
             <label>
               <span className="text-sm font-medium">Title</span>
-              <input name="title" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
+              <input
+                name="title"
+                required
+                placeholder="e.g. Die-Cast Toys"
+                className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+              />
             </label>
             <label>
               <span className="text-sm font-medium">Link URL</span>
@@ -933,7 +963,16 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             </label>
             <label>
               <span className="text-sm font-medium">Sort</span>
-              <input name="sort_order" type="number" defaultValue={0} className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
+              <input
+                name="sort_order"
+                type="number"
+                min={1}
+                defaultValue={nextHeroSortOrder}
+                className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-meta-3">
+                Next available: {nextHeroSortOrder}. Leave as-is unless you need a specific order.
+              </p>
             </label>
             <label className="flex items-center gap-2 text-sm mt-6">
               <input name="is_active" type="checkbox" defaultChecked /> Active

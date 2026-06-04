@@ -7,7 +7,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
-import { revalidateHomePage } from "@/lib/cache/homePageCache";
+import { revalidateHomePage, revalidateMarketingSite } from "@/lib/cache/homePageCache";
 
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -85,6 +85,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       },
     });
     revalidateHomePage();
+    revalidateMarketingSite();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
@@ -119,6 +120,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       await cloudinary.uploader.destroy(derivedPublicId).catch(() => null);
     }
     revalidateHomePage();
+    revalidateMarketingSite();
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}

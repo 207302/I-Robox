@@ -6,7 +6,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { hasSuspiciousInput, isUuid, normalizeCode, readJsonBody } from "@/lib/validation/input";
 import {
-  categoryScopeError,
+  couponScopeError,
   computeCouponDiscount,
   couponTimingError,
   couponUsageErrors,
@@ -52,7 +52,11 @@ export async function POST(req: NextRequest) {
     const timeErr = couponTimingError(coupon, now);
     if (timeErr) return NextResponse.json({ error: timeErr }, { status: 400 });
   
-    if (coupon.categoryIds.length > 0) {
+    if (
+      coupon.categoryIds.length > 0 ||
+      coupon.brandIds.length > 0 ||
+      coupon.productIds.length > 0
+    ) {
       const idList: string[] = [];
       for (const row of rawLines) {
         if (row && typeof row === "object") {
@@ -63,20 +67,34 @@ export async function POST(req: NextRequest) {
       const productIds = [...new Set(idList)];
       if (productIds.length === 0) {
         return NextResponse.json(
-          { error: "This coupon applies to specific categories — add items to your cart to validate" },
+          {
+            error:
+              "This coupon applies to specific products, categories, or brands — add items to your cart to validate",
+          },
           { status: 400 }
         );
       }
       const products = await prisma.products.findMany({
         where: { id: { in: productIds }, is_active: true },
-        select: { id: true, category_id: true },
+        select: { id: true, category_id: true, brand_id: true },
       });
-      const pmap = new Map(products.map((p) => [p.id, p.category_id]));
-      const lineMeta = productIds.map((id) => ({
-        productId: id,
-        categoryId: pmap.get(id) ?? null,
-      }));
-      const scopeErr = categoryScopeError(coupon.categoryIds, lineMeta);
+      const pmap = new Map(products.map((p) => [p.id, p]));
+      const lineMeta = productIds.map((id) => {
+        const p = pmap.get(id);
+        return {
+          productId: id,
+          categoryId: p?.category_id ?? null,
+          brandId: p?.brand_id ?? null,
+        };
+      });
+      const scopeErr = couponScopeError(
+        {
+          categoryIds: coupon.categoryIds,
+          brandIds: coupon.brandIds,
+          productIds: coupon.productIds,
+        },
+        lineMeta
+      );
       if (scopeErr) return NextResponse.json({ error: scopeErr }, { status: 400 });
     }
   

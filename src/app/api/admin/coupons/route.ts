@@ -78,6 +78,26 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+      if (Array.isArray(body.brand_ids)) {
+        const brandIds = body.brand_ids.filter(
+          (x: unknown) => typeof x === "string" && isUuid(x)
+        ) as string[];
+        if (brandIds.length) {
+          await tx.coupon_brands.createMany({
+            data: brandIds.map((brand_id) => ({ coupon_id: row.id, brand_id })),
+          });
+        }
+      }
+      if (Array.isArray(body.product_ids)) {
+        const productIds = body.product_ids.filter(
+          (x: unknown) => typeof x === "string" && isUuid(x)
+        ) as string[];
+        if (productIds.length) {
+          await tx.coupon_products.createMany({
+            data: productIds.map((product_id) => ({ coupon_id: row.id, product_id })),
+          });
+        }
+      }
       return row;
     });
   

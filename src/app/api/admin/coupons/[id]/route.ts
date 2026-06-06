@@ -33,12 +33,19 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         ends_at: true,
         is_active: true,
         coupon_categories: { select: { category_id: true } },
+        coupon_brands: { select: { brand_id: true } },
+        coupon_products: { select: { product_id: true } },
       },
     });
     if (!coupon) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const { coupon_categories, ...rest } = coupon;
+    const { coupon_categories, coupon_brands, coupon_products, ...rest } = coupon;
     return NextResponse.json(
-      { ...rest, category_ids: coupon_categories.map((c) => c.category_id) },
+      {
+        ...rest,
+        category_ids: coupon_categories.map((c) => c.category_id),
+        brand_ids: coupon_brands.map((b) => b.brand_id),
+        product_ids: coupon_products.map((p) => p.product_id),
+      },
       { status: 200 }
     );
   
@@ -153,6 +160,30 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         if (catIds.length) {
           await tx.coupon_categories.createMany({
             data: catIds.map((category_id) => ({ coupon_id: id, category_id })),
+          });
+        }
+      }
+
+      if (Array.isArray(body.brand_ids)) {
+        const brandIds = body.brand_ids.filter(
+          (x: unknown) => typeof x === "string" && isUuid(x)
+        ) as string[];
+        await tx.coupon_brands.deleteMany({ where: { coupon_id: id } });
+        if (brandIds.length) {
+          await tx.coupon_brands.createMany({
+            data: brandIds.map((brand_id) => ({ coupon_id: id, brand_id })),
+          });
+        }
+      }
+
+      if (Array.isArray(body.product_ids)) {
+        const productIds = body.product_ids.filter(
+          (x: unknown) => typeof x === "string" && isUuid(x)
+        ) as string[];
+        await tx.coupon_products.deleteMany({ where: { coupon_id: id } });
+        if (productIds.length) {
+          await tx.coupon_products.createMany({
+            data: productIds.map((product_id) => ({ coupon_id: id, product_id })),
           });
         }
       }

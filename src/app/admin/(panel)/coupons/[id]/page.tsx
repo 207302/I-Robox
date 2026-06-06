@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { AdminCouponScopeFields } from "@/components/admin/AdminCouponScopeFields";
 
-type Category = { id: string; name: string; slug: string };
+type TaxonomyItem = { id: string; name: string; slug: string };
 
 type CouponForm = {
   code?: string;
@@ -17,6 +18,8 @@ type CouponForm = {
   ends_at?: string | null;
   is_active?: boolean;
   category_ids?: string[];
+  brand_ids?: string[];
+  product_ids?: string[];
 };
 
 function toLocalInput(iso: string | null | undefined): string {
@@ -32,13 +35,17 @@ export default function EditCouponPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<CouponForm | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<TaxonomyItem[]>([]);
+  const [brands, setBrands] = useState<TaxonomyItem[]>([]);
 
   useEffect(() => {
-    void fetch("/api/admin/categories")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setCategories(data);
+    void Promise.all([
+      fetch("/api/admin/categories").then((r) => r.json()),
+      fetch("/api/admin/brands").then((r) => r.json()),
+    ])
+      .then(([catData, brandData]) => {
+        if (Array.isArray(catData)) setCategories(catData);
+        if (Array.isArray(brandData)) setBrands(brandData);
       })
       .catch(() => {});
   }, []);
@@ -54,6 +61,8 @@ export default function EditCouponPage() {
       setForm({
         ...data,
         category_ids: Array.isArray(data.category_ids) ? data.category_ids : [],
+        brand_ids: Array.isArray(data.brand_ids) ? data.brand_ids : [],
+        product_ids: Array.isArray(data.product_ids) ? data.product_ids : [],
         starts_at: toLocalInput(data.starts_at),
         ends_at: toLocalInput(data.ends_at),
       });
@@ -80,6 +89,8 @@ export default function EditCouponPage() {
           starts_at,
           ends_at,
           category_ids: form.category_ids ?? [],
+          brand_ids: form.brand_ids ?? [],
+          product_ids: form.product_ids ?? [],
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -94,8 +105,6 @@ export default function EditCouponPage() {
   }
 
   if (!form) return <div className="text-sm text-meta-3">Loading…</div>;
-
-  const selected = new Set(form.category_ids ?? []);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -192,33 +201,16 @@ export default function EditCouponPage() {
           </label>
         </div>
 
-        <div>
-          <span className="mb-2 block text-sm font-medium text-dark">
-            Allowed categories (optional)
-          </span>
-          <p className="text-xs text-meta-3 mb-2">
-            If any are selected, <strong>every</strong> cart line must belong to one of these categories.
-          </p>
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
-            {categories.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selected.has(c.id)}
-                  onChange={() => {
-                    setForm((f) => {
-                      const cur = new Set(f!.category_ids ?? []);
-                      if (cur.has(c.id)) cur.delete(c.id);
-                      else cur.add(c.id);
-                      return { ...f!, category_ids: [...cur] };
-                    });
-                  }}
-                />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        </div>
+        <AdminCouponScopeFields
+          categories={categories}
+          brands={brands}
+          categoryIds={form.category_ids ?? []}
+          brandIds={form.brand_ids ?? []}
+          productIds={form.product_ids ?? []}
+          onCategoryIdsChange={(category_ids) => setForm((f) => ({ ...f!, category_ids }))}
+          onBrandIdsChange={(brand_ids) => setForm((f) => ({ ...f!, brand_ids }))}
+          onProductIdsChange={(product_ids) => setForm((f) => ({ ...f!, product_ids }))}
+        />
 
         <label className="flex items-center gap-2 text-sm text-meta-3">
           <input

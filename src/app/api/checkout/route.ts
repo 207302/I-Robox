@@ -23,7 +23,7 @@ import {
 } from "@/lib/validation/input";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
-  categoryScopeError,
+  couponScopeError,
   computeCouponDiscount,
   couponTimingError,
   couponUsageErrors,
@@ -224,9 +224,16 @@ export async function POST(req: NextRequest) {
   
       const lineMeta = items.map((i) => {
         const p = productMap.get(i.productId)!;
-        return { productId: p.id, categoryId: p.category_id };
+        return { productId: p.id, categoryId: p.category_id, brandId: p.brand_id };
       });
-      const scopeErr = categoryScopeError(coupon.categoryIds, lineMeta);
+      const scopeErr = couponScopeError(
+        {
+          categoryIds: coupon.categoryIds,
+          brandIds: coupon.brandIds,
+          productIds: coupon.productIds,
+        },
+        lineMeta
+      );
       if (scopeErr) return NextResponse.json({ error: scopeErr }, { status: 400 });
   
       const minOk = coupon.min_cart_value != null ? subtotal >= coupon.min_cart_value : true;

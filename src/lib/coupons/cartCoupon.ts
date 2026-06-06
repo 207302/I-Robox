@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 
-export type CartLineForCoupon = { productId: string; categoryId: string | null };
+export type CartLineForCoupon = {
+  productId: string;
+  categoryId: string | null;
+  brandId: string | null;
+};
 
 export type CouponForCart = {
   id: string;
@@ -13,6 +17,8 @@ export type CouponForCart = {
   max_uses: number | null;
   max_uses_per_user: number | null;
   categoryIds: string[];
+  brandIds: string[];
+  productIds: string[];
 };
 
 export async function fetchCouponForCart(code: string): Promise<CouponForCart | null> {
@@ -29,6 +35,8 @@ export async function fetchCouponForCart(code: string): Promise<CouponForCart | 
       max_uses: true,
       max_uses_per_user: true,
       coupon_categories: { select: { category_id: true } },
+      coupon_brands: { select: { brand_id: true } },
+      coupon_products: { select: { product_id: true } },
     },
   });
   if (!c) return null;
@@ -43,18 +51,42 @@ export async function fetchCouponForCart(code: string): Promise<CouponForCart | 
     max_uses: c.max_uses,
     max_uses_per_user: c.max_uses_per_user,
     categoryIds: c.coupon_categories.map((x) => x.category_id),
+    brandIds: c.coupon_brands.map((x) => x.brand_id),
+    productIds: c.coupon_products.map((x) => x.product_id),
   };
 }
 
-export function categoryScopeError(categoryIds: string[], lines: CartLineForCoupon[]): string | null {
-  if (categoryIds.length === 0) return null;
-  const allowed = new Set(categoryIds);
+export function couponScopeError(
+  scope: { categoryIds: string[]; brandIds: string[]; productIds: string[] },
+  lines: CartLineForCoupon[]
+): string | null {
+  const { categoryIds, brandIds, productIds } = scope;
+  if (categoryIds.length === 0 && brandIds.length === 0 && productIds.length === 0) return null;
+
+  const allowedCategories = new Set(categoryIds);
+  const allowedBrands = new Set(brandIds);
+  const allowedProducts = new Set(productIds);
+
   for (const line of lines) {
-    if (!line.categoryId || !allowed.has(line.categoryId)) {
+    if (
+      categoryIds.length > 0 &&
+      (!line.categoryId || !allowedCategories.has(line.categoryId))
+    ) {
+      return "Coupon does not apply to items in your cart";
+    }
+    if (brandIds.length > 0 && (!line.brandId || !allowedBrands.has(line.brandId))) {
+      return "Coupon does not apply to items in your cart";
+    }
+    if (productIds.length > 0 && !allowedProducts.has(line.productId)) {
       return "Coupon does not apply to items in your cart";
     }
   }
   return null;
+}
+
+/** @deprecated Use couponScopeError */
+export function categoryScopeError(categoryIds: string[], lines: CartLineForCoupon[]): string | null {
+  return couponScopeError({ categoryIds, brandIds: [], productIds: [] }, lines);
 }
 
 export function couponTimingError(c: CouponForCart, now: Date): string | null {

@@ -21,6 +21,7 @@ export type AdminOrderRow = {
   paymentStatus: string;
   totalAmount: number;
   createdAtLabel: string;
+  customerName: string | null;
   customerEmail: string | null;
   productNames: string;
 };
@@ -153,7 +154,7 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search order id, customer, product, status…"
+            placeholder="Search order id, name, email, product, status…"
             aria-label="Search orders"
             autoComplete="off"
             className="min-w-0 flex-1 rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm text-dark outline-none focus:border-blue"
@@ -240,7 +241,12 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
                   <div className="font-semibold text-dark font-mono tracking-wide">{o.orderId}</div>
                   <div className="text-xs text-meta-4">{o.createdAtLabel}</div>
                 </td>
-                <td className="py-3 px-4 text-dark">{o.customerEmail ?? "Guest"}</td>
+                <td className="py-3 px-4 text-dark">
+                  <div className="font-medium">{o.customerName ?? "Guest"}</div>
+                  {o.customerEmail ? (
+                    <div className="text-xs text-meta-4 break-all">{o.customerEmail}</div>
+                  ) : null}
+                </td>
                 <td className="py-3 px-4 text-dark">{o.status}</td>
                 <td className="py-3 px-4 text-dark">{o.paymentStatus}</td>
                 <td className="py-3 px-4 text-dark">{formatPrice(o.totalAmount)}</td>

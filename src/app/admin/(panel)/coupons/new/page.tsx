@@ -1,12 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import toast from "react-hot-toast";
+import { AdminCouponScopeFields } from "@/components/admin/AdminCouponScopeFields";
+
+type TaxonomyItem = { id: string; name: string };
 
 export default function NewCouponPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<TaxonomyItem[]>([]);
+  const [brands, setBrands] = useState<TaxonomyItem[]>([]);
   const [form, setForm] = useState<any>({
     code: "",
     discount_type: "PERCENTAGE",
@@ -17,7 +22,22 @@ export default function NewCouponPage() {
     starts_at: "",
     ends_at: "",
     is_active: true,
+    category_ids: [] as string[],
+    brand_ids: [] as string[],
+    product_ids: [] as string[],
   });
+
+  useEffect(() => {
+    void Promise.all([
+      fetch("/api/admin/categories").then((r) => r.json()),
+      fetch("/api/admin/brands").then((r) => r.json()),
+    ])
+      .then(([catData, brandData]) => {
+        if (Array.isArray(catData)) setCategories(catData);
+        if (Array.isArray(brandData)) setBrands(brandData);
+      })
+      .catch(() => {});
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -126,6 +146,17 @@ export default function NewCouponPage() {
           </label>
         </div>
 
+        <AdminCouponScopeFields
+          categories={categories}
+          brands={brands}
+          categoryIds={form.category_ids}
+          brandIds={form.brand_ids}
+          productIds={form.product_ids}
+          onCategoryIdsChange={(category_ids) => setForm((f: any) => ({ ...f, category_ids }))}
+          onBrandIdsChange={(brand_ids) => setForm((f: any) => ({ ...f, brand_ids }))}
+          onProductIdsChange={(product_ids) => setForm((f: any) => ({ ...f, product_ids }))}
+        />
+
         <label className="flex items-center gap-2 text-sm text-meta-3">
           <input
             type="checkbox"
@@ -145,4 +176,3 @@ export default function NewCouponPage() {
     </div>
   );
 }
-

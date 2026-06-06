@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
+import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
 import type { MarketingBulkEntity } from "@/lib/admin/marketingBulkDelete";
 import { cloudinaryCardUrl } from "@/lib/images/cloudinaryDeliver";
@@ -108,7 +109,15 @@ async function j<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (data as { error?: string }).error;
-    throw new Error(msg || (res.status === 429 ? "Too many requests — wait a moment" : "Request failed"));
+    if (res.status === 503 && (data as { code?: string }).code === "TIMEOUT") {
+      throw new Error("Request timed out — wait a moment and try again");
+    }
+    throw new Error(
+      msg ||
+        (res.status === 429
+          ? "Too many requests — wait a moment"
+          : `Request failed (${res.status})`)
+    );
   }
   return data as T;
 }
@@ -1817,7 +1826,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               const fd = new FormData(formEl);
               try {
                 await j(
-                  await fetch("/api/admin/marketing/announcements", {
+                  await fetchAdminWithRetry("/api/admin/marketing/announcements", {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({
@@ -1825,7 +1834,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                       body: fd.get("body"),
                       link_url: fd.get("link_url") || null,
                       link_label: fd.get("link_label") || null,
-                      sort_order: Number(fd.get("sort_order") || 0),
+                      sort_order:
+                        fd.get("sort_order") === "" || fd.get("sort_order") === null
+                          ? undefined
+                          : Number(fd.get("sort_order")),
                       is_active: fd.get("is_active") === "on",
                     }),
                   })

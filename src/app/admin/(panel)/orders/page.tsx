@@ -35,7 +35,8 @@ export default async function AdminOrdersPage() {
       total_amount: true,
       created_at: true,
       customer_id: true,
-      customers: { select: { email: true } },
+      customers: { select: { email: true, name: true } },
+      addresses_orders_shipping_address_idToaddresses: { select: { full_name: true } },
       order_items: { select: { product_name: true } },
     },
   });
@@ -48,6 +49,10 @@ export default async function AdminOrdersPage() {
     paymentStatus: String(o.payment_status),
     totalAmount: Number(o.total_amount),
     createdAtLabel: formatDateTimeIst(o.created_at),
+    customerName:
+      o.addresses_orders_shipping_address_idToaddresses?.full_name?.trim() ||
+      o.customers?.name?.trim() ||
+      null,
     customerEmail: o.customers?.email ?? null,
     productNames: o.order_items.map((item) => item.product_name).join(" "),
   }));

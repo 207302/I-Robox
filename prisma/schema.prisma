@@ -78,6 +78,7 @@ model brands {
   products    products[]
   homepage_highlights homepage_highlights[]
   homepage_brand_rail homepage_brand_rail[]
+  coupon_brands coupon_brands[]
 }
 
 /// Diecast model scales (e.g. 1:64). Products reference this like category/brand.
@@ -224,6 +225,8 @@ model coupons {
   coupon_usages       coupon_usages[]
   orders              orders[]
   coupon_categories   coupon_categories[]
+  coupon_brands       coupon_brands[]
+  coupon_products     coupon_products[]
 }
 
 /// When rows exist, every cart line product must belong to one of these categories.
@@ -235,6 +238,28 @@ model coupon_categories {
 
   @@id([coupon_id, category_id])
   @@index([category_id], map: "idx_coupon_categories_category_id")
+}
+
+/// When rows exist, every cart line product must belong to one of these brands.
+model coupon_brands {
+  coupon_id String @db.Uuid
+  brand_id  String @db.Uuid
+  coupons   coupons @relation(fields: [coupon_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  brands    brands  @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([coupon_id, brand_id])
+  @@index([brand_id], map: "idx_coupon_brands_brand_id")
+}
+
+/// When rows exist, every cart line product must be one of these products.
+model coupon_products {
+  coupon_id  String   @db.Uuid
+  product_id String   @db.Uuid
+  coupons    coupons  @relation(fields: [coupon_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([coupon_id, product_id])
+  @@index([product_id], map: "idx_coupon_products_product_id")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -413,6 +438,7 @@ model products {
   wishlist_items         wishlist_items[]
   homepage_highlights    homepage_highlights[]
   flash_sale_products    flash_sale_products?
+  coupon_products        coupon_products[]
 
   @@index([age_group], map: "idx_products_age_group")
   @@index([brand_id], map: "idx_products_brand_id")

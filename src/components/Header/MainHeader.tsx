@@ -327,7 +327,7 @@ const MainHeader = ({
 
         {/* Main Header */}
         <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
-          <div className="relative flex min-h-14 items-center justify-between py-2 sm:min-h-16 xl:py-2" suppressHydrationWarning>
+          <div className="relative flex min-h-16 items-center justify-between py-2 xl:py-2" suppressHydrationWarning>
             {/* Left: mobile menu + search | desktop logo + nav */}
             <div className="z-10 flex min-w-[5rem] shrink-0 items-center gap-2 xl:min-w-0 xl:gap-8" suppressHydrationWarning>
               <div className="flex items-center gap-2 xl:hidden" suppressHydrationWarning>
@@ -375,7 +375,7 @@ const MainHeader = ({
                   height={88}
                   quality={90}
                   unoptimized={isLocalPublicImage(headerLogoSrc) || headerLogoSrc.endsWith(".svg")}
-                  className="h-8 w-auto max-h-8 object-contain sm:h-9 sm:max-h-9"
+                  className="h-11 w-auto max-h-11 object-contain sm:h-12 sm:max-h-12"
                   loading="eager"
                   fetchPriority="low"
                   sizes="88px"

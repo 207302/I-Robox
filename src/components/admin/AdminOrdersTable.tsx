@@ -22,6 +22,7 @@ export type AdminOrderRow = {
   totalAmount: number;
   createdAtLabel: string;
   customerEmail: string | null;
+  productNames: string;
 };
 
 type AdminOrdersTableProps = {
@@ -33,7 +34,15 @@ function filterOrders(rows: AdminOrderRow[], query: string): AdminOrderRow[] {
   const q = query.trim().toLowerCase();
   if (!q) return rows;
   return rows.filter((o) => {
-    const hay = [o.orderNumber, o.id, o.status, o.paymentStatus, o.customerEmail ?? "guest"]
+    const hay = [
+      o.orderId,
+      o.orderNumber,
+      o.id,
+      o.status,
+      o.paymentStatus,
+      o.customerEmail ?? "guest",
+      o.productNames,
+    ]
       .join(" ")
       .toLowerCase();
     return hay.includes(q);
@@ -144,7 +153,7 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search order id, customer, status…"
+            placeholder="Search order id, customer, product, status…"
             aria-label="Search orders"
             autoComplete="off"
             className="min-w-0 flex-1 rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm text-dark outline-none focus:border-blue"

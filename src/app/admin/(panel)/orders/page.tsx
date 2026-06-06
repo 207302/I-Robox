@@ -36,6 +36,7 @@ export default async function AdminOrdersPage() {
       created_at: true,
       customer_id: true,
       customers: { select: { email: true } },
+      order_items: { select: { product_name: true } },
     },
   });
 
@@ -48,6 +49,7 @@ export default async function AdminOrdersPage() {
     totalAmount: Number(o.total_amount),
     createdAtLabel: formatDateTimeIst(o.created_at),
     customerEmail: o.customers?.email ?? null,
+    productNames: o.order_items.map((item) => item.product_name).join(" "),
   }));
 
   return (

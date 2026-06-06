@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { formatPrice } from "@/utils/formatePrice";
-import { toOrderNumber } from "@/utils/orderNumber";
+import { formatOrderReference } from "@/utils/orderNumber";
 
 type Props = {
   params: Promise<{ orderId: string }>;
@@ -20,6 +20,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
     where: { id: orderId },
     select: {
       id: true,
+      order_number: true,
       customer_id: true,
       status: true,
       payment_status: true,
@@ -81,8 +82,8 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,_1fr)_360px]">
           <div className="rounded-2xl border border-gray-3 bg-white">
             <div className="p-5 sm:p-6 border-b border-gray-3">
-              <div className="text-sm text-meta-3">Order ID</div>
-              <div className="font-semibold text-dark">{toOrderNumber(order.id)}</div>
+              <div className="text-sm text-meta-3">Order</div>
+              <div className="font-semibold text-dark">{formatOrderReference(order)}</div>
               <div className="mt-3 flex flex-wrap gap-3 text-sm">
                 <span className="rounded-full bg-gray-1 px-3 py-1 border border-gray-3">
                   Status: <b>{String(order.status)}</b>

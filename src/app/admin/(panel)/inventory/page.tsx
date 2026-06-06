@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import { AdminInventoryTable, type AdminInventoryRow } from "@/components/admin/AdminInventoryTable";
 import type { ProductSearchItem } from "@/lib/search/productSearch";
 
@@ -17,6 +18,7 @@ function productSearchFields(p: {
   product_types: { name: string } | null;
   product_collections: { name: string } | null;
   diecast_scales: { ratio: string } | null;
+  product_images?: { url: string }[];
 }): ProductSearchItem {
   return {
     id: p.id,
@@ -29,6 +31,7 @@ function productSearchFields(p: {
     productType: p.product_types?.name ?? null,
     collection: p.product_collections?.name ?? null,
     scale: p.diecast_scales?.ratio ?? null,
+    imageUrl: firstProductImageUrl(p),
   };
 }
 
@@ -44,6 +47,7 @@ const productSelect = {
   product_types: { select: { name: true } },
   product_collections: { select: { name: true } },
   diecast_scales: { select: { ratio: true } },
+  product_images: adminProductImageSelect,
 } as const;
 
 export default async function AdminInventoryPage() {

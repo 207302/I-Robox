@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
+import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin/rbac";
+import { deleteOrderById } from "@/lib/admin/deleteOrder";
+import { requireAdmin, requireSuperAdmin } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
+import { writeAuditLog } from "@/lib/audit";
+import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
+import { ORDERS_TAG } from "@/lib/cache/tags";
+import { revalidateInventoryCatalog } from "@/lib/cache/revalidate";
 import {
   cleanText,
   hasSuspiciousInput,
@@ -14,6 +21,17 @@ import {
 import { notifyCustomerOrderOrShipmentUpdate } from "@/lib/orders/customerOrderNotifications";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { compactOrderId } from "@/lib/orders/orderNumber";
+
+function formatPaymentMethod(provider: string | null, paymentStatus: string): string {
+  const p = (provider ?? "").trim().toLowerCase();
+  if (p.includes("razorpay")) return "Razorpay";
+  if (p === "placeholder") {
+    return paymentStatus === "SUCCEEDED" ? "Online payment" : "Payment pending";
+  }
+  if (provider?.trim()) return provider.trim();
+  return paymentStatus === "SUCCEEDED" ? "Paid" : "Payment pending";
+}
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runApiRoute(async () => {
@@ -26,16 +44,49 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       where: { id },
       select: {
         id: true,
+        order_number: true,
         status: true,
+        payment_status: true,
+        payment_provider: true,
+        subtotal_amount: true,
+        discount_amount: true,
+        shipping_amount: true,
+        total_amount: true,
+        is_gift: true,
+        gift_message: true,
+        created_at: true,
         customer_id: true,
-        customers: { select: { email: true } },
+        customers: { select: { email: true, name: true, phone: true } },
+        addresses_orders_shipping_address_idToaddresses: {
+          select: {
+            full_name: true,
+            phone: true,
+            line1: true,
+            line2: true,
+            city: true,
+            state: true,
+            postal_code: true,
+            country: true,
+          },
+        },
         shipments: {
           select: { id: true, carrier: true, tracking_number: true, status: true, metadata: true },
         },
-        order_items: { select: { id: true, product_name: true, quantity: true } },
+        order_items: {
+          select: {
+            id: true,
+            product_name: true,
+            quantity: true,
+            unit_price: true,
+            subtotal_amount: true,
+          },
+        },
       },
     });
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const ship = order.addresses_orders_shipping_address_idToaddresses;
+    const paymentStatus = String(order.payment_status);
   
     const shipmozoFromMeta = (() => {
       const m = order.shipments?.metadata;
@@ -47,8 +98,32 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json(
       {
         id: order.id,
+        orderId: compactOrderId(order.order_number),
+        orderNumber: order.order_number,
         status: String(order.status),
-        customer: order.customers?.email ?? order.customer_id ?? null,
+        paymentStatus,
+        paymentMethod: formatPaymentMethod(order.payment_provider, paymentStatus),
+        subtotalAmount: Number(order.subtotal_amount),
+        discountAmount: Number(order.discount_amount),
+        shippingAmount: Number(order.shipping_amount),
+        totalAmount: Number(order.total_amount),
+        isGift: Boolean(order.is_gift),
+        giftMessage: order.gift_message ?? null,
+        customer: {
+          name: ship?.full_name?.trim() || order.customers?.name?.trim() || null,
+          phone: ship?.phone?.trim() || order.customers?.phone?.trim() || null,
+          email: order.customers?.email ?? null,
+        },
+        shippingAddress: ship
+          ? {
+              line1: ship.line1,
+              line2: ship.line2,
+              city: ship.city,
+              state: ship.state,
+              postalCode: ship.postal_code,
+              country: ship.country,
+            }
+          : null,
         shipment: order.shipments
           ? {
               id: order.shipments.id,
@@ -58,7 +133,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
               shipmozo: shipmozoFromMeta,
             }
           : { id: null, carrier: "", tracking_number: "", status: "PENDING", shipmozo: null },
-        items: order.order_items,
+        items: order.order_items.map((it) => ({
+          id: it.id,
+          product_name: it.product_name,
+          quantity: it.quantity,
+          unit_price: Number(it.unit_price),
+          subtotal_amount: Number(it.subtotal_amount),
+        })),
       },
       { status: 200 }
     );
@@ -131,7 +212,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         return NextResponse.json({ error: "Invalid shipment fields" }, { status: 400 });
       }
   
-      const createStatus = (shipmentStatusRaw ?? "CREATED") as any;
+      const createStatus = (shipmentStatusRaw ?? "PENDING") as any;
       const updated = await prisma.shipments.upsert({
         where: { order_id: id },
         update: {
@@ -185,4 +266,51 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ ok: true }, { status: 200 });
   
   });}
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return runApiRoute(async () => {
+    try {
+      assertSameOrigin(req);
+      await rateLimitStrict(`admin_orders_del:${req.ip ?? "unknown"}`, 1);
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === "BAD_ORIGIN") {
+        return NextResponse.json({ error: "Bad origin" }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    const auth = await requireSuperAdmin();
+    if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const { id } = await ctx.params;
+    if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const result = await deleteOrderById(id);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    after(async () => {
+      try {
+        await writeAuditLog({
+          adminUserId: auth.session.sub,
+          entityType: "ORDER",
+          entityId: id,
+          action: "ORDER_DELETED",
+          ipAddress: req.ip ?? null,
+          userAgent: req.headers.get("user-agent"),
+        });
+        await syncLowStockAlertsByProductIds(result.productIds);
+        for (const productId of result.productIds) {
+          revalidateInventoryCatalog({ productId });
+        }
+        revalidateTag(ORDERS_TAG);
+      } catch (err) {
+        console.error("[admin orders DELETE] background work failed", err);
+      }
+    });
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  });
+}
 

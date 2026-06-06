@@ -1,13 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
 
 /** Shipmozo rejects ref / order_id longer than this (e.g. auto-assign, schedule pickup). */
 const SHIPMOZO_ORDER_ID_MAX_LEN = 30;
-
-function toShipmozoOrderIdRef(orderUuid: string): string {
-  return orderUuid.replace(/-/g, "").slice(0, SHIPMOZO_ORDER_ID_MAX_LEN);
-}
 
 function normalizeShipmozoOrderIdRef(value: string): string {
   return String(value).replace(/-/g, "").slice(0, SHIPMOZO_ORDER_ID_MAX_LEN);
@@ -122,6 +119,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     where: { id: orderId },
     select: {
       id: true,
+      order_number: true,
       total_amount: true,
       addresses_orders_shipping_address_idToaddresses: {
         select: {
@@ -191,7 +189,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
   }));
 
   const pushPayload: Record<string, unknown> = {
-    order_id: toShipmozoOrderIdRef(order.id),
+    order_id: shipmozoOrderRef(order),
     order_date: new Date().toISOString().slice(0, 10),
     consignee_name: String(addr.full_name ?? "Customer").slice(0, 120),
     consignee_phone: Number(phone),

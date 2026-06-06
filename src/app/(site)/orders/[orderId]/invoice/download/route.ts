@@ -3,7 +3,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
-import { toOrderNumber } from "@/utils/orderNumber";
+import { formatOrderReference } from "@/utils/orderNumber";
 
 const SELLER_NAME = "Tron Play World";
 const SELLER_ADDRESS = "24 Basement 21st Main Road, Bengaluru Bangalore, Karnataka, 560102";
@@ -109,6 +109,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orderId: st
     where: { id: orderId },
     select: {
       id: true,
+      order_number: true,
       customer_id: true,
       created_at: true,
       total_amount: true,
@@ -208,11 +209,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orderId: st
   yLeft = drawWrapped(`Email: ${SELLER_EMAIL}`, leftX, yLeft, leftW, { size: 10, lineHeight: 12 });
   yLeft = drawWrapped(`GSTIN ${SELLER_GSTIN || "--"}`, leftX, yLeft, leftW, { size: 10, lineHeight: 12 });
 
+  const orderRef = formatOrderReference(order);
   let yRight = y - 4;
-  yRight = drawWrapped(`Order ID ${toOrderNumber(order.id)}`, rightX, yRight, rightW, { bold: true, size: 10, lineHeight: 12 });
-  yRight = drawWrapped(`Ref ID # ${order.id.slice(0, 8).toUpperCase()}`, rightX, yRight, rightW, { size: 10, lineHeight: 12 });
+  yRight = drawWrapped(`Order ${orderRef}`, rightX, yRight, rightW, { bold: true, size: 10, lineHeight: 12 });
   yRight = drawWrapped(`Order Date ${formatDateDdMmYy(order.created_at)}`, rightX, yRight, rightW, { size: 10, lineHeight: 12 });
-  yRight = drawWrapped(`Invoice No ${order.id.slice(0, 6).toUpperCase()}`, rightX, yRight, rightW, { size: 10, lineHeight: 12 });
+  yRight = drawWrapped(`Invoice No ${orderRef.replace(/-/g, "")}`, rightX, yRight, rightW, { size: 10, lineHeight: 12 });
   yRight = drawWrapped(`Invoice Date ${formatDateDdMmYy(new Date())}`, rightX, yRight, rightW, { size: 10, lineHeight: 12 });
 
   y = Math.min(yLeft, yRight) - 8;

@@ -8,7 +8,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
-import { v2 as cloudinary } from "cloudinary";
+import { deleteProductById, destroyCloudinaryImages } from "@/lib/admin/deleteProduct";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 
@@ -30,27 +30,6 @@ function parseMaxOrderQuantityIn(body: Record<string, unknown>): number | { erro
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
-}
-
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-function cloudinaryPublicIdFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const marker = "/upload/";
-    const idx = u.pathname.indexOf(marker);
-    if (idx < 0) return null;
-    let tail = u.pathname.slice(idx + marker.length);
-    tail = tail.replace(/^([^/]+\/)*v\d+\//, "");
-    if (!tail) return null;
-    return tail.replace(/\.[^.\/]+$/, "");
-  } catch {
-    return null;
-  }
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -385,79 +364,14 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const productBeforeDelete = await prisma.products.findUnique({
-      where: { id },
-      select: { slug: true },
-    });
-    if (!productBeforeDelete) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  
-    const imageRows = await prisma.product_images.findMany({
-      where: { product_id: id },
-      select: { url: true },
-    });
-  
-    const [orderItemsCount, activeOrderRefsCount, reviewsCount, returnsCount] = await Promise.all([
-      prisma.order_items.count({ where: { product_id: id } }),
-      prisma.order_items.count({
-        where: {
-          product_id: id,
-          orders: {
-            status: {
-              in: ["PENDING", "CONFIRMED", "SHIPPED", "RETURN_REQUESTED", "RETURN_APPROVED"],
-            },
-          },
-        },
-      }),
-      prisma.reviews.count({ where: { product_id: id } }),
-      prisma.returns.count({
-        where: {
-          order_items: {
-            product_id: id,
-          },
-        },
-      }),
-    ]);
-  
-    if (orderItemsCount > 0 || reviewsCount > 0 || returnsCount > 0) {
-      const reasonParts: string[] = [];
-      if (activeOrderRefsCount > 0) reasonParts.push(`${activeOrderRefsCount} active/pending order item(s)`);
-      if (orderItemsCount > 0) reasonParts.push(`${orderItemsCount} total historical order item(s)`);
-      if (reviewsCount > 0) reasonParts.push(`${reviewsCount} review(s)`);
-      if (returnsCount > 0) reasonParts.push(`${returnsCount} return record(s)`);
-      return NextResponse.json(
-        {
-          error: `Cannot delete this product because it is referenced by ${reasonParts.join(", ")}. You can set it inactive instead.`,
-        },
-        { status: 409 }
-      );
-    }
-  
-    try {
-      await prisma.products.delete({ where: { id } });
-    } catch (e: unknown) {
-      const code = (e as { code?: string } | null)?.code;
-      if (code === "P2003") {
-        return NextResponse.json(
-          {
-            error:
-              "Cannot delete this product because it has order/review references. Set it inactive instead.",
-          },
-          { status: 409 }
-        );
-      }
-      throw e;
-    }
-  
-    const publicIds = imageRows
-      .map((r) => cloudinaryPublicIdFromUrl(r.url))
-      .filter((v): v is string => Boolean(v));
-    if (publicIds.length > 0) {
-      cloudinary.api.delete_resources(publicIds, { resource_type: "image" }).catch(() => {});
+    const result = await deleteProductById(id);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
-    const deletedSlug = productBeforeDelete.slug;
+    destroyCloudinaryImages(result.cloudinaryPublicIds);
+
+    const deletedSlug = result.slug;
     after(() => {
       try {
         revalidateProductCatalog({ slug: deletedSlug });

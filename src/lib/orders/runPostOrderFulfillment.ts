@@ -12,6 +12,8 @@ import { notifyStoreNewOrder } from "@/lib/orders/storeOrderNotifications";
 import { bookShipmentForOrder } from "@/lib/shipping";
 import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
+import { formatOrderReference } from "@/lib/orders/orderNumber";
+import { prisma } from "@/lib/prisma";
 
 export type PostOrderFulfillmentInput = {
   orderId: string;
@@ -52,7 +54,7 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
         entityType: "ORDER",
         entityId: orderId,
         action: "PAYMENT_CONFIRMED",
-        newValues: { status: "CONFIRMED", paymentProvider: "razorpay" },
+        newValues: { payment_status: "SUCCEEDED", status: "PENDING", paymentProvider: "razorpay" },
         ipAddress: audit.ipAddress,
         userAgent: audit.userAgent,
       });
@@ -69,6 +71,12 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
 
   if (!checkoutEmail) return;
 
+  const orderRow = await prisma.orders.findUnique({
+    where: { id: orderId },
+    select: { id: true, order_number: true },
+  });
+  const orderRef = orderRow ? formatOrderReference(orderRow) : orderId;
+
   let orderLines: Awaited<ReturnType<typeof loadOrderEmailLines>> = [];
   try {
     orderLines = await loadOrderEmailLines(orderId);
@@ -80,8 +88,8 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
     await sendEmail({
       to: checkoutEmail,
       subject: "Order placed successfully",
-      html: orderConfirmedCustomerEmailHtml({ orderId, lines: orderLines }),
-      text: orderConfirmedCustomerEmailText({ orderId, lines: orderLines }),
+      html: orderConfirmedCustomerEmailHtml({ orderId: orderRef, lines: orderLines }),
+      text: orderConfirmedCustomerEmailText({ orderId: orderRef, lines: orderLines }),
     });
   } catch (err) {
     console.error("[postOrderFulfillment] order email failed", err);
@@ -96,13 +104,13 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
         html: newGuestAccountPasswordEmailHtml({
           email: checkoutEmail,
           setupUrl: newAccountPasswordSetup.setupUrl,
-          orderId,
+          orderId: orderRef,
           loginUrl,
         }),
         text: newGuestAccountPasswordEmailText({
           email: checkoutEmail,
           setupUrl: newAccountPasswordSetup.setupUrl,
-          orderId,
+          orderId: orderRef,
           loginUrl,
         }),
       });

@@ -4,10 +4,10 @@ import { prisma } from "@/lib/prisma";
 export async function ensureOrderShipmentCreated(orderId: string) {
   await prisma.shipments.upsert({
     where: { order_id: orderId },
-    update: { status: "CREATED" },
+    update: {},
     create: {
       order_id: orderId,
-      status: "CREATED",
+      status: "PENDING",
       tracking_number: null,
       carrier: null,
     },

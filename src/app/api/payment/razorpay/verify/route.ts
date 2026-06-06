@@ -105,7 +105,6 @@ export async function POST(req: NextRequest) {
         const order = await tx.orders.create({
           data: {
             customer_id: ctx.checkoutUserId,
-            status: "CONFIRMED",
             payment_status: "SUCCEEDED",
             subtotal_amount: ctx.subtotal,
             discount_amount: ctx.discount,

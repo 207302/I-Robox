@@ -4,7 +4,10 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
+import { useBulkSelection } from "@/components/admin/useBulkSelection";
+import type { MarketingBulkEntity } from "@/lib/admin/marketingBulkDelete";
 import { cloudinaryCardUrl } from "@/lib/images/cloudinaryDeliver";
 import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
@@ -183,6 +186,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     | "flash"
     | "settings"
   >("hero");
+  const bulk = useBulkSelection();
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [slides, setSlides] = useState(() =>
     sortHeroSlides((initial.slides as HeroSlideRow[]) ?? [])
   );
@@ -463,6 +468,164 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     setFlashSales(await r.json());
   }
 
+  useEffect(() => {
+    bulk.clearSelection();
+  }, [tab, bulk.clearSelection]);
+
+  const tabBulkEntity = useMemo((): MarketingBulkEntity | null => {
+    switch (tab) {
+      case "hero":
+        return "hero-slides";
+      case "highlights":
+        return "highlights";
+      case "brandRail":
+        return "brand-rail";
+      case "categoryGrid":
+        return "category-tiles";
+      case "announcements":
+        return "announcements";
+      case "popups":
+        return "popups";
+      case "flash":
+        return "flash-sales";
+      default:
+        return null;
+    }
+  }, [tab]);
+
+  const tabListIds = useMemo((): string[] => {
+    switch (tab) {
+      case "hero":
+        return (slides as HeroSlideRow[]).map((s) => s.id);
+      case "highlights":
+        return (highlights as { id: string }[]).map((r) => r.id);
+      case "brandRail":
+        return (brandRailRows as { id: string }[]).map((r) => r.id);
+      case "categoryGrid":
+        return (categoryGridRows as { id: string }[]).map((r) => r.id);
+      case "announcements":
+        return (announcements as { id: string }[]).map((r) => r.id);
+      case "popups":
+        return (popups as { id: string }[]).map((r) => r.id);
+      case "flash":
+        return (flashSales as { id: string }[]).map((r) => r.id);
+      default:
+        return [];
+    }
+  }, [tab, slides, highlights, brandRailRows, categoryGridRows, announcements, popups, flashSales]);
+
+  const { allOnPageSelected: allTabSelected, someOnPageSelected: someTabSelected } =
+    bulk.selectionForPage(tabListIds);
+
+  async function handleMarketingBulkDelete() {
+    const entity = tabBulkEntity;
+    const ids = bulk.selectedArray;
+    if (!entity || ids.length === 0) return;
+    if (ids.length > 50) {
+      toast.error("Select at most 50 items at a time");
+      return;
+    }
+    if (!window.confirm(`Delete ${ids.length} selected item${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const data = await j<{
+        deletedCount?: number;
+        failed?: { id: string; error: string }[];
+      }>(
+        await fetch("/api/admin/marketing/bulk-delete", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ entity, ids }),
+        })
+      );
+
+      const deletedCount = Number(data.deletedCount ?? 0);
+      const failed = data.failed ?? [];
+
+      if (deletedCount > 0) {
+        toast.success(`Deleted ${deletedCount} item${deletedCount === 1 ? "" : "s"}`);
+      }
+      if (failed.length > 0) {
+        toast.error(`${failed.length} could not be deleted`, { duration: 6000 });
+      }
+
+      bulk.clearSelection();
+      switch (entity) {
+        case "hero-slides":
+          await refreshHero();
+          break;
+        case "highlights":
+          await refreshHighlights();
+          break;
+        case "brand-rail":
+          await refreshBrandRail();
+          break;
+        case "category-tiles":
+          await refreshCategoryGrid();
+          break;
+        case "announcements":
+          await refreshAnnouncements();
+          break;
+        case "popups":
+          await refreshPopups();
+          break;
+        case "flash-sales":
+          await refreshFlash();
+          break;
+      }
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  function marketingSelectAllBar(itemLabel: string) {
+    if (tabListIds.length === 0) return null;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-sm text-meta-3">
+          <input
+            type="checkbox"
+            aria-label={`Select all ${itemLabel}`}
+            checked={allTabSelected}
+            ref={(el) => {
+              if (el) el.indeterminate = someTabSelected && !allTabSelected;
+            }}
+            onChange={() => bulk.toggleMany(tabListIds, !allTabSelected)}
+            disabled={bulkDeleting}
+            className="h-4 w-4 rounded border-gray-3"
+          />
+          Select all
+        </label>
+        <AdminBulkDeleteBar
+          selectedCount={bulk.selectedCount}
+          deleting={bulkDeleting}
+          itemLabel={itemLabel}
+          onClear={bulk.clearSelection}
+          onDelete={() => void handleMarketingBulkDelete()}
+        />
+      </div>
+    );
+  }
+
+  function marketingRowCheckbox(id: string, label: string) {
+    return (
+      <input
+        type="checkbox"
+        aria-label={`Select ${label}`}
+        checked={bulk.isSelected(id)}
+        onChange={() => bulk.toggleOne(id)}
+        disabled={bulkDeleting}
+        className="h-4 w-4 shrink-0 rounded border-gray-3"
+      />
+    );
+  }
+
   function listedPriceForProduct(productId: string): number | null {
     const p = prods.find((x) => x.id === productId);
     if (!p) return null;
@@ -680,6 +843,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               Lower sort numbers show first on the homepage.
             </p>
           </div>
+          {marketingSelectAllBar("banner")}
           <ul className="divide-y divide-gray-3 text-sm max-h-[min(70vh,720px)] overflow-y-auto">
             {(slides as HeroSlideRow[]).map((row) => (
               <li key={row.id} id={`hero-slide-${row.id}`} className="py-3">
@@ -825,6 +989,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
+                      {marketingRowCheckbox(row.id, row.title?.trim() || "Hero slide")}
                       <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded border border-gray-3 bg-gray-2">
                         <Image
                           src={heroSlideThumbUrl(row.image_url)}
@@ -1050,11 +1215,15 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             </button>
           </div>
 
+          {marketingSelectAllBar("highlight")}
           <ul className="divide-y divide-gray-3 text-sm">
             {highlights.map((row: any) => (
               <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  {row.kind} — {row.title}
+                <span className="flex items-center gap-2 min-w-0">
+                  {marketingRowCheckbox(row.id, row.title ?? row.kind)}
+                  <span className="truncate">
+                    {row.kind} — {row.title}
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -1212,10 +1381,13 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             Square image and label below — same layout as the storefront. Each tile links to that brand in
             the shop. Leave label blank to use the catalog brand name.
           </p>
+          {marketingSelectAllBar("brand tile")}
           <ul className="divide-y divide-gray-3 text-sm">
             {brandRailRows.map((row: any) => (
               <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="flex-1 min-w-[200px]">
+                <span className="flex flex-1 min-w-[200px] items-start gap-2">
+                  {marketingRowCheckbox(row.id, row.brands?.name ?? "Brand")}
+                  <span className="min-w-0">
                   <span className="font-medium text-dark">
                     {row.brands?.name ?? "Brand"}
                   </span>
@@ -1223,6 +1395,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                     <span className="text-meta-3"> — label: {row.label_override}</span>
                   ) : null}
                   <span className="block truncate text-xs text-meta-4 mt-0.5">{row.image_url}</span>
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -1360,10 +1533,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             set sort order. Only active tiles are shown; if this list is empty, the site
             falls back to the first eight categories without photos.
           </p>
+          {marketingSelectAllBar("category tile")}
           <ul className="divide-y divide-gray-3 text-sm">
             {(categoryGridRows as any[]).map((row) => (
               <li key={row.id} className="py-3 flex flex-wrap items-start justify-between gap-3">
                 <div className="flex gap-3 min-w-0 flex-1">
+                  {marketingRowCheckbox(row.id, row.categories?.name ?? "Category")}
                   {row.image_url ? (
                     <Image
                       src={row.image_url}
@@ -1607,11 +1782,15 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <p className="text-sm text-meta-3">
             UTILITY = top strip (welcome / sign in). MARQUEE = scrolling row below.
           </p>
+          {marketingSelectAllBar("announcement")}
           <ul className="divide-y divide-gray-3 text-sm">
             {announcements.map((row: any) => (
               <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  {row.placement}: {row.body}
+                <span className="flex items-center gap-2 min-w-0">
+                  {marketingRowCheckbox(row.id, row.body ?? row.placement)}
+                  <span className="truncate">
+                    {row.placement}: {row.body}
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -1697,15 +1876,19 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
       {tab === "popups" ? (
         <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
           <h2 className="text-lg font-semibold">Popup campaigns</h2>
+          {marketingSelectAllBar("popup")}
           <ul className="divide-y divide-gray-3 text-sm">
             {popups.map((row: any) => (
               <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span>
+                <span className="flex items-center gap-2 min-w-0">
+                  {marketingRowCheckbox(row.id, row.title)}
+                  <span className="truncate">
                   {row.title}
                   <span className="ml-2 text-xs text-meta-3">
                     {Number(row.auto_close_ms ?? 0) > 0
                       ? `auto-close ${(Number(row.auto_close_ms) / 1000).toFixed(1)}s`
                       : "no auto-close"}
+                  </span>
                   </span>
                 </span>
                 <button
@@ -1865,6 +2048,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <p className="text-sm text-meta-3">
             Overrides catalog unit price at checkout when active (and in window).
           </p>
+          {marketingSelectAllBar("flash sale")}
           <ul className="divide-y divide-gray-3 text-sm">
             {flashSales.map((row: any) => (
               <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
@@ -1930,8 +2114,11 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                   </div>
                 ) : (
                   <>
-                    <span>
-                      {row.products?.name ?? row.product_id} — ₹{row.sale_price}
+                    <span className="flex items-center gap-2 min-w-0">
+                      {marketingRowCheckbox(row.id, row.products?.name ?? row.product_id)}
+                      <span className="truncate">
+                        {row.products?.name ?? row.product_id} — ₹{row.sale_price}
+                      </span>
                     </span>
                     <div className="flex items-center gap-3">
                       <button

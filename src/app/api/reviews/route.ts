@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
         product_id: productId,
         orders: {
           customer_id: session.sub,
-          status: "CONFIRMED",
+          payment_status: "SUCCEEDED",
         },
         reviews: {
           none: {

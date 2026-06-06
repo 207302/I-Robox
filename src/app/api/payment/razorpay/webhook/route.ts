@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
         where: { external_payment_id: paymentId, payment_provider: "razorpay" },
         select: { id: true, payment_status: true, status: true },
       });
-      if (order && (order.payment_status !== "SUCCEEDED" || order.status !== "CONFIRMED")) {
+      if (order && order.payment_status !== "SUCCEEDED") {
         await prisma.orders.update({
           where: { id: order.id },
-          data: { payment_status: "SUCCEEDED", status: "CONFIRMED" },
+          data: { payment_status: "SUCCEEDED" },
         });
         await writeAuditLog({
           entityType: "ORDER",

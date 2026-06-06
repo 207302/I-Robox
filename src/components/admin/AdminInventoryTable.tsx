@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import { filterAndSortProducts } from "@/lib/search/productSearch";
 import type { ProductSearchItem } from "@/lib/search/productSearch";
+import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import { AdminPagination } from "@/components/admin/AdminPagination";
+import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
+import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
+import { useBulkSelection } from "@/components/admin/useBulkSelection";
 
 const PAGE_SIZE = 50;
+const MAX_BULK_DELETE = 50;
 
 export type AdminInventoryRow = {
   id: string;
@@ -46,9 +53,12 @@ type AdminInventoryTableProps = {
 };
 
 export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const searching = query !== deferredQuery;
+  const bulk = useBulkSelection();
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const filtered = useMemo(
     () => filterAndSortInventoryRows(rows, deferredQuery),
@@ -71,6 +81,9 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
     return filtered.slice(skip, skip + PAGE_SIZE);
   }, [filtered, safePage]);
 
+  const pagedProductIds = useMemo(() => paged.map((r) => r.productId), [paged]);
+  const { allOnPageSelected, someOnPageSelected } = bulk.selectionForPage(pagedProductIds);
+
   const rangeStart = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const rangeEnd = (safePage - 1) * PAGE_SIZE + paged.length;
 
@@ -90,9 +103,67 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
     setPage(1);
   }
 
+  async function handleBulkDeleteProducts() {
+    const productIds = [...new Set(bulk.selectedArray)];
+    if (productIds.length === 0) return;
+    if (productIds.length > MAX_BULK_DELETE) {
+      toast.error(`Select at most ${MAX_BULK_DELETE} products at a time`);
+      return;
+    }
+
+    const names = rows
+      .filter((r) => bulk.isSelected(r.productId))
+      .map((r) => r.search.name)
+      .slice(0, 5);
+    const preview =
+      names.length > 0
+        ? `\n\n${names.join("\n")}${productIds.length > 5 ? `\n…and ${productIds.length - 5} more` : ""}`
+        : "";
+
+    const ok = window.confirm(
+      `Delete ${productIds.length} product${productIds.length === 1 ? "" : "s"}? This removes them from the catalog. Products with orders or reviews will be skipped.${preview}`
+    );
+    if (!ok) return;
+
+    setBulkDeleting(true);
+    try {
+      const res = await fetchAdminWithRetry("/api/admin/products/bulk-delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: productIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
+
+      const deletedCount = Number(data.deletedCount ?? 0);
+      const failed = (data.failed ?? []) as { id: string; error: string }[];
+
+      if (deletedCount > 0) {
+        toast.success(`Deleted ${deletedCount} product${deletedCount === 1 ? "" : "s"}`);
+      }
+      if (failed.length > 0) {
+        const first = failed[0];
+        const productName =
+          rows.find((r) => r.productId === first.id)?.search.name ?? first.id;
+        toast.error(
+          `${failed.length} could not be deleted (e.g. ${productName}: ${first.error})`,
+          { duration: 6000 }
+        );
+      }
+
+      bulk.clearSelection();
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   return (
     <>
-      <div className="mx-auto flex w-full max-w-md items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto flex w-full max-w-md items-center gap-2 sm:mx-0">
         <input
           type="search"
           value={query}
@@ -111,6 +182,15 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
             Clear
           </button>
         ) : null}
+      </div>
+
+        <AdminBulkDeleteBar
+          selectedCount={bulk.selectedCount}
+          deleting={bulkDeleting}
+          itemLabel="product"
+          onClear={bulk.clearSelection}
+          onDelete={() => void handleBulkDeleteProducts()}
+        />
       </div>
 
       {outOfStock.length > 0 && (
@@ -179,6 +259,19 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-meta-3 border-b border-gray-3">
+              <th className="py-3 px-4 w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Select all on this page"
+                  checked={allOnPageSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
+                  }}
+                  onChange={() => bulk.toggleMany(pagedProductIds, !allOnPageSelected)}
+                  disabled={paged.length === 0 || bulkDeleting}
+                  className="h-4 w-4 rounded border-gray-3"
+                />
+              </th>
               <th className="py-3 px-4">Product</th>
               <th className="py-3 px-4">Store</th>
               <th className="py-3 px-4">Available</th>
@@ -194,10 +287,28 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
               const isRed = isBelowThreshold(r.availableQuantity, r.lowStockThreshold);
               const isOut = r.availableQuantity === 0;
               return (
-                <tr key={r.id} className={`border-b border-gray-3 ${isRed ? "bg-red-50" : ""}`}>
+                <tr
+                  key={r.id}
+                  className={`border-b border-gray-3 ${isRed ? "bg-red-50" : ""} ${bulk.isSelected(r.productId) ? "bg-blue/5" : ""}`}
+                >
                   <td className="py-3 px-4">
-                    <div className="font-semibold text-dark">{r.search.name}</div>
-                    <div className="text-xs text-meta-4">{r.search.sku ?? ""}</div>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${r.search.name}`}
+                      checked={bulk.isSelected(r.productId)}
+                      onChange={() => bulk.toggleOne(r.productId)}
+                      disabled={bulkDeleting}
+                      className="h-4 w-4 rounded border-gray-3"
+                    />
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <AdminProductThumbnail url={r.search.imageUrl} alt={r.search.name} />
+                      <div className="min-w-0">
+                        <div className="font-semibold text-dark truncate">{r.search.name}</div>
+                        <div className="text-xs text-meta-4 truncate">{r.search.sku ?? ""}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="py-3 px-4">
                     <span
@@ -250,7 +361,7 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
             })}
             {paged.length === 0 ? (
               <tr>
-                <td className="py-6 px-4 text-sm text-meta-3" colSpan={8}>
+                <td className="py-6 px-4 text-sm text-meta-3" colSpan={9}>
                   {q ? "No matching inventory rows." : "No inventory rows found."}
                 </td>
               </tr>

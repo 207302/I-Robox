@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
+import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { formatPrice } from "@/utils/formatePrice";
 
 export const STORE_ORDER_NOTIFICATION_EMAIL = "iroboxtoys@gmail.com";
@@ -46,6 +47,7 @@ export async function notifyStoreNewOrder(orderId: string) {
     where: { id: orderId },
     select: {
       id: true,
+      order_number: true,
       total_amount: true,
       subtotal_amount: true,
       discount_amount: true,
@@ -81,6 +83,7 @@ export async function notifyStoreNewOrder(orderId: string) {
 
   if (!order) return { ok: false, skipped: true as const };
 
+  const orderRef = formatOrderReference(order);
   const adminUrl = `${getSiteBaseUrl()}/admin/orders/${order.id}`;
   const customerEmail = order.customers?.email ?? "—";
   const customerName = order.customers?.name?.trim() || "—";
@@ -115,7 +118,7 @@ export async function notifyStoreNewOrder(orderId: string) {
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">New order received</h2>
     <p style="margin:0 0 1em">A customer order was confirmed and is ready to fulfil.</p>
-    <p style="margin:0.35em 0"><strong>Order ID:</strong> ${escapeHtml(order.id)}</p>
+    <p style="margin:0.35em 0"><strong>Order:</strong> ${escapeHtml(orderRef)}</p>
     <p style="margin:0.35em 0"><strong>Status:</strong> ${escapeHtml(String(order.status))} · ${escapeHtml(String(order.payment_status))}</p>
     <p style="margin:0.35em 0"><strong>Customer:</strong> ${escapeHtml(customerName)}</p>
     <p style="margin:0.35em 0"><strong>Email:</strong> ${escapeHtml(customerEmail)}</p>
@@ -151,7 +154,7 @@ export async function notifyStoreNewOrder(orderId: string) {
   const text = [
     "New order received",
     "",
-    `Order ID: ${order.id}`,
+    `Order: ${orderRef}`,
     `Status: ${order.status} · ${order.payment_status}`,
     `Customer: ${customerName}`,
     `Email: ${customerEmail}`,
@@ -174,7 +177,7 @@ export async function notifyStoreNewOrder(orderId: string) {
 
   await sendEmail({
     to: STORE_ORDER_NOTIFICATION_EMAIL,
-    subject: `New order — ${formatPrice(Number(order.total_amount))} | ${order.id.slice(0, 8)}…`,
+    subject: `New order — ${formatPrice(Number(order.total_amount))} | ${orderRef}`,
     html,
     text,
   });

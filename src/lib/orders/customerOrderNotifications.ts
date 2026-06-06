@@ -1,4 +1,6 @@
 import { sendEmail, isEmailConfigured, orderUpdateCustomerEmailHtml } from "@/lib/email";
+import { formatOrderReference } from "@/lib/orders/orderNumber";
+import { prisma } from "@/lib/prisma";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 
 export type ShipmentSnapshot = {
@@ -44,6 +46,12 @@ export async function notifyCustomerOrderOrShipmentUpdate(input: {
     return { ok: false, skipped: true as const };
   }
 
+  const orderRow = await prisma.orders.findUnique({
+    where: { id: input.orderId },
+    select: { id: true, order_number: true },
+  });
+  const orderRef = orderRow ? formatOrderReference(orderRow) : input.orderId;
+
   const base = getSiteBaseUrl();
   const orderUrl = `${base}/orders/${input.orderId}`;
   const blocks: string[] = [];
@@ -68,8 +76,8 @@ export async function notifyCustomerOrderOrShipmentUpdate(input: {
     }
   }
 
-  const html = orderUpdateCustomerEmailHtml({ orderId: input.orderId, orderUrl, blocksHtml: blocks });
-  const textLines: string[] = [`Order ${input.orderId} was updated.`];
+  const html = orderUpdateCustomerEmailHtml({ orderId: orderRef, orderUrl, blocksHtml: blocks });
+  const textLines: string[] = [`Order ${orderRef} was updated.`];
   if (statusChanged) textLines.push(`Status: ${input.previousOrderStatus} → ${input.nextOrderStatus}`);
   if (shipChanged && input.nextShipment) {
     textLines.push(`Shipment: ${input.nextShipment.status}`);
@@ -91,7 +99,7 @@ export async function notifyCustomerOrderOrShipmentUpdate(input: {
 
   await sendEmail({
     to: input.to,
-    subject: `${subjectHint} — order ${input.orderId.slice(0, 8)}… | i-Robox`,
+    subject: `${subjectHint} — order ${orderRef} | i-Robox`,
     html,
     text: textLines.join("\n"),
   });

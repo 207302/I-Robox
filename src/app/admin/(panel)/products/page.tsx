@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import { AdminProductsTable } from "@/components/admin/AdminProductsTable";
 import type { ProductSearchItem as AdminProductSearchItem } from "@/lib/search/productSearch";
 
@@ -24,6 +25,7 @@ export default async function AdminProductsPage() {
       product_types: { select: { name: true } },
       product_collections: { select: { name: true } },
       diecast_scales: { select: { ratio: true } },
+      product_images: adminProductImageSelect,
     },
   });
 
@@ -41,6 +43,7 @@ export default async function AdminProductsPage() {
     subcategory: p.product_subtypes?.name ?? null,
     productType: p.product_types?.name ?? null,
     collection: p.product_collections?.name ?? null,
+    imageUrl: firstProductImageUrl(p),
   }));
 
   return (

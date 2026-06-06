@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
+import { formatOrderReference } from "@/utils/orderNumber";
 
 export const metadata = {
   title: "Returns | i-Robox",
@@ -26,7 +27,14 @@ export default async function ReturnsPage() {
   const returns = await prisma.returns.findMany({
     where: { customer_id: session.sub },
     orderBy: { created_at: "desc" },
-    select: { id: true, status: true, quantity: true, created_at: true, order_id: true },
+    select: {
+      id: true,
+      status: true,
+      quantity: true,
+      created_at: true,
+      order_id: true,
+      orders: { select: { id: true, order_number: true } },
+    },
     take: 50,
   });
 
@@ -52,7 +60,9 @@ export default async function ReturnsPage() {
                   <div>
                     <div className="text-sm text-meta-3">Return</div>
                     <div className="font-semibold text-dark">{r.id}</div>
-                    <div className="mt-1 text-xs text-meta-4">Order: {r.order_id}</div>
+                    <div className="mt-1 text-xs text-meta-4">
+                      Order: {r.orders ? formatOrderReference(r.orders) : r.order_id}
+                    </div>
                   </div>
                   <div className="text-sm">
                     <div className="text-meta-3">Qty</div>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { formatPrice } from "@/utils/formatePrice";
-import { toOrderNumber } from "@/utils/orderNumber";
+import { formatOrderReference } from "@/utils/orderNumber";
 
 export const metadata = {
   title: "Orders | i-Robox",
@@ -33,6 +33,7 @@ export default async function OrdersPage() {
     orderBy: { created_at: "desc" },
     select: {
       id: true,
+      order_number: true,
       status: true,
       payment_status: true,
       total_amount: true,
@@ -71,7 +72,7 @@ export default async function OrdersPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm text-meta-3">Order</div>
-                    <div className="font-semibold text-dark">{toOrderNumber(o.id)}</div>
+                    <div className="font-semibold text-dark">{formatOrderReference(o)}</div>
                     {o.addresses_orders_shipping_address_idToaddresses ? (
                       <div className="mt-1 text-xs text-meta-3 line-clamp-1">
                         {o.addresses_orders_shipping_address_idToaddresses.line1}

@@ -1,4 +1,9 @@
-export function toOrderNumber(id: string) {
-  const compact = id.replace(/-/g, "").toUpperCase();
-  return `ORD-${compact.slice(0, 10)}`;
-}
+import { formatOrderReference } from "@/lib/orders/orderNumber";
+
+export {
+  compactOrderId,
+  formatOrderReference,
+  formatSequentialOrderNumber,
+  ORDER_NUMBER_PREFIX,
+  ORDER_NUMBER_START,
+} from "@/lib/orders/orderNumber";

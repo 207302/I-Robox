@@ -9,6 +9,7 @@ export type ProductSearchItem = {
   productType: string | null;
   collection: string | null;
   scale: string | null;
+  imageUrl?: string | null;
 };
 
 /** Lowercase, collapse punctuation to spaces. */

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { formatPrice } from "@/utils/formatePrice";
+import { formatOrderReference } from "@/utils/orderNumber";
 
 function formatDateTimeIst(value: Date | string) {
   const d = value instanceof Date ? value : new Date(value);
@@ -35,6 +36,7 @@ export default async function InvoicePage({ params, searchParams }: Props) {
     where: { id: orderId },
     select: {
       id: true,
+      order_number: true,
       customer_id: true,
       created_at: true,
       subtotal_amount: true,
@@ -81,7 +83,7 @@ export default async function InvoicePage({ params, searchParams }: Props) {
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
               <div className="text-sm text-meta-3">Invoice for order</div>
-              <div className="text-lg font-semibold text-dark">{order.id}</div>
+              <div className="text-lg font-semibold text-dark">{formatOrderReference(order)}</div>
               <div className="mt-2 text-sm text-meta-3">
                 Date: {formatDateTimeIst(order.created_at)}
               </div>

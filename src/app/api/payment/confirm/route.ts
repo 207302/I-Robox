@@ -102,7 +102,6 @@ export async function POST(req: NextRequest) {
         where: { id: orderId },
         data: {
           payment_status: "SUCCEEDED",
-          status: "CONFIRMED",
           external_payment_id: `placeholder_${Date.now()}`,
         },
       });
@@ -157,7 +156,7 @@ export async function POST(req: NextRequest) {
             tracking_number: shipRow.tracking_number,
           }
         : {
-            status: "CREATED",
+            status: "PENDING",
             carrier: null,
             tracking_number: null,
           };
@@ -168,7 +167,7 @@ export async function POST(req: NextRequest) {
           entityType: "ORDER",
           entityId: orderId,
           action: "PAYMENT_CONFIRMED",
-          newValues: { status: "CONFIRMED" },
+          newValues: { payment_status: "SUCCEEDED", status: "PENDING" },
           ipAddress: req.ip ?? null,
           userAgent: req.headers.get("user-agent"),
         });
@@ -204,7 +203,7 @@ export async function POST(req: NextRequest) {
           to: recipient,
           orderId,
           previousOrderStatus: result.previousStatus ?? "PENDING",
-          nextOrderStatus: "CONFIRMED",
+          nextOrderStatus: result.previousStatus ?? "PENDING",
           previousShipment: result.previousShipment ?? null,
           nextShipment,
         });

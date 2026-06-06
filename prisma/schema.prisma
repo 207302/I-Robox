@@ -298,6 +298,7 @@ model order_items {
 
 model orders {
   id                                              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_number                                    String                   @unique @db.VarChar(16)
   customer_id                                     String?                  @db.Uuid
   status                                          order_status_type        @default(PENDING)
   payment_status                                  payment_status_type      @default(PENDING)

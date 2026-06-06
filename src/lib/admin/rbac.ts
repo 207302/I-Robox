@@ -19,3 +19,11 @@ export async function requireAdminWrite() {
   return { ok: canWrite as boolean, session: res.session };
 }
 
+export async function requireSuperAdmin() {
+  const res = await requireAdmin();
+  if (!res.ok) return res;
+  const roles = res.session.roles ?? [];
+  const isSuperAdmin = roles.includes("SUPER_ADMIN");
+  return { ok: isSuperAdmin as boolean, session: res.session };
+}
+

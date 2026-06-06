@@ -34,6 +34,7 @@ import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
+import { allocateNextOrderNumber, formatOrderReference } from "@/lib/orders/orderNumber";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 type CheckoutItem = {
@@ -284,8 +285,11 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
   
+      const order_number = await allocateNextOrderNumber(tx);
+
       const createdOrder = await tx.orders.create({
         data: {
+          order_number,
           customer_id: checkoutUserId,
           status: "PENDING",
           payment_status: "PENDING",
@@ -302,7 +306,7 @@ export async function POST(req: NextRequest) {
           is_gift: isGift,
           gift_message: giftMessage,
         },
-        select: { id: true },
+        select: { id: true, order_number: true },
       });
   
       for (const li of lineItems) {
@@ -376,18 +380,19 @@ export async function POST(req: NextRequest) {
         } catch (lineErr) {
           console.error("[checkout] order line images failed", lineErr);
         }
+        const orderRef = formatOrderReference(order);
         const mailResult = await sendEmail({
           to: checkoutEmail,
           subject: newAccountPasswordSetup
             ? "Order received — set your password (see email)"
             : "Order created (pending payment)",
           html: orderPendingCustomerEmailHtml({
-            orderId: order.id,
+            orderId: orderRef,
             lines: orderLines,
             passwordSetup,
           }),
           text: orderPendingCustomerEmailText({
-            orderId: order.id,
+            orderId: orderRef,
             lines: orderLines,
             passwordSetup,
           }),

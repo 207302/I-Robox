@@ -24,12 +24,12 @@ function cloudinaryPublicIdFromUrl(url: string): string | null {
 
 export type DeleteProductResult =
   | { ok: true; slug: string; cloudinaryPublicIds: string[] }
-  | { ok: false; status: 404 | 409; error: string };
+  | { ok: false; status: 404 | 409; error: string; name?: string | null };
 
 export async function deleteProductById(id: string): Promise<DeleteProductResult> {
   const productBeforeDelete = await prisma.products.findUnique({
     where: { id },
-    select: { slug: true },
+    select: { slug: true, name: true },
   });
   if (!productBeforeDelete) {
     return { ok: false, status: 404, error: "Product not found" };
@@ -72,6 +72,7 @@ export async function deleteProductById(id: string): Promise<DeleteProductResult
       ok: false,
       status: 409,
       error: `Referenced by ${reasonParts.join(", ")}. Set inactive instead.`,
+      name: productBeforeDelete.name,
     };
   }
 
@@ -84,6 +85,7 @@ export async function deleteProductById(id: string): Promise<DeleteProductResult
         ok: false,
         status: 409,
         error: "Has order/review references. Set inactive instead.",
+        name: productBeforeDelete.name,
       };
     }
     throw e;

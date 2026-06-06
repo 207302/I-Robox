@@ -32,6 +32,15 @@ export function useBulkSelection() {
     setSelectedIds(new Set());
   }, []);
 
+  const deselectMany = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
+
   const isSelected = useCallback((id: string) => selectedIds.has(id), [selectedIds]);
 
   const selectionForPage = useCallback(
@@ -53,6 +62,7 @@ export function useBulkSelection() {
     toggleOne,
     toggleMany,
     clearSelection,
+    deselectMany,
     isSelected,
     selectionForPage,
   };

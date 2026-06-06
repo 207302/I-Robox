@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       }
 
       const deleted: string[] = [];
-      const failed: { id: string; error: string }[] = [];
+      const failed: { id: string; name: string | null; error: string }[] = [];
       const deletedSlugs: string[] = [];
       const cloudinaryIds: string[] = [];
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           deletedSlugs.push(result.slug);
           cloudinaryIds.push(...result.cloudinaryPublicIds);
         } else {
-          failed.push({ id, error: result.error });
+          failed.push({ id, name: result.name ?? null, error: result.error });
         }
       }
 

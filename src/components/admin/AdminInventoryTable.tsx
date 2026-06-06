@@ -135,23 +135,32 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
 
-      const deletedCount = Number(data.deletedCount ?? 0);
-      const failed = (data.failed ?? []) as { id: string; error: string }[];
+      const deleted = (data.deleted ?? []) as string[];
+      const deletedCount = Number(data.deletedCount ?? deleted.length);
+      const failed = (data.failed ?? []) as { id: string; name?: string | null; error: string }[];
 
       if (deletedCount > 0) {
         toast.success(`Deleted ${deletedCount} product${deletedCount === 1 ? "" : "s"}`);
+        bulk.deselectMany(deleted);
       }
+
       if (failed.length > 0) {
-        const first = failed[0];
-        const productName =
-          rows.find((r) => r.productId === first.id)?.search.name ?? first.id;
+        const skippedNames = failed
+          .map(
+            (f) => f.name ?? rows.find((r) => r.productId === f.id)?.search.name ?? f.id
+          )
+          .slice(0, 5);
+        const suffix = failed.length > 5 ? `, +${failed.length - 5} more` : "";
         toast.error(
-          `${failed.length} could not be deleted (e.g. ${productName}: ${first.error})`,
-          { duration: 6000 }
+          `${failed.length} skipped (have orders/reviews): ${skippedNames.join(", ")}${suffix}`,
+          { duration: 8000 }
         );
       }
 
-      bulk.clearSelection();
+      if (deletedCount === 0 && failed.length === 0) {
+        bulk.clearSelection();
+      }
+
       router.refresh();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Bulk delete failed");

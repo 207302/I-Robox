@@ -103,3 +103,108 @@ export function destroyCloudinaryImages(publicIds: string[]) {
   if (unique.length === 0) return;
   cloudinary.api.delete_resources(unique, { resource_type: "image" }).catch(() => {});
 }
+
+function blockerMessage(input: {
+  orderItems?: number;
+  reviews?: number;
+  returns?: number;
+}): string {
+  const parts: string[] = [];
+  if (input.orderItems) parts.push(`${input.orderItems} order item(s)`);
+  if (input.reviews) parts.push(`${input.reviews} review(s)`);
+  if (input.returns) parts.push(`${input.returns} return record(s)`);
+  return `Referenced by ${parts.join(", ")}. Set inactive instead.`;
+}
+
+/** Fast path for bulk delete: batched reference checks + deleteMany. */
+export async function bulkDeleteProductsByIds(ids: string[]): Promise<{
+  deleted: { id: string; slug: string; cloudinaryPublicIds: string[] }[];
+  failed: { id: string; name: string | null; error: string }[];
+}> {
+  const uniqueIds = [...new Set(ids)];
+  const deleted: { id: string; slug: string; cloudinaryPublicIds: string[] }[] = [];
+  const failed: { id: string; name: string | null; error: string }[] = [];
+
+  if (uniqueIds.length === 0) return { deleted, failed };
+
+  const [products, images, orderRefs, reviewRefs, returnRefs] = await Promise.all([
+    prisma.products.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, slug: true, name: true },
+    }),
+    prisma.product_images.findMany({
+      where: { product_id: { in: uniqueIds } },
+      select: { product_id: true, url: true },
+    }),
+    prisma.order_items.groupBy({
+      by: ["product_id"],
+      where: { product_id: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.reviews.groupBy({
+      by: ["product_id"],
+      where: { product_id: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.order_items.groupBy({
+      by: ["product_id"],
+      where: {
+        product_id: { in: uniqueIds },
+        returns: { some: {} },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const orderCounts = new Map(orderRefs.map((r) => [r.product_id, r._count._all]));
+  const reviewCounts = new Map(reviewRefs.map((r) => [r.product_id, r._count._all]));
+  const returnCounts = new Map(returnRefs.map((r) => [r.product_id, r._count._all]));
+
+  const imagesByProduct = new Map<string, string[]>();
+  for (const img of images) {
+    const list = imagesByProduct.get(img.product_id) ?? [];
+    list.push(img.url);
+    imagesByProduct.set(img.product_id, list);
+  }
+
+  const deletableIds: string[] = [];
+
+  for (const id of uniqueIds) {
+    const product = productById.get(id);
+    if (!product) {
+      failed.push({ id, name: null, error: "Product not found" });
+      continue;
+    }
+
+    const orderItems = orderCounts.get(id) ?? 0;
+    const reviews = reviewCounts.get(id) ?? 0;
+    const returns = returnCounts.get(id) ?? 0;
+
+    if (orderItems > 0 || reviews > 0 || returns > 0) {
+      failed.push({
+        id,
+        name: product.name,
+        error: blockerMessage({ orderItems, reviews, returns }),
+      });
+      continue;
+    }
+
+    deletableIds.push(id);
+  }
+
+  if (deletableIds.length > 0) {
+    await prisma.products.deleteMany({ where: { id: { in: deletableIds } } });
+
+    for (const id of deletableIds) {
+      const product = productById.get(id)!;
+      const urls = imagesByProduct.get(id) ?? [];
+      const cloudinaryPublicIds = urls
+        .map((url) => cloudinaryPublicIdFromUrl(url))
+        .filter((v): v is string => Boolean(v));
+      deleted.push({ id, slug: product.slug, cloudinaryPublicIds });
+    }
+  }
+
+  return { deleted, failed };
+}

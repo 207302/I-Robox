@@ -133,7 +133,12 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
         body: JSON.stringify({ ids: productIds }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
+      if (!res.ok) {
+        if (res.status === 503 && data?.code === "TIMEOUT") {
+          throw new Error("Bulk delete timed out — try fewer products or retry in a moment");
+        }
+        throw new Error(data?.error || "Bulk delete failed");
+      }
 
       const deleted = (data.deleted ?? []) as string[];
       const deletedCount = Number(data.deletedCount ?? deleted.length);

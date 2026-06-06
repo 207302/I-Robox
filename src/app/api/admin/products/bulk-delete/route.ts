@@ -4,11 +4,12 @@ import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { isUuid, readJsonBody } from "@/lib/validation/input";
-import { deleteProductById, destroyCloudinaryImages } from "@/lib/admin/deleteProduct";
+import { bulkDeleteProductsByIds, destroyCloudinaryImages } from "@/lib/admin/deleteProduct";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 
 const MAX_BULK_DELETE = 50;
+const BULK_DELETE_TIMEOUT_MS = 120_000;
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -51,25 +52,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No valid product ids" }, { status: 400 });
       }
 
-      const deleted: string[] = [];
-      const failed: { id: string; name: string | null; error: string }[] = [];
-      const deletedSlugs: string[] = [];
-      const cloudinaryIds: string[] = [];
-
-      for (const id of ids) {
-        const result = await deleteProductById(id);
-        if (result.ok) {
-          deleted.push(id);
-          deletedSlugs.push(result.slug);
-          cloudinaryIds.push(...result.cloudinaryPublicIds);
-        } else {
-          failed.push({ id, name: result.name ?? null, error: result.error });
-        }
-      }
+      const { deleted, failed } = await bulkDeleteProductsByIds(ids);
+      const deletedIds = deleted.map((d) => d.id);
+      const deletedSlugs = deleted.map((d) => d.slug);
+      const cloudinaryIds = deleted.flatMap((d) => d.cloudinaryPublicIds);
 
       if (deleted.length > 0) {
-        destroyCloudinaryImages(cloudinaryIds);
         after(() => {
+          destroyCloudinaryImages(cloudinaryIds);
           try {
             for (const slug of deletedSlugs) {
               revalidateProductCatalog({ slug });
@@ -84,7 +74,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           ok: true,
-          deleted,
+          deleted: deletedIds,
           failed,
           deletedCount: deleted.length,
           failedCount: failed.length,
@@ -92,6 +82,6 @@ export async function POST(req: NextRequest) {
         { status: 200 }
       );
     },
-    { name: "POST /api/admin/products/bulk-delete" }
+    { name: "POST /api/admin/products/bulk-delete", timeoutMs: BULK_DELETE_TIMEOUT_MS }
   );
 }

@@ -23,8 +23,7 @@ import {
 } from "@/lib/validation/input";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
-  couponScopeError,
-  computeCouponDiscount,
+  couponDiscountFromLines,
   couponTimingError,
   couponUsageErrors,
   fetchCouponForCart,
@@ -226,22 +225,20 @@ export async function POST(req: NextRequest) {
       const timeErr = couponTimingError(coupon, now);
       if (timeErr) return NextResponse.json({ error: timeErr }, { status: 400 });
   
-      const lineMeta = items.map((i) => {
-        const p = productMap.get(i.productId)!;
-        return { productId: p.id, categoryId: p.category_id, brandId: p.brand_id };
+      const couponLines = lineItems.map((li) => {
+        const p = productMap.get(li.productId)!;
+        return {
+          productId: p.id,
+          categoryId: p.category_id,
+          brandId: p.brand_id,
+          subtotal: li.subtotal,
+        };
       });
-      const scopeErr = couponScopeError(
-        {
-          categoryIds: coupon.categoryIds,
-          brandIds: coupon.brandIds,
-          productIds: coupon.productIds,
-        },
-        lineMeta
+      const { discount: scopedDiscount, error: discountErr } = couponDiscountFromLines(
+        couponLines,
+        coupon
       );
-      if (scopeErr) return NextResponse.json({ error: scopeErr }, { status: 400 });
-  
-      const minOk = coupon.min_cart_value != null ? subtotal >= coupon.min_cart_value : true;
-      if (!minOk) return NextResponse.json({ error: "Coupon minimum not met" }, { status: 400 });
+      if (discountErr) return NextResponse.json({ error: discountErr }, { status: 400 });
   
       const usageErr = await couponUsageErrors(coupon, checkoutUserId);
       if (usageErr) return NextResponse.json({ error: usageErr }, { status: 400 });
@@ -266,7 +263,7 @@ export async function POST(req: NextRequest) {
         }
       }
   
-      discount = computeCouponDiscount(subtotal, coupon);
+      discount = scopedDiscount;
     }
     const totalBeforeShip = Math.max(0, subtotal - discount);
     const [freeShippingThresholdInr, freeShippingExcludedBrandIds] = await Promise.all([

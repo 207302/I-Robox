@@ -11,8 +11,7 @@ import {
 } from "@/lib/validation/input";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
-  couponScopeError,
-  computeCouponDiscount,
+  couponDiscountFromLines,
   couponTimingError,
   couponUsageErrors,
   fetchCouponForCart,
@@ -253,21 +252,20 @@ export async function buildCheckoutContext(input: {
     const now = new Date();
     const timeErr = couponTimingError(coupon, now);
     if (timeErr) throw new Error(timeErr);
-    const lineMeta = items.map((i) => {
-      const p = productMap.get(i.productId)!;
-      return { productId: p.id, categoryId: p.category_id, brandId: p.brand_id };
+    const couponLines = lineItems.map((li) => {
+      const p = productMap.get(li.productId)!;
+      return {
+        productId: p.id,
+        categoryId: p.category_id,
+        brandId: p.brand_id,
+        subtotal: li.subtotal,
+      };
     });
-    const scopeErr = couponScopeError(
-      {
-        categoryIds: coupon.categoryIds,
-        brandIds: coupon.brandIds,
-        productIds: coupon.productIds,
-      },
-      lineMeta
+    const { discount: scopedDiscount, error: discountErr } = couponDiscountFromLines(
+      couponLines,
+      coupon
     );
-    if (scopeErr) throw new Error(scopeErr);
-    const minOk = coupon.min_cart_value != null ? subtotal >= coupon.min_cart_value : true;
-    if (!minOk) throw new Error("Coupon minimum not met");
+    if (discountErr) throw new Error(discountErr);
     const usageErr = await couponUsageErrors(coupon, checkoutUserId);
     if (usageErr) throw new Error(usageErr);
 
@@ -287,7 +285,7 @@ export async function buildCheckoutContext(input: {
       }
     }
 
-    discount = computeCouponDiscount(subtotal, coupon);
+    discount = scopedDiscount;
   }
 
   const [freeShippingThresholdInr, freeShippingExcludedBrandIds] = await Promise.all([

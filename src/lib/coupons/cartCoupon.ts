@@ -6,6 +6,16 @@ export type CartLineForCoupon = {
   brandId: string | null;
 };
 
+export type CartLineForCouponWithSubtotal = CartLineForCoupon & {
+  subtotal: number;
+};
+
+export type CouponScope = {
+  categoryIds: string[];
+  brandIds: string[];
+  productIds: string[];
+};
+
 export type CouponForCart = {
   id: string;
   code: string;
@@ -56,35 +66,77 @@ export async function fetchCouponForCart(code: string): Promise<CouponForCart | 
   };
 }
 
-export function couponScopeError(
-  scope: { categoryIds: string[]; brandIds: string[]; productIds: string[] },
-  lines: CartLineForCoupon[]
-): string | null {
-  const { categoryIds, brandIds, productIds } = scope;
-  if (categoryIds.length === 0 && brandIds.length === 0 && productIds.length === 0) return null;
+export function couponHasScope(scope: CouponScope): boolean {
+  return scope.categoryIds.length > 0 || scope.brandIds.length > 0 || scope.productIds.length > 0;
+}
 
-  const allowedCategories = new Set(categoryIds);
-  const allowedBrands = new Set(brandIds);
-  const allowedProducts = new Set(productIds);
+export function lineMatchesCouponScope(line: CartLineForCoupon, scope: CouponScope): boolean {
+  if (!couponHasScope(scope)) return true;
 
-  for (const line of lines) {
-    if (
-      categoryIds.length > 0 &&
-      (!line.categoryId || !allowedCategories.has(line.categoryId))
-    ) {
-      return "Coupon does not apply to items in your cart";
-    }
-    if (brandIds.length > 0 && (!line.brandId || !allowedBrands.has(line.brandId))) {
-      return "Coupon does not apply to items in your cart";
-    }
-    if (productIds.length > 0 && !allowedProducts.has(line.productId)) {
-      return "Coupon does not apply to items in your cart";
-    }
+  const allowedCategories = new Set(scope.categoryIds);
+  const allowedBrands = new Set(scope.brandIds);
+  const allowedProducts = new Set(scope.productIds);
+
+  if (
+    scope.categoryIds.length > 0 &&
+    (!line.categoryId || !allowedCategories.has(line.categoryId))
+  ) {
+    return false;
   }
+  if (scope.brandIds.length > 0 && (!line.brandId || !allowedBrands.has(line.brandId))) {
+    return false;
+  }
+  if (scope.productIds.length > 0 && !allowedProducts.has(line.productId)) {
+    return false;
+  }
+  return true;
+}
+
+export function eligibleCouponLines<T extends CartLineForCoupon>(lines: T[], scope: CouponScope): T[] {
+  if (!couponHasScope(scope)) return lines;
+  return lines.filter((line) => lineMatchesCouponScope(line, scope));
+}
+
+export function couponDiscountFromLines(
+  lines: CartLineForCouponWithSubtotal[],
+  coupon: CouponForCart
+): { discount: number; eligibleSubtotal: number; error: string | null } {
+  const scope: CouponScope = {
+    categoryIds: coupon.categoryIds,
+    brandIds: coupon.brandIds,
+    productIds: coupon.productIds,
+  };
+  const scoped = couponHasScope(scope);
+  const eligible = eligibleCouponLines(lines, scope);
+  const fullSubtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
+  const eligibleSubtotal = eligible.reduce((sum, line) => sum + line.subtotal, 0);
+
+  if (scoped && eligible.length === 0) {
+    return { discount: 0, eligibleSubtotal: 0, error: "Coupon does not apply to items in your cart" };
+  }
+
+  const minBase = scoped ? eligibleSubtotal : fullSubtotal;
+  if (coupon.min_cart_value != null && minBase < coupon.min_cart_value) {
+    return { discount: 0, eligibleSubtotal, error: "Coupon minimum not met" };
+  }
+
+  const discountBase = scoped ? eligibleSubtotal : fullSubtotal;
+  return {
+    discount: computeCouponDiscount(discountBase, coupon),
+    eligibleSubtotal,
+    error: null,
+  };
+}
+
+/** @deprecated Use couponDiscountFromLines */
+export function couponScopeError(scope: CouponScope, lines: CartLineForCoupon[]): string | null {
+  if (!couponHasScope(scope)) return null;
+  const eligible = eligibleCouponLines(lines, scope);
+  if (eligible.length === 0) return "Coupon does not apply to items in your cart";
   return null;
 }
 
-/** @deprecated Use couponScopeError */
+/** @deprecated Use couponDiscountFromLines */
 export function categoryScopeError(categoryIds: string[], lines: CartLineForCoupon[]): string | null {
   return couponScopeError({ categoryIds, brandIds: [], productIds: [] }, lines);
 }

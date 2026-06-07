@@ -231,6 +231,7 @@ export default function CheckoutPage() {
           lineItems: items.map((i) => ({
             productId: String(i.productId ?? i.id),
             quantity: i.quantity,
+            subtotal: Number(i.price || 0) * Number(i.quantity || 0),
           })),
         }),
       });

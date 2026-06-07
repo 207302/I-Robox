@@ -14,7 +14,7 @@ export default async function MarketingAdminPage() {
   const auth = await requireAdminWrite();
   if (!auth.ok) redirect("/admin/login");
 
-  const [{ settings, categories, freeShippingExcludedCategoryIds }, wave2, { products, brands }] =
+  const [{ settings, categories, freeShippingExcludedBrandIds }, wave2, { products, brands }] =
     await Promise.all([
       getMarketingAdminWave1(),
       getMarketingAdminWave2(),
@@ -40,7 +40,7 @@ export default async function MarketingAdminPage() {
           announcements,
           settings,
           categories,
-          freeShippingExcludedCategoryIds,
+          freeShippingExcludedBrandIds,
           products: productsPlain,
           brands,
         }}

@@ -11,7 +11,7 @@ import {
 } from "@/lib/coupons/cartCoupon";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
-  getFreeShippingExcludedCategoryIds,
+  getFreeShippingExcludedBrandIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { normalizeCode } from "@/lib/validation/input";
@@ -60,11 +60,11 @@ export async function buildPublicMarketingPayload(
 ): Promise<PublicMarketingPayload> {
   const isLoggedIn = Boolean(session?.sub);
 
-  const [settings, freeShippingThresholdInr, freeShippingExcludedCategoryIds, popups] =
+  const [settings, freeShippingThresholdInr, freeShippingExcludedBrandIds, popups] =
     await Promise.all([
       getSiteMarketingSettings(),
       getFreeShippingThresholdInr(),
-      getFreeShippingExcludedCategoryIds(),
+      getFreeShippingExcludedBrandIds(),
       getCachedMarketingPopupsForStorefront(),
     ]);
 
@@ -104,7 +104,7 @@ export async function buildPublicMarketingPayload(
     popup: popup ? toPopupPayload(popup) : null,
     firstVisitCouponCode,
     freeShippingThresholdInr,
-    freeShippingExcludedCategoryIds,
+    freeShippingExcludedBrandIds,
   };
 }
 

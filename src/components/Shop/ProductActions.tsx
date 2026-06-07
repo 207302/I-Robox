@@ -19,7 +19,7 @@ type ProductActionsProps = {
   discountedPrice?: number | null;
   quantity: number;
   shippingPerUnit?: number;
-  categoryId?: string | null;
+  brandId?: string | null;
   color?: string;
   size?: string;
 };
@@ -49,7 +49,7 @@ export default function ProductActions(props: ProductActionsProps) {
       slug: props.slug,
       availableQuantity: props.quantity,
       shippingPerUnit: Number(props.shippingPerUnit ?? 0),
-      categoryId: props.categoryId ?? null,
+      brandId: props.brandId ?? null,
       color: props.color ?? "",
       size: props.size ?? "",
       quantity: 1,

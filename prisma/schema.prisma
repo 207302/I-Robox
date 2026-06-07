@@ -79,6 +79,7 @@ model brands {
   homepage_highlights homepage_highlights[]
   homepage_brand_rail homepage_brand_rail[]
   coupon_brands coupon_brands[]
+  free_shipping_excluded_brands free_shipping_excluded_brands?
 }
 
 /// Diecast model scales (e.g. 1:64). Products reference this like category/brand.
@@ -134,7 +135,6 @@ model categories {
   other_categories categories[] @relation("categoriesTocategories")
   products         products[]
   coupon_categories coupon_categories[]
-  free_shipping_excluded_categories free_shipping_excluded_categories?
   homepage_highlights homepage_highlights[]
   homepage_category_tiles homepage_category_tiles[]
   product_types     product_types[]
@@ -144,10 +144,10 @@ model categories {
   @@index([parent_id], map: "idx_categories_parent_id")
 }
 
-/// Categories excluded from free-shipping threshold subtotal; lines always pay per-unit shipping.
-model free_shipping_excluded_categories {
-  category_id String     @id @db.Uuid
-  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+/// Brands excluded from free-shipping threshold subtotal; lines always pay per-unit shipping.
+model free_shipping_excluded_brands {
+  brand_id String @id @db.Uuid
+  brands   brands @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 /// Per-category product type (e.g. "RC Car"). Slug is globally unique for simple URL params.

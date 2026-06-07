@@ -27,7 +27,7 @@ type Props = {
   discountedPrice?: number | null;
   quantity: number;
   shippingPerUnit?: number;
-  categoryId?: string | null;
+  brandId?: string | null;
   variants: VariantRow[];
   fallbackImage: string;
   galleryId: string;
@@ -41,7 +41,7 @@ export default function ProductVariantPurchase({
   discountedPrice,
   quantity,
   shippingPerUnit = 0,
-  categoryId = null,
+  brandId = null,
   variants,
   fallbackImage,
   galleryId,
@@ -85,7 +85,7 @@ export default function ProductVariantPurchase({
         discountedPrice={discountedPrice}
         quantity={quantity}
         shippingPerUnit={shippingPerUnit}
-        categoryId={categoryId}
+        brandId={brandId}
         color={selected?.color ?? ""}
         size={selected?.size ?? ""}
       />

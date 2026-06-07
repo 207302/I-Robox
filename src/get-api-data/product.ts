@@ -218,7 +218,7 @@ async function loadProductBySlug(slug: string) {
       diecast_scales: { select: { ratio: true } },
       slug: true,
       updated_at: true,
-      category_id: true,
+      brand_id: true,
       categories: {
         select: {
           slug: true,
@@ -287,7 +287,7 @@ async function loadProductBySlug(slug: string) {
     quantity: getInventoryQuantity(product.inventory),
     sku: product.sku ?? "",
     shippingPerUnit: Number(product.shipping_per_unit ?? 0),
-    categoryId: product.category_id,
+    brandId: product.brand_id,
     tags: [],
     offers: "",
     updatedAt: product.updated_at,

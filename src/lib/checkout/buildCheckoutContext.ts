@@ -21,7 +21,7 @@ import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import {
-  getFreeShippingExcludedCategoryIds,
+  getFreeShippingExcludedBrandIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { generatePasswordSetupSecret, PASSWORD_SETUP_TTL_MS } from "@/lib/auth/passwordSetupToken";
@@ -221,7 +221,7 @@ export async function buildCheckoutContext(input: {
       quantity: i.quantity,
       subtotal: unit * i.quantity,
       shippingPerUnit: Math.max(0, Number(p.shipping_per_unit ?? 0)),
-      categoryId: p.category_id,
+      brandId: p.brand_id,
     };
   });
 
@@ -290,9 +290,9 @@ export async function buildCheckoutContext(input: {
     discount = computeCouponDiscount(subtotal, coupon);
   }
 
-  const [freeShippingThresholdInr, freeShippingExcludedCategoryIds] = await Promise.all([
+  const [freeShippingThresholdInr, freeShippingExcludedBrandIds] = await Promise.all([
     getFreeShippingThresholdInr(),
-    getFreeShippingExcludedCategoryIds(),
+    getFreeShippingExcludedBrandIds(),
   ]);
   const shipping = orderShippingInrFromLines({
     subtotalBeforeDiscount: subtotal,
@@ -300,10 +300,10 @@ export async function buildCheckoutContext(input: {
       quantity: li.quantity,
       shippingPerUnit: li.shippingPerUnit,
       lineSubtotal: li.subtotal,
-      categoryId: li.categoryId,
+      brandId: li.brandId,
     })),
     freeShippingThresholdInr,
-    freeShippingExcludedCategoryIds,
+    freeShippingExcludedBrandIds,
   });
   const total = Math.max(0, subtotal - discount) + shipping;
 

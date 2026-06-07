@@ -5,7 +5,7 @@ export type OrderShippingLine = {
   quantity: number;
   shippingPerUnit: number;
   lineSubtotal: number;
-  categoryId?: string | null;
+  brandId?: string | null;
 };
 
 /**
@@ -32,14 +32,14 @@ export function orderShippingInrFromLines(args: {
   lines: OrderShippingLine[];
   /** When null, free shipping is off. When set, shipping is ₹0 at or above this subtotal. */
   freeShippingThresholdInr?: number | null;
-  /** Category IDs omitted from threshold subtotal; these lines always pay per-unit shipping. */
-  freeShippingExcludedCategoryIds?: string[];
+  /** Brand IDs omitted from threshold subtotal; these lines always pay per-unit shipping. */
+  freeShippingExcludedBrandIds?: string[];
 }): number {
-  const excluded = new Set(args.freeShippingExcludedCategoryIds ?? []);
+  const excluded = new Set(args.freeShippingExcludedBrandIds ?? []);
   const threshold = args.freeShippingThresholdInr;
 
   const eligibleSubtotal = args.lines.reduce((sum, line) => {
-    if (line.categoryId && excluded.has(line.categoryId)) return sum;
+    if (line.brandId && excluded.has(line.brandId)) return sum;
     return sum + line.lineSubtotal;
   }, 0);
 
@@ -48,7 +48,7 @@ export function orderShippingInrFromLines(args: {
 
   let shipping = 0;
   for (const line of args.lines) {
-    const isExcluded = Boolean(line.categoryId && excluded.has(line.categoryId));
+    const isExcluded = Boolean(line.brandId && excluded.has(line.brandId));
     if (isExcluded || !qualifiesForFreeShipping) {
       shipping += line.quantity * Math.max(0, line.shippingPerUnit);
     }

@@ -17,14 +17,14 @@ export const getFreeShippingThresholdInr = cache(async function getFreeShippingT
   );
 });
 
-/** Categories excluded from free-shipping threshold subtotal. */
-export const getFreeShippingExcludedCategoryIds = cache(
-  async function getFreeShippingExcludedCategoryIds(): Promise<string[]> {
+/** Brands excluded from free-shipping threshold subtotal. */
+export const getFreeShippingExcludedBrandIds = cache(
+  async function getFreeShippingExcludedBrandIds(): Promise<string[]> {
     try {
-      const rows = await prisma.free_shipping_excluded_categories.findMany({
-        select: { category_id: true },
+      const rows = await prisma.free_shipping_excluded_brands.findMany({
+        select: { brand_id: true },
       });
-      return rows.map((row) => row.category_id);
+      return rows.map((row) => row.brand_id);
     } catch {
       return [];
     }

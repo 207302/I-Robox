@@ -43,17 +43,17 @@ async function loadHighlightsForAdmin() {
 
 export const getMarketingAdminWave1 = unstable_cache(
   async () => {
-    const [settings, categories, excludedCategories] = await Promise.all([
+    const [settings, categories, excludedBrands] = await Promise.all([
       getSiteMarketingSettings(),
       getCategoriesForAdmin(),
-      prisma.free_shipping_excluded_categories
-        .findMany({ select: { category_id: true } })
+      prisma.free_shipping_excluded_brands
+        .findMany({ select: { brand_id: true } })
         .catch(() => []),
     ]);
     return {
       settings,
       categories,
-      freeShippingExcludedCategoryIds: excludedCategories.map((row) => row.category_id),
+      freeShippingExcludedBrandIds: excludedBrands.map((row) => row.brand_id),
     };
   },
   ["marketing-admin-wave1"],

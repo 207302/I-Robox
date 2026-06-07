@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
@@ -95,7 +95,7 @@ type Initial = {
   announcements: unknown[];
   settings: SiteSettingsRow | null;
   categories: { id: string; name: string; slug: string }[];
-  freeShippingExcludedCategoryIds: string[];
+  freeShippingExcludedBrandIds: string[];
   products: {
     id: string;
     name: string;
@@ -222,9 +222,11 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     return String(raw);
   });
   const [freeShippingSaving, setFreeShippingSaving] = useState(false);
-  const [freeShippingExcludedCategoryIds, setFreeShippingExcludedCategoryIds] = useState<string[]>(
-    initial.freeShippingExcludedCategoryIds ?? []
+  const [freeShippingExcludedBrandIds, setFreeShippingExcludedBrandIds] = useState<string[]>(
+    initial.freeShippingExcludedBrandIds ?? []
   );
+  const [freeShippingExclusionQuery, setFreeShippingExclusionQuery] = useState("");
+  const deferredFreeShippingExclusionQuery = useDeferredValue(freeShippingExclusionQuery);
   const [freeShippingExclusionsSaving, setFreeShippingExclusionsSaving] = useState(false);
   const st0 = initial.settings;
   const [helpSupportTitle, setHelpSupportTitle] = useState(st0?.help_support_title ?? "");
@@ -333,6 +335,19 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const cats = initial.categories;
   const prods = initial.products;
   const brands = initial.brands;
+  const visibleFreeShippingExcludedBrands = useMemo(() => {
+    const q = deferredFreeShippingExclusionQuery.trim().toLowerCase();
+    const selected = brands.filter((b) => freeShippingExcludedBrandIds.includes(b.id));
+    const filtered = q
+      ? brands.filter(
+          (b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q)
+        )
+      : brands;
+    const merged = new Map<string, (typeof brands)[number]>();
+    for (const b of selected) merged.set(b.id, b);
+    for (const b of filtered) merged.set(b.id, b);
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [brands, deferredFreeShippingExclusionQuery, freeShippingExcludedBrandIds]);
   const coupons = deferredCoupons;
   const quickLinkFieldMap: Record<
     QuickLinkPageAdminKey,
@@ -2252,7 +2267,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             <h2 className="text-lg font-semibold">Free shipping threshold</h2>
             <p className="text-sm text-meta-3">
               When a cart&apos;s subtotal (before coupons) reaches this amount, shipping is ₹0 for
-              eligible items. Excluded categories below are left out of this subtotal and always pay
+              eligible items. Excluded brands below are left out of this subtotal and always pay
               per-product shipping. Leave empty to use the default (₹2,000). Enter{" "}
               <span className="font-mono">0</span> to turn off free shipping.
             </p>
@@ -2307,28 +2322,42 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
             <h2 className="text-lg font-semibold">Free shipping exclusions</h2>
             <p className="text-sm text-meta-3">
-              Selected categories are excluded from the free-shipping cart value and always charged
+              Selected brands are excluded from the free-shipping cart value and always charged
               shipping (e.g. Hot Wheels). Other items can still qualify for free shipping when the
               rest of the cart meets the threshold.
             </p>
+            <input
+              type="search"
+              value={freeShippingExclusionQuery}
+              onChange={(e) => setFreeShippingExclusionQuery(e.target.value)}
+              placeholder="Search brands…"
+              className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+            />
+            {freeShippingExcludedBrandIds.length > 0 ? (
+              <p className="text-xs text-meta-3">
+                {freeShippingExcludedBrandIds.length} brand(s) selected
+              </p>
+            ) : null}
             <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
-              {cats.length === 0 ? (
-                <p className="text-sm text-meta-3">No categories found.</p>
+              {brands.length === 0 ? (
+                <p className="text-sm text-meta-3">No brands found.</p>
+              ) : visibleFreeShippingExcludedBrands.length === 0 ? (
+                <p className="text-sm text-meta-3">No brands match your search.</p>
               ) : (
-                cats.map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                visibleFreeShippingExcludedBrands.map((b) => (
+                  <label key={b.id} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={freeShippingExcludedCategoryIds.includes(c.id)}
+                      checked={freeShippingExcludedBrandIds.includes(b.id)}
                       onChange={() => {
-                        setFreeShippingExcludedCategoryIds((prev) =>
-                          prev.includes(c.id)
-                            ? prev.filter((id) => id !== c.id)
-                            : [...prev, c.id]
+                        setFreeShippingExcludedBrandIds((prev) =>
+                          prev.includes(b.id)
+                            ? prev.filter((id) => id !== b.id)
+                            : [...prev, b.id]
                         );
                       }}
                     />
-                    {c.name}
+                    {b.name}
                   </label>
                 ))
               )}
@@ -2340,18 +2369,18 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               onClick={async () => {
                 try {
                   setFreeShippingExclusionsSaving(true);
-                  const row = await j<{ free_shipping_excluded_category_ids?: string[] }>(
+                  const row = await j<{ free_shipping_excluded_brand_ids?: string[] }>(
                     await fetch("/api/admin/marketing/settings", {
                       method: "PATCH",
                       headers: { "content-type": "application/json" },
                       body: JSON.stringify({
-                        free_shipping_excluded_category_ids: freeShippingExcludedCategoryIds,
+                        free_shipping_excluded_brand_ids: freeShippingExcludedBrandIds,
                       }),
                     })
                   );
-                  setFreeShippingExcludedCategoryIds(
-                    Array.isArray(row.free_shipping_excluded_category_ids)
-                      ? row.free_shipping_excluded_category_ids
+                  setFreeShippingExcludedBrandIds(
+                    Array.isArray(row.free_shipping_excluded_brand_ids)
+                      ? row.free_shipping_excluded_brand_ids
                       : []
                   );
                   toast.success("Free shipping exclusions saved");

@@ -26,17 +26,17 @@ export async function GET() {
   return runApiRoute(async () => {
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const [row, excludedCategories] = await Promise.all([
+    const [row, excludedBrands] = await Promise.all([
       safeSiteMarketingSettingsFindUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
       }),
-      prisma.free_shipping_excluded_categories
-        .findMany({ select: { category_id: true } })
+      prisma.free_shipping_excluded_brands
+        .findMany({ select: { brand_id: true } })
         .catch(() => []),
     ]);
     return NextResponse.json({
       ...(row ?? { id: SITE_MARKETING_SETTINGS_ID, first_visit_coupon_code: null }),
-      free_shipping_excluded_category_ids: excludedCategories.map((c) => c.category_id),
+      free_shipping_excluded_brand_ids: excludedBrands.map((b) => b.brand_id),
     });
   
   });}
@@ -242,30 +242,30 @@ export async function PATCH(req: NextRequest) {
       data.footer_link_color = cleanOptionalHexColor(body.footer_link_color);
     }
 
-    let excludedCategoryIds: string[] | undefined;
-    if (body.free_shipping_excluded_category_ids !== undefined) {
-      if (!Array.isArray(body.free_shipping_excluded_category_ids)) {
+    let excludedBrandIds: string[] | undefined;
+    if (body.free_shipping_excluded_brand_ids !== undefined) {
+      if (!Array.isArray(body.free_shipping_excluded_brand_ids)) {
         return NextResponse.json(
-          { error: "Invalid free_shipping_excluded_category_ids" },
+          { error: "Invalid free_shipping_excluded_brand_ids" },
           { status: 400 }
         );
       }
-      if (body.free_shipping_excluded_category_ids.length > 50) {
-        return NextResponse.json({ error: "Too many excluded categories" }, { status: 400 });
+      if (body.free_shipping_excluded_brand_ids.length > 50) {
+        return NextResponse.json({ error: "Too many excluded brands" }, { status: 400 });
       }
-      const ids = body.free_shipping_excluded_category_ids.filter(
+      const ids = body.free_shipping_excluded_brand_ids.filter(
         (x: unknown) => typeof x === "string" && isUuid(x)
       ) as string[];
-      if (ids.length !== body.free_shipping_excluded_category_ids.length) {
+      if (ids.length !== body.free_shipping_excluded_brand_ids.length) {
         return NextResponse.json(
-          { error: "Invalid free_shipping_excluded_category_ids" },
+          { error: "Invalid free_shipping_excluded_brand_ids" },
           { status: 400 }
         );
       }
-      excludedCategoryIds = [...new Set(ids)];
+      excludedBrandIds = [...new Set(ids)];
     }
   
-    if (Object.keys(data).length === 0 && excludedCategoryIds === undefined) {
+    if (Object.keys(data).length === 0 && excludedBrandIds === undefined) {
       return NextResponse.json({ error: "No recognized fields to update" }, { status: 400 });
     }
   
@@ -322,11 +322,11 @@ export async function PATCH(req: NextRequest) {
   
     try {
       const updated = await prisma.$transaction(async (tx) => {
-        if (excludedCategoryIds !== undefined) {
-          await tx.free_shipping_excluded_categories.deleteMany({});
-          if (excludedCategoryIds.length > 0) {
-            await tx.free_shipping_excluded_categories.createMany({
-              data: excludedCategoryIds.map((category_id) => ({ category_id })),
+        if (excludedBrandIds !== undefined) {
+          await tx.free_shipping_excluded_brands.deleteMany({});
+          if (excludedBrandIds.length > 0) {
+            await tx.free_shipping_excluded_brands.createMany({
+              data: excludedBrandIds.map((brand_id) => ({ brand_id })),
             });
           }
         }
@@ -347,17 +347,17 @@ export async function PATCH(req: NextRequest) {
       });
 
       const excludedRows =
-        excludedCategoryIds ??
-        (await prisma.free_shipping_excluded_categories
-          .findMany({ select: { category_id: true } })
-          .then((rows) => rows.map((row) => row.category_id))
+        excludedBrandIds ??
+        (await prisma.free_shipping_excluded_brands
+          .findMany({ select: { brand_id: true } })
+          .then((rows) => rows.map((row) => row.brand_id))
           .catch(() => []));
 
       revalidateMarketingSite();
       return NextResponse.json(
         {
           ...updated,
-          free_shipping_excluded_category_ids: excludedRows,
+          free_shipping_excluded_brand_ids: excludedRows,
         },
         { status: 200 }
       );

@@ -95,6 +95,7 @@ type Initial = {
   announcements: unknown[];
   settings: SiteSettingsRow | null;
   categories: { id: string; name: string; slug: string }[];
+  freeShippingExcludedCategoryIds: string[];
   products: {
     id: string;
     name: string;
@@ -221,6 +222,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     return String(raw);
   });
   const [freeShippingSaving, setFreeShippingSaving] = useState(false);
+  const [freeShippingExcludedCategoryIds, setFreeShippingExcludedCategoryIds] = useState<string[]>(
+    initial.freeShippingExcludedCategoryIds ?? []
+  );
+  const [freeShippingExclusionsSaving, setFreeShippingExclusionsSaving] = useState(false);
   const st0 = initial.settings;
   const [helpSupportTitle, setHelpSupportTitle] = useState(st0?.help_support_title ?? "");
   const [contactAddress, setContactAddress] = useState(st0?.contact_address ?? "");
@@ -2246,9 +2251,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
             <h2 className="text-lg font-semibold">Free shipping threshold</h2>
             <p className="text-sm text-meta-3">
-              When a cart&apos;s subtotal (before coupons) reaches this amount, shipping is ₹0 for the
-              whole order — per-product shipping rates are ignored. Leave empty to use the default
-              (₹2,000). Enter <span className="font-mono">0</span> to turn off free shipping.
+              When a cart&apos;s subtotal (before coupons) reaches this amount, shipping is ₹0 for
+              eligible items. Excluded categories below are left out of this subtotal and always pay
+              per-product shipping. Leave empty to use the default (₹2,000). Enter{" "}
+              <span className="font-mono">0</span> to turn off free shipping.
             </p>
             <label className="block">
               <span className="text-sm font-medium">Minimum subtotal (₹)</span>
@@ -2295,6 +2301,69 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               }}
             >
               {freeShippingSaving ? "Saving…" : "Save threshold"}
+            </button>
+          </section>
+
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
+            <h2 className="text-lg font-semibold">Free shipping exclusions</h2>
+            <p className="text-sm text-meta-3">
+              Selected categories are excluded from the free-shipping cart value and always charged
+              shipping (e.g. Hot Wheels). Other items can still qualify for free shipping when the
+              rest of the cart meets the threshold.
+            </p>
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
+              {cats.length === 0 ? (
+                <p className="text-sm text-meta-3">No categories found.</p>
+              ) : (
+                cats.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={freeShippingExcludedCategoryIds.includes(c.id)}
+                      onChange={() => {
+                        setFreeShippingExcludedCategoryIds((prev) =>
+                          prev.includes(c.id)
+                            ? prev.filter((id) => id !== c.id)
+                            : [...prev, c.id]
+                        );
+                      }}
+                    />
+                    {c.name}
+                  </label>
+                ))
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={freeShippingExclusionsSaving}
+              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setFreeShippingExclusionsSaving(true);
+                  const row = await j<{ free_shipping_excluded_category_ids?: string[] }>(
+                    await fetch("/api/admin/marketing/settings", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        free_shipping_excluded_category_ids: freeShippingExcludedCategoryIds,
+                      }),
+                    })
+                  );
+                  setFreeShippingExcludedCategoryIds(
+                    Array.isArray(row.free_shipping_excluded_category_ids)
+                      ? row.free_shipping_excluded_category_ids
+                      : []
+                  );
+                  toast.success("Free shipping exclusions saved");
+                  router.refresh();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Failed");
+                } finally {
+                  setFreeShippingExclusionsSaving(false);
+                }
+              }}
+            >
+              {freeShippingExclusionsSaving ? "Saving…" : "Save exclusions"}
             </button>
           </section>
 

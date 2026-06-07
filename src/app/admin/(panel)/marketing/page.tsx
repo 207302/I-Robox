@@ -14,11 +14,12 @@ export default async function MarketingAdminPage() {
   const auth = await requireAdminWrite();
   if (!auth.ok) redirect("/admin/login");
 
-  const [{ settings, categories }, wave2, { products, brands }] = await Promise.all([
-    getMarketingAdminWave1(),
-    getMarketingAdminWave2(),
-    getMarketingAdminWave3(),
-  ]);
+  const [{ settings, categories, freeShippingExcludedCategoryIds }, wave2, { products, brands }] =
+    await Promise.all([
+      getMarketingAdminWave1(),
+      getMarketingAdminWave2(),
+      getMarketingAdminWave3(),
+    ]);
 
   const { slides, highlights, brandRail, categoryTiles, announcements } = wave2;
 
@@ -39,6 +40,7 @@ export default async function MarketingAdminPage() {
           announcements,
           settings,
           categories,
+          freeShippingExcludedCategoryIds,
           products: productsPlain,
           brands,
         }}

@@ -15,4 +15,5 @@ export type PublicMarketingPayload = {
   popup: MarketingPopupPayload | null;
   firstVisitCouponCode: string | null;
   freeShippingThresholdInr: number | null;
+  freeShippingExcludedCategoryIds: string[];
 };

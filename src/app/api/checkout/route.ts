@@ -32,7 +32,10 @@ import {
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
-import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
+import {
+  getFreeShippingExcludedCategoryIds,
+  getFreeShippingThresholdInr,
+} from "@/lib/marketing/freeShipping";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { allocateNextOrderNumber, formatOrderReference } from "@/lib/orders/orderNumber";
 import { runApiRoute } from "@/lib/api/runApiRoute";
@@ -212,6 +215,7 @@ export async function POST(req: NextRequest) {
         quantity: i.quantity,
         subtotal: unit * i.quantity,
         shippingPerUnit: Math.max(0, Number(p.shipping_per_unit ?? 0)),
+        categoryId: p.category_id,
       };
     });
   
@@ -265,11 +269,20 @@ export async function POST(req: NextRequest) {
       discount = computeCouponDiscount(subtotal, coupon);
     }
     const totalBeforeShip = Math.max(0, subtotal - discount);
-    const freeShippingThresholdInr = await getFreeShippingThresholdInr();
+    const [freeShippingThresholdInr, freeShippingExcludedCategoryIds] = await Promise.all([
+      getFreeShippingThresholdInr(),
+      getFreeShippingExcludedCategoryIds(),
+    ]);
     const shippingAmount = orderShippingInrFromLines({
       subtotalBeforeDiscount: subtotal,
-      lines: lineItems.map((li) => ({ quantity: li.quantity, shippingPerUnit: li.shippingPerUnit })),
+      lines: lineItems.map((li) => ({
+        quantity: li.quantity,
+        shippingPerUnit: li.shippingPerUnit,
+        lineSubtotal: li.subtotal,
+        categoryId: li.categoryId,
+      })),
       freeShippingThresholdInr,
+      freeShippingExcludedCategoryIds,
     });
     const total = totalBeforeShip + shippingAmount;
   

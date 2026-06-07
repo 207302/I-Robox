@@ -37,6 +37,9 @@ export default function CheckoutPage() {
   const [giftMessage, setGiftMessage] = useState("");
   const [signedInLabel, setSignedInLabel] = useState<string | null>(null);
   const [freeShippingThresholdInr, setFreeShippingThresholdInr] = useState<number | null>(2000);
+  const [freeShippingExcludedCategoryIds, setFreeShippingExcludedCategoryIds] = useState<string[]>(
+    []
+  );
 
   const previewSubtotal = Number(totalPrice || 0);
 
@@ -46,10 +49,13 @@ export default function CheckoutPage() {
       lines: items.map((item) => ({
         quantity: Number(item.quantity || 0),
         shippingPerUnit: Math.max(0, Number(item.shippingPerUnit ?? 0)),
+        lineSubtotal: Number(item.price || 0) * Number(item.quantity || 0),
+        categoryId: item.categoryId ?? null,
       })),
       freeShippingThresholdInr,
+      freeShippingExcludedCategoryIds,
     });
-  }, [items, previewSubtotal, freeShippingThresholdInr]);
+  }, [items, previewSubtotal, freeShippingThresholdInr, freeShippingExcludedCategoryIds]);
   const previewDiscount = couponBreakdown?.discount ?? 0;
   const previewTotal = Math.max(0, previewSubtotal - previewDiscount) + deliveryCharge;
 
@@ -58,7 +64,10 @@ export default function CheckoutPage() {
     if (typeof threshold === "number" || threshold === null) {
       setFreeShippingThresholdInr(threshold);
     }
-  }, [marketingData?.freeShippingThresholdInr]);
+    if (Array.isArray(marketingData?.freeShippingExcludedCategoryIds)) {
+      setFreeShippingExcludedCategoryIds(marketingData.freeShippingExcludedCategoryIds);
+    }
+  }, [marketingData?.freeShippingThresholdInr, marketingData?.freeShippingExcludedCategoryIds]);
 
   useEffect(() => {
     setCouponBreakdown(null);

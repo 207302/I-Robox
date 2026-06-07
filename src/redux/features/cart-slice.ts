@@ -18,6 +18,7 @@ export type CartItem = {
   price: number;
   quantity: number;
   shippingPerUnit?: number;
+  categoryId?: string | null;
   currency?: string;
   image?: string;
   slug?: string;

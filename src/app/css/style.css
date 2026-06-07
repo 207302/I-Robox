@@ -147,17 +147,15 @@
 
 .marquee-track {
   display: flex;
-  width: 100%;
+  width: max-content;
   white-space: nowrap;
   will-change: transform;
-  animation: marquee 18s linear infinite;
+  animation: marquee var(--marquee-duration, 30s) linear infinite;
 }
 
 .marquee-group {
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  min-width: 100%;
   flex-shrink: 0;
 }
 

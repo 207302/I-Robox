@@ -298,12 +298,20 @@ const MainHeader = ({
                         : []),
                       { body: "New arrivals added weekly", linkUrl: null },
                     ];
+              const marqueeDurationSec = Math.max(
+                24,
+                Math.min(120, items.length * 10 + items.reduce((sum, item) => sum + item.body.length, 0) * 0.15)
+              );
               return (
-                <div className="marquee-track py-2 text-xs sm:text-sm font-medium text-white" suppressHydrationWarning>
+                <div
+                  className="marquee-track py-2 text-xs sm:text-sm font-medium text-white"
+                  style={{ "--marquee-duration": `${marqueeDurationSec}s` } as React.CSSProperties}
+                  suppressHydrationWarning
+                >
                   {[0, 1].map((copyIdx) => (
-                    <div key={copyIdx} className="marquee-group" suppressHydrationWarning>
+                    <div key={copyIdx} className="marquee-group" aria-hidden={copyIdx === 1} suppressHydrationWarning>
                       {items.map((item, idx) => (
-                        <span key={`${copyIdx}-${idx}`} className="mx-6">
+                        <span key={`${copyIdx}-${idx}`} className="mx-6 shrink-0">
                           {item.linkUrl ? (
                             <Link
                               href={item.linkUrl}

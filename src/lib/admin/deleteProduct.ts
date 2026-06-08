@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { v2 as cloudinary } from "cloudinary";
+import { TERMINAL_ORDER_STATUSES } from "@/lib/inventory/orderInventoryRestore";
 
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -26,6 +28,35 @@ export type DeleteProductResult =
   | { ok: true; slug: string; cloudinaryPublicIds: string[] }
   | { ok: false; status: 404 | 409; error: string; name?: string | null };
 
+async function cleanupTerminalOrderRefsForProduct(
+  tx: Prisma.TransactionClient,
+  productId: string
+) {
+  const terminalItems = await tx.order_items.findMany({
+    where: {
+      product_id: productId,
+      orders: { status: { in: [...TERMINAL_ORDER_STATUSES] } },
+    },
+    select: { id: true, order_id: true },
+  });
+
+  if (terminalItems.length === 0) return;
+
+  const orderItemIds = terminalItems.map((item) => item.id);
+  const orderIds = [...new Set(terminalItems.map((item) => item.order_id))];
+
+  await tx.returns.deleteMany({ where: { order_item_id: { in: orderItemIds } } });
+  await tx.order_items.deleteMany({ where: { id: { in: orderItemIds } } });
+
+  for (const orderId of orderIds) {
+    const remaining = await tx.order_items.count({ where: { order_id: orderId } });
+    if (remaining === 0) {
+      await tx.coupon_usages.deleteMany({ where: { order_id: orderId } });
+      await tx.orders.delete({ where: { id: orderId } });
+    }
+  }
+}
+
 export async function deleteProductById(id: string): Promise<DeleteProductResult> {
   const productBeforeDelete = await prisma.products.findUnique({
     where: { id },
@@ -40,51 +71,34 @@ export async function deleteProductById(id: string): Promise<DeleteProductResult
     select: { url: true },
   });
 
-  const [orderItemsCount, activeOrderRefsCount, reviewsCount, returnsCount] = await Promise.all([
-    prisma.order_items.count({ where: { product_id: id } }),
-    prisma.order_items.count({
-      where: {
-        product_id: id,
-        orders: {
-          status: {
-            in: ["PENDING", "CONFIRMED", "SHIPPED", "RETURN_REQUESTED", "RETURN_APPROVED"],
-          },
-        },
-      },
-    }),
-    prisma.reviews.count({ where: { product_id: id } }),
-    prisma.returns.count({
-      where: {
-        order_items: {
-          product_id: id,
-        },
-      },
-    }),
-  ]);
+  const activeOrderItemsCount = await prisma.order_items.count({
+    where: {
+      product_id: id,
+      orders: { status: { notIn: [...TERMINAL_ORDER_STATUSES] } },
+    },
+  });
 
-  if (orderItemsCount > 0 || reviewsCount > 0 || returnsCount > 0) {
-    const reasonParts: string[] = [];
-    if (activeOrderRefsCount > 0) reasonParts.push(`${activeOrderRefsCount} active/pending order item(s)`);
-    if (orderItemsCount > 0) reasonParts.push(`${orderItemsCount} total historical order item(s)`);
-    if (reviewsCount > 0) reasonParts.push(`${reviewsCount} review(s)`);
-    if (returnsCount > 0) reasonParts.push(`${returnsCount} return record(s)`);
+  if (activeOrderItemsCount > 0) {
     return {
       ok: false,
       status: 409,
-      error: `Referenced by ${reasonParts.join(", ")}. Set inactive instead.`,
+      error: `Referenced by ${activeOrderItemsCount} active order item(s). Mark related orders refunded or set inactive instead.`,
       name: productBeforeDelete.name,
     };
   }
 
   try {
-    await prisma.products.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await cleanupTerminalOrderRefsForProduct(tx, id);
+      await tx.products.delete({ where: { id } });
+    });
   } catch (e: unknown) {
     const code = (e as { code?: string } | null)?.code;
     if (code === "P2003") {
       return {
         ok: false,
         status: 409,
-        error: "Has order/review references. Set inactive instead.",
+        error: "Has active order references. Set inactive instead.",
         name: productBeforeDelete.name,
       };
     }
@@ -104,16 +118,8 @@ export function destroyCloudinaryImages(publicIds: string[]) {
   cloudinary.api.delete_resources(unique, { resource_type: "image" }).catch(() => {});
 }
 
-function blockerMessage(input: {
-  orderItems?: number;
-  reviews?: number;
-  returns?: number;
-}): string {
-  const parts: string[] = [];
-  if (input.orderItems) parts.push(`${input.orderItems} order item(s)`);
-  if (input.reviews) parts.push(`${input.reviews} review(s)`);
-  if (input.returns) parts.push(`${input.returns} return record(s)`);
-  return `Referenced by ${parts.join(", ")}. Set inactive instead.`;
+function blockerMessage(activeOrderItems: number): string {
+  return `Referenced by ${activeOrderItems} active order item(s). Mark related orders refunded or set inactive instead.`;
 }
 
 /** Fast path for bulk delete: batched reference checks + deleteMany. */
@@ -127,7 +133,7 @@ export async function bulkDeleteProductsByIds(ids: string[]): Promise<{
 
   if (uniqueIds.length === 0) return { deleted, failed };
 
-  const [products, images, orderRefs, reviewRefs, returnRefs] = await Promise.all([
+  const [products, images, activeOrderRefs] = await Promise.all([
     prisma.products.findMany({
       where: { id: { in: uniqueIds } },
       select: { id: true, slug: true, name: true },
@@ -138,28 +144,16 @@ export async function bulkDeleteProductsByIds(ids: string[]): Promise<{
     }),
     prisma.order_items.groupBy({
       by: ["product_id"],
-      where: { product_id: { in: uniqueIds } },
-      _count: { _all: true },
-    }),
-    prisma.reviews.groupBy({
-      by: ["product_id"],
-      where: { product_id: { in: uniqueIds } },
-      _count: { _all: true },
-    }),
-    prisma.order_items.groupBy({
-      by: ["product_id"],
       where: {
         product_id: { in: uniqueIds },
-        returns: { some: {} },
+        orders: { status: { notIn: [...TERMINAL_ORDER_STATUSES] } },
       },
       _count: { _all: true },
     }),
   ]);
 
   const productById = new Map(products.map((p) => [p.id, p]));
-  const orderCounts = new Map(orderRefs.map((r) => [r.product_id, r._count._all]));
-  const reviewCounts = new Map(reviewRefs.map((r) => [r.product_id, r._count._all]));
-  const returnCounts = new Map(returnRefs.map((r) => [r.product_id, r._count._all]));
+  const activeOrderCounts = new Map(activeOrderRefs.map((r) => [r.product_id, r._count._all]));
 
   const imagesByProduct = new Map<string, string[]>();
   for (const img of images) {
@@ -177,15 +171,12 @@ export async function bulkDeleteProductsByIds(ids: string[]): Promise<{
       continue;
     }
 
-    const orderItems = orderCounts.get(id) ?? 0;
-    const reviews = reviewCounts.get(id) ?? 0;
-    const returns = returnCounts.get(id) ?? 0;
-
-    if (orderItems > 0 || reviews > 0 || returns > 0) {
+    const activeOrderItems = activeOrderCounts.get(id) ?? 0;
+    if (activeOrderItems > 0) {
       failed.push({
         id,
         name: product.name,
-        error: blockerMessage({ orderItems, reviews, returns }),
+        error: blockerMessage(activeOrderItems),
       });
       continue;
     }
@@ -194,7 +185,12 @@ export async function bulkDeleteProductsByIds(ids: string[]): Promise<{
   }
 
   if (deletableIds.length > 0) {
-    await prisma.products.deleteMany({ where: { id: { in: deletableIds } } });
+    await prisma.$transaction(async (tx) => {
+      for (const id of deletableIds) {
+        await cleanupTerminalOrderRefsForProduct(tx, id);
+      }
+      await tx.products.deleteMany({ where: { id: { in: deletableIds } } });
+    });
 
     for (const id of deletableIds) {
       const product = productById.get(id)!;

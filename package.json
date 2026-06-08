@@ -13,6 +13,7 @@
   "scripts": {
     "postinstall": "node scripts/copy-tinymce-to-public.mjs",
     "seed:admin": "tsx scripts/seed-admin.ts",
+    "inventory:restore-refunded": "tsx scripts/restore-refunded-order-stock.ts",
     "dev": "next dev",
     "db:migrate": "node scripts/run-prisma-migrate.mjs",
     "db:extensions": "node scripts/ensure-extensions.mjs",

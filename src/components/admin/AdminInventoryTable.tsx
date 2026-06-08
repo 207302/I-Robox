@@ -157,7 +157,7 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
           .slice(0, 5);
         const suffix = failed.length > 5 ? `, +${failed.length - 5} more` : "";
         toast.error(
-          `${failed.length} skipped (have orders/reviews): ${skippedNames.join(", ")}${suffix}`,
+          `${failed.length} skipped (active orders): ${skippedNames.join(", ")}${suffix}`,
           { duration: 8000 }
         );
       }

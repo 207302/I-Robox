@@ -3,6 +3,8 @@ import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { deleteOrderById } from "@/lib/admin/deleteOrder";
+import { restoreSoldInventoryForOrder } from "@/lib/inventory/orderInventoryRestore";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { requireAdmin, requireSuperAdmin } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
@@ -179,6 +181,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       where: { id },
       select: {
         status: true,
+        payment_status: true,
         customers: { select: { email: true } },
         shipments: { select: { status: true, carrier: true, tracking_number: true } },
       },
@@ -186,6 +189,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
     const prevStatus = String(before.status);
+    const paymentSucceeded = String(before.payment_status) === "SUCCEEDED";
     const prevShip = before.shipments
       ? {
           status: String(before.shipments.status),
@@ -194,7 +198,42 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         }
       : null;
   
-    await prisma.orders.update({ where: { id }, data: { status: status as any } });
+    let restoredProductIds: string[] = [];
+    if (status === "REFUNDED" && prevStatus !== "REFUNDED") {
+      const restoreResult = await prisma.$transaction(async (tx) => {
+        const restore = await restoreSoldInventoryForOrder(tx, id, paymentSucceeded);
+        if (!restore.ok) return restore;
+
+        await tx.orders.update({
+          where: { id },
+          data: {
+            status: "REFUNDED",
+            ...(paymentSucceeded ? { payment_status: "REFUNDED" } : {}),
+          },
+        });
+        return restore;
+      }, PRISMA_TRANSACTION_OPTIONS);
+
+      if (!restoreResult.ok) {
+        return NextResponse.json({ error: restoreResult.error }, { status: 409 });
+      }
+      restoredProductIds = restoreResult.productIds;
+    } else {
+      await prisma.orders.update({ where: { id }, data: { status: status as any } });
+    }
+
+    if (restoredProductIds.length > 0) {
+      after(async () => {
+        try {
+          await syncLowStockAlertsByProductIds(restoredProductIds);
+          for (const productId of restoredProductIds) {
+            revalidateInventoryCatalog({ productId });
+          }
+        } catch (err) {
+          console.error("[admin orders PUT] inventory revalidate failed", err);
+        }
+      });
+    }
   
     let nextShip = prevShip;
     const shipment = body.shipment;

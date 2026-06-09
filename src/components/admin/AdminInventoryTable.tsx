@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { filterAndSortProducts } from "@/lib/search/productSearch";
 import type { ProductSearchItem } from "@/lib/search/productSearch";
@@ -13,6 +13,7 @@ import {
   bulkDeleteProductsClient,
   formatBulkDeleteFailureToast,
 } from "@/lib/admin/bulkDeleteProductsClient";
+import { bulkInactiveProductsClient } from "@/lib/admin/bulkInactiveProductsClient";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
 
 const PAGE_SIZE = 50;
@@ -47,6 +48,23 @@ function filterAndSortInventoryRows(rows: AdminInventoryRow[], query: string): A
     .sort((a, b) => (order.get(a.productId) ?? 0) - (order.get(b.productId) ?? 0));
 }
 
+function InventoryAlertDetails({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="rounded-xl border border-red-200 bg-red-50 text-sm text-red-700">
+      <summary className="cursor-pointer px-4 py-3 font-semibold list-none [&::-webkit-details-marker]:hidden">
+        {title}
+      </summary>
+      <div className="px-4 pb-3">{children}</div>
+    </details>
+  );
+}
+
 function isBelowThreshold(available: number, threshold: number) {
   return available === 0 || available < threshold;
 }
@@ -62,6 +80,7 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
   const searching = query !== deferredQuery;
   const bulk = useBulkSelection();
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkInactivating, setBulkInactivating] = useState(false);
 
   const filtered = useMemo(
     () => filterAndSortInventoryRows(rows, deferredQuery),
@@ -104,6 +123,58 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
   function clearSearch() {
     setQuery("");
     setPage(1);
+  }
+
+  async function handleBulkInactiveProducts() {
+    const productIds = [...new Set(bulk.selectedArray)];
+    if (productIds.length === 0) return;
+    if (productIds.length > MAX_BULK_DELETE) {
+      toast.error(`Select at most ${MAX_BULK_DELETE} products at a time`);
+      return;
+    }
+
+    const names = rows
+      .filter((r) => bulk.isSelected(r.productId))
+      .map((r) => r.search.name)
+      .slice(0, 5);
+    const preview =
+      names.length > 0
+        ? `\n\n${names.join("\n")}${productIds.length > 5 ? `\n…and ${productIds.length - 5} more` : ""}`
+        : "";
+
+    const ok = window.confirm(
+      `Set ${productIds.length} product${productIds.length === 1 ? "" : "s"} to inactive? They will be hidden from the shop but kept in admin and order history.${preview}`
+    );
+    if (!ok) return;
+
+    setBulkInactivating(true);
+    try {
+      const { inactivated, failed } = await bulkInactiveProductsClient(productIds);
+      const count = inactivated.length;
+
+      if (count > 0) {
+        toast.success(`Set ${count} product${count === 1 ? "" : "s"} to inactive`);
+        bulk.deselectMany(inactivated);
+      }
+
+      if (failed.length > 0) {
+        const skippedNames = failed
+          .map(
+            (f) => f.name ?? rows.find((r) => r.productId === f.id)?.search.name ?? f.id
+          )
+          .slice(0, 5);
+        const suffix = failed.length > 5 ? `, +${failed.length - 5} more` : "";
+        toast.error(`${failed.length} could not be updated: ${skippedNames.join(", ")}${suffix}`, {
+          duration: 8000,
+        });
+      }
+
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Bulk inactive failed");
+    } finally {
+      setBulkInactivating(false);
+    }
   }
 
   async function handleBulkDeleteProducts() {
@@ -187,17 +258,18 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
         <AdminBulkDeleteBar
           selectedCount={bulk.selectedCount}
           deleting={bulkDeleting}
+          inactivating={bulkInactivating}
           itemLabel="product"
           onClear={bulk.clearSelection}
+          onInactive={() => void handleBulkInactiveProducts()}
           onDelete={() => void handleBulkDeleteProducts()}
         />
       </div>
 
       {outOfStock.length > 0 && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
-          <p className="font-semibold">
-            🚫 {outOfStock.length} line{outOfStock.length !== 1 ? "s" : ""} out of stock
-          </p>
+        <InventoryAlertDetails
+          title={`🚫 ${outOfStock.length} line${outOfStock.length !== 1 ? "s" : ""} out of stock`}
+        >
           <ul className="list-disc list-inside text-xs space-y-0.5">
             {outOfStock.map((r) => (
               <li key={r.id}>
@@ -211,14 +283,13 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
               </li>
             ))}
           </ul>
-        </div>
+        </InventoryAlertDetails>
       )}
 
       {lowStock.length > 0 && outOfStock.length < lowStock.length && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-1">
-          <p className="font-semibold">
-            ⚠️ {lowStock.length} line{lowStock.length !== 1 ? "s" : ""} below low-stock threshold
-          </p>
+        <InventoryAlertDetails
+          title={`⚠️ ${lowStock.length} line${lowStock.length !== 1 ? "s" : ""} below low-stock threshold`}
+        >
           <ul className="list-disc list-inside text-xs space-y-0.5">
             {lowStock
               .filter((r) => r.availableQuantity > 0)
@@ -235,7 +306,7 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
                 </li>
               ))}
           </ul>
-        </div>
+        </InventoryAlertDetails>
       )}
 
       {lowStock.length === 0 && (
@@ -268,7 +339,7 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
                     if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
                   }}
                   onChange={() => bulk.toggleMany(pagedProductIds, !allOnPageSelected)}
-                  disabled={paged.length === 0 || bulkDeleting}
+                  disabled={paged.length === 0 || bulkDeleting || bulkInactivating}
                   className="h-4 w-4 rounded border-gray-3"
                 />
               </th>
@@ -297,7 +368,7 @@ export function AdminInventoryTable({ rows }: AdminInventoryTableProps) {
                       aria-label={`Select ${r.search.name}`}
                       checked={bulk.isSelected(r.productId)}
                       onChange={() => bulk.toggleOne(r.productId)}
-                      disabled={bulkDeleting}
+                      disabled={bulkDeleting || bulkInactivating}
                       className="h-4 w-4 rounded border-gray-3"
                     />
                   </td>

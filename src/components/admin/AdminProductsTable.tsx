@@ -9,10 +9,12 @@ import { filterAndSortProducts } from "@/lib/search/productSearch";
 import type { ProductSearchItem as AdminProductSearchItem } from "@/lib/search/productSearch";
 import { AdminPagination } from "@/components/admin/AdminPagination";
 import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
+import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import {
   bulkDeleteProductsClient,
   formatBulkDeleteFailureToast,
 } from "@/lib/admin/bulkDeleteProductsClient";
+import { bulkInactiveProductsClient } from "@/lib/admin/bulkInactiveProductsClient";
 
 const PAGE_SIZE = 50;
 const MAX_BULK_DELETE = 50;
@@ -28,6 +30,7 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
   const searching = query !== deferredQuery;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkInactivating, setBulkInactivating] = useState(false);
 
   const filtered = useMemo(
     () => filterAndSortProducts(products, deferredQuery),
@@ -93,6 +96,60 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
 
   function clearSelection() {
     setSelectedIds(new Set());
+  }
+
+  async function handleBulkInactive() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (ids.length > MAX_BULK_DELETE) {
+      toast.error(`Select at most ${MAX_BULK_DELETE} products at a time`);
+      return;
+    }
+
+    const names = products
+      .filter((p) => selectedIds.has(p.id))
+      .map((p) => p.name)
+      .slice(0, 5);
+    const preview =
+      names.length > 0
+        ? `\n\n${names.join("\n")}${ids.length > 5 ? `\n…and ${ids.length - 5} more` : ""}`
+        : "";
+
+    const ok = window.confirm(
+      `Set ${ids.length} product${ids.length === 1 ? "" : "s"} to inactive? They will be hidden from the shop but kept in admin and order history.${preview}`
+    );
+    if (!ok) return;
+
+    setBulkInactivating(true);
+    try {
+      const { inactivated, failed } = await bulkInactiveProductsClient(ids);
+      const count = inactivated.length;
+
+      if (count > 0) {
+        toast.success(`Set ${count} product${count === 1 ? "" : "s"} to inactive`);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of inactivated) next.delete(id);
+          return next;
+        });
+      }
+
+      if (failed.length > 0) {
+        const skippedNames = failed
+          .map((f) => f.name ?? products.find((p) => p.id === f.id)?.name ?? f.id)
+          .slice(0, 5);
+        const suffix = failed.length > 5 ? `, +${failed.length - 5} more` : "";
+        toast.error(`${failed.length} could not be updated: ${skippedNames.join(", ")}${suffix}`, {
+          duration: 8000,
+        });
+      }
+
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Bulk inactive failed");
+    } finally {
+      setBulkInactivating(false);
+    }
   }
 
   async function handleBulkDelete() {
@@ -174,26 +231,15 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
           ) : null}
         </div>
 
-        {selectedCount > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-meta-3">{selectedCount} selected</span>
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="text-sm font-medium text-meta-3 hover:text-blue"
-            >
-              Clear selection
-            </button>
-            <button
-              type="button"
-              disabled={bulkDeleting}
-              onClick={() => void handleBulkDelete()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
-            >
-              {bulkDeleting ? "Deleting…" : `Delete selected (${selectedCount})`}
-            </button>
-          </div>
-        ) : null}
+        <AdminBulkDeleteBar
+          selectedCount={selectedCount}
+          deleting={bulkDeleting}
+          inactivating={bulkInactivating}
+          itemLabel="product"
+          onClear={clearSelection}
+          onInactive={() => void handleBulkInactive()}
+          onDelete={() => void handleBulkDelete()}
+        />
       </div>
 
       {total > 0 ? (
@@ -220,7 +266,7 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
                     if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
                   }}
                   onChange={togglePage}
-                  disabled={paged.length === 0 || bulkDeleting}
+                  disabled={paged.length === 0 || bulkDeleting || bulkInactivating}
                   className="h-4 w-4 rounded border-gray-3"
                 />
               </th>
@@ -244,7 +290,7 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
                     aria-label={`Select ${p.name}`}
                     checked={selectedIds.has(p.id)}
                     onChange={() => toggleOne(p.id)}
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || bulkInactivating}
                     className="h-4 w-4 rounded border-gray-3"
                   />
                 </td>

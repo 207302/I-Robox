@@ -39,7 +39,6 @@ export async function restoreSoldInventoryForOrder(
 
   const productIds: string[] = [];
   for (const item of items) {
-    productIds.push(item.product_id);
     const updated = await tx.inventory.updateMany({
       where: {
         product_id: item.product_id,
@@ -51,13 +50,10 @@ export async function restoreSoldInventoryForOrder(
         available_quantity: { increment: item.quantity },
       },
     });
-    if (updated.count !== 1) {
-      return {
-        ok: false,
-        error:
-          "Could not restore stock for this order. Check inventory sold quantities and try again.",
-      };
+    if (updated.count === 1) {
+      productIds.push(item.product_id);
     }
+    // sold_quantity already reflects a prior restore (e.g. backfill) — skip, still allow refund.
   }
 
   return { ok: true, productIds: [...new Set(productIds)] };

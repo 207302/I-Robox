@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { v2 as cloudinary } from "cloudinary";
 import { TERMINAL_ORDER_STATUSES } from "@/lib/inventory/orderInventoryRestore";
 
@@ -91,7 +92,7 @@ export async function deleteProductById(id: string): Promise<DeleteProductResult
     await prisma.$transaction(async (tx) => {
       await cleanupTerminalOrderRefsForProduct(tx, id);
       await tx.products.delete({ where: { id } });
-    });
+    }, PRISMA_TRANSACTION_OPTIONS);
   } catch (e: unknown) {
     const code = (e as { code?: string } | null)?.code;
     if (code === "P2003") {
@@ -184,21 +185,31 @@ export async function bulkDeleteProductsByIds(ids: string[]): Promise<{
     deletableIds.push(id);
   }
 
-  if (deletableIds.length > 0) {
-    await prisma.$transaction(async (tx) => {
-      for (const id of deletableIds) {
+  for (const id of deletableIds) {
+    const product = productById.get(id)!;
+    try {
+      await prisma.$transaction(async (tx) => {
         await cleanupTerminalOrderRefsForProduct(tx, id);
-      }
-      await tx.products.deleteMany({ where: { id: { in: deletableIds } } });
-    });
+        await tx.products.delete({ where: { id } });
+      }, PRISMA_TRANSACTION_OPTIONS);
 
-    for (const id of deletableIds) {
-      const product = productById.get(id)!;
       const urls = imagesByProduct.get(id) ?? [];
       const cloudinaryPublicIds = urls
         .map((url) => cloudinaryPublicIdFromUrl(url))
         .filter((v): v is string => Boolean(v));
       deleted.push({ id, slug: product.slug, cloudinaryPublicIds });
+    } catch (e: unknown) {
+      const code = (e as { code?: string } | null)?.code;
+      failed.push({
+        id,
+        name: product.name,
+        error:
+          code === "P2003"
+            ? "Has linked order records that block deletion."
+            : e instanceof Error && e.message.includes("Transaction already closed")
+              ? "Delete timed out — try fewer products at once."
+              : "Delete failed — retry or delete individually.",
+      });
     }
   }
 

@@ -9,7 +9,10 @@ import { filterAndSortProducts } from "@/lib/search/productSearch";
 import type { ProductSearchItem as AdminProductSearchItem } from "@/lib/search/productSearch";
 import { AdminPagination } from "@/components/admin/AdminPagination";
 import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
-import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
+import {
+  bulkDeleteProductsClient,
+  formatBulkDeleteFailureToast,
+} from "@/lib/admin/bulkDeleteProductsClient";
 
 const PAGE_SIZE = 50;
 const MAX_BULK_DELETE = 50;
@@ -116,22 +119,8 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
 
     setBulkDeleting(true);
     try {
-      const res = await fetchAdminWithRetry("/api/admin/products/bulk-delete", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ids }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 503 && data?.code === "TIMEOUT") {
-          throw new Error("Bulk delete timed out — try fewer products or retry in a moment");
-        }
-        throw new Error(data?.error || "Bulk delete failed");
-      }
-
-      const deleted = (data.deleted ?? []) as string[];
-      const deletedCount = Number(data.deletedCount ?? deleted.length);
-      const failed = (data.failed ?? []) as { id: string; name?: string | null; error: string }[];
+      const { deleted, failed } = await bulkDeleteProductsClient(ids);
+      const deletedCount = deleted.length;
 
       if (deletedCount > 0) {
         toast.success(`Deleted ${deletedCount} product${deletedCount === 1 ? "" : "s"}`);
@@ -143,13 +132,9 @@ export function AdminProductsTable({ products }: AdminProductsTableProps) {
       }
 
       if (failed.length > 0) {
-        const skippedNames = failed
-          .map((f) => f.name ?? products.find((p) => p.id === f.id)?.name ?? f.id)
-          .slice(0, 5);
-        const suffix = failed.length > 5 ? `, +${failed.length - 5} more` : "";
         toast.error(
-          `${failed.length} skipped (active orders): ${skippedNames.join(", ")}${suffix}`,
-          { duration: 8000 }
+          formatBulkDeleteFailureToast(failed, (id) => products.find((p) => p.id === id)?.name),
+          { duration: 10000 }
         );
       }
 

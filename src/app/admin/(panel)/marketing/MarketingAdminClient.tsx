@@ -11,10 +11,10 @@ import { useBulkSelection } from "@/components/admin/useBulkSelection";
 import type { MarketingBulkEntity } from "@/lib/admin/marketingBulkDelete";
 import { cloudinaryCardUrl } from "@/lib/images/cloudinaryDeliver";
 import {
+  abandonedCartIdleHoursFromMinutes,
   DEFAULT_ABANDONED_CART_IDLE_HOURS,
   MAX_ABANDONED_CART_IDLE_HOURS,
   MIN_ABANDONED_CART_IDLE_HOURS,
-  resolveAbandonedCartIdleHours,
 } from "@/lib/marketing/abandonedCart";
 import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
@@ -55,7 +55,7 @@ type SiteSettingsRow = {
   hero_overlay_cta_label_color?: string | null;
   hero_carousel_interval_ms?: number | null;
   abandoned_cart_reminders_enabled?: boolean | null;
-  abandoned_cart_idle_hours?: number | null;
+  abandoned_cart_idle_minutes?: number | null;
   highlights_section_eyebrow?: string | null;
   highlights_section_heading?: string | null;
   privacy_page_title?: string | null;
@@ -240,8 +240,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     initial.settings?.abandoned_cart_reminders_enabled ?? true
   );
   const [abandonedCartIdleHours, setAbandonedCartIdleHours] = useState(() =>
-    resolveAbandonedCartIdleHours(
-      initial.settings?.abandoned_cart_idle_hours ?? DEFAULT_ABANDONED_CART_IDLE_HOURS
+    abandonedCartIdleHoursFromMinutes(
+      initial.settings?.abandoned_cart_idle_minutes ?? DEFAULT_ABANDONED_CART_IDLE_HOURS * 60
     )
   );
   const [abandonedCartSaving, setAbandonedCartSaving] = useState(false);
@@ -2340,8 +2340,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             <h2 className="text-lg font-semibold">Abandoned cart reminders</h2>
             <p className="text-sm text-meta-3">
               Email logged-in customers once when their saved cart has been idle for the set time.
-              The reminder job runs daily via cron ({MIN_ABANDONED_CART_IDLE_HOURS}–
-              {MAX_ABANDONED_CART_IDLE_HOURS} hours).
+              The reminder job runs daily via cron. Use decimals for short tests (e.g.{" "}
+              <span className="font-mono">0.5</span> = 30 min, <span className="font-mono">0.1</span>{" "}
+              = 6 min). Range: {MIN_ABANDONED_CART_IDLE_HOURS}–{MAX_ABANDONED_CART_IDLE_HOURS}{" "}
+              hours.
             </p>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -2357,7 +2359,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 type="number"
                 min={MIN_ABANDONED_CART_IDLE_HOURS}
                 max={MAX_ABANDONED_CART_IDLE_HOURS}
-                step={1}
+                step={0.1}
                 value={abandonedCartIdleHours}
                 disabled={!abandonedCartEnabled}
                 onChange={(e) => setAbandonedCartIdleHours(Number(e.target.value))}
@@ -2383,8 +2385,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                   );
                   setAbandonedCartEnabled(row.abandoned_cart_reminders_enabled ?? true);
                   setAbandonedCartIdleHours(
-                    resolveAbandonedCartIdleHours(
-                      row.abandoned_cart_idle_hours ?? DEFAULT_ABANDONED_CART_IDLE_HOURS
+                    abandonedCartIdleHoursFromMinutes(
+                      row.abandoned_cart_idle_minutes ?? DEFAULT_ABANDONED_CART_IDLE_HOURS * 60
                     )
                   );
                   toast.success("Abandoned cart settings saved");

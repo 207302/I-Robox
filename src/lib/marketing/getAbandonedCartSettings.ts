@@ -2,8 +2,8 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import {
-  DEFAULT_ABANDONED_CART_IDLE_HOURS,
-  resolveAbandonedCartIdleHours,
+  DEFAULT_ABANDONED_CART_IDLE_MINUTES,
+  resolveAbandonedCartIdleMinutes,
 } from "@/lib/marketing/abandonedCart";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 
@@ -30,30 +30,30 @@ export async function getAbandonedCartSettings(): Promise<AbandonedCartSettings>
     where: { id: SITE_MARKETING_SETTINGS_ID },
     select: {
       abandoned_cart_reminders_enabled: true,
-      abandoned_cart_idle_hours: true,
+      abandoned_cart_idle_minutes: true,
     },
   });
 
   if (row) {
-    const hours = resolveAbandonedCartIdleHours(row.abandoned_cart_idle_hours);
+    const minutes = resolveAbandonedCartIdleMinutes(row.abandoned_cart_idle_minutes);
     return {
       enabled: row.abandoned_cart_reminders_enabled,
-      idleMs: hours * 60 * 60 * 1000,
-      idleHours: hours,
+      idleMs: minutes * 60 * 1000,
+      idleHours: minutes / 60,
       source: "db",
     };
   }
 
   const envHours = Number(process.env.ABANDONED_CART_HOURS ?? "");
-  const hours =
+  const minutes =
     Number.isFinite(envHours) && envHours > 0
-      ? resolveAbandonedCartIdleHours(envHours)
-      : DEFAULT_ABANDONED_CART_IDLE_HOURS;
+      ? resolveAbandonedCartIdleMinutes(envHours * 60)
+      : DEFAULT_ABANDONED_CART_IDLE_MINUTES;
 
   return {
     enabled: true,
-    idleMs: hours * 60 * 60 * 1000,
-    idleHours: hours,
+    idleMs: minutes * 60 * 1000,
+    idleHours: minutes / 60,
     source: Number.isFinite(envHours) && envHours > 0 ? "env_hours" : "default",
   };
 }

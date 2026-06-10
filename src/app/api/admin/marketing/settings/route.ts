@@ -15,7 +15,10 @@ import {
   readJsonBody,
 } from "@/lib/validation/input";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
-import { resolveAbandonedCartIdleHours } from "@/lib/marketing/abandonedCart";
+import {
+  abandonedCartIdleMinutesFromHours,
+  resolveAbandonedCartIdleMinutes,
+} from "@/lib/marketing/abandonedCart";
 import {
   heroCarouselIntervalMsFromSeconds,
   resolveHeroCarouselIntervalMs,
@@ -143,13 +146,27 @@ export async function PATCH(req: NextRequest) {
         body.abandoned_cart_idle_hours === null ||
         body.abandoned_cart_idle_hours === ""
       ) {
-        data.abandoned_cart_idle_hours = resolveAbandonedCartIdleHours(undefined);
+        data.abandoned_cart_idle_minutes = resolveAbandonedCartIdleMinutes(undefined);
       } else {
         const hours = Number(body.abandoned_cart_idle_hours);
         if (!Number.isFinite(hours)) {
           return NextResponse.json({ error: "Invalid abandoned_cart_idle_hours" }, { status: 400 });
         }
-        data.abandoned_cart_idle_hours = resolveAbandonedCartIdleHours(hours);
+        data.abandoned_cart_idle_minutes = abandonedCartIdleMinutesFromHours(hours);
+      }
+    }
+    if (body.abandoned_cart_idle_minutes !== undefined) {
+      if (
+        body.abandoned_cart_idle_minutes === null ||
+        body.abandoned_cart_idle_minutes === ""
+      ) {
+        data.abandoned_cart_idle_minutes = resolveAbandonedCartIdleMinutes(undefined);
+      } else {
+        const minutes = Number(body.abandoned_cart_idle_minutes);
+        if (!Number.isFinite(minutes)) {
+          return NextResponse.json({ error: "Invalid abandoned_cart_idle_minutes" }, { status: 400 });
+        }
+        data.abandoned_cart_idle_minutes = resolveAbandonedCartIdleMinutes(minutes);
       }
     }
   
@@ -302,7 +319,7 @@ export async function PATCH(req: NextRequest) {
       hero_overlay_cta_label_color: null,
       hero_carousel_interval_ms: resolveHeroCarouselIntervalMs(undefined),
       abandoned_cart_reminders_enabled: true,
-      abandoned_cart_idle_hours: resolveAbandonedCartIdleHours(undefined),
+      abandoned_cart_idle_minutes: resolveAbandonedCartIdleMinutes(undefined),
       highlights_section_eyebrow: null,
       highlights_section_heading: null,
       privacy_page_title: null,

@@ -848,6 +848,10 @@ model site_marketing_settings {
   hero_overlay_cta_label_color  String? @db.VarChar(20)
   /// Milliseconds each hero banner stays visible before auto-advancing (2–60s enforced in app).
   hero_carousel_interval_ms     Int      @default(7000)
+  /// Send one abandoned-cart reminder email per logged-in customer cart after idle period.
+  abandoned_cart_reminders_enabled Boolean @default(true)
+  /// Hours a cart must sit unchanged before the reminder cron emails the customer (1–168).
+  abandoned_cart_idle_hours        Int     @default(48)
   /// Homepage highlights block — small label above the carousel (CSS may uppercase).
   highlights_section_eyebrow  String? @db.VarChar(120)
   /// Homepage highlights block — main heading under the label.

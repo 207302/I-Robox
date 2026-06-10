@@ -15,6 +15,7 @@ import {
   readJsonBody,
 } from "@/lib/validation/input";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+import { resolveAbandonedCartIdleHours } from "@/lib/marketing/abandonedCart";
 import {
   heroCarouselIntervalMsFromSeconds,
   resolveHeroCarouselIntervalMs,
@@ -132,6 +133,23 @@ export async function PATCH(req: NextRequest) {
         data.hero_carousel_interval_ms = heroCarouselIntervalMsFromSeconds(
           Number(body.hero_carousel_interval_seconds)
         );
+      }
+    }
+    if (body.abandoned_cart_reminders_enabled !== undefined) {
+      data.abandoned_cart_reminders_enabled = Boolean(body.abandoned_cart_reminders_enabled);
+    }
+    if (body.abandoned_cart_idle_hours !== undefined) {
+      if (
+        body.abandoned_cart_idle_hours === null ||
+        body.abandoned_cart_idle_hours === ""
+      ) {
+        data.abandoned_cart_idle_hours = resolveAbandonedCartIdleHours(undefined);
+      } else {
+        const hours = Number(body.abandoned_cart_idle_hours);
+        if (!Number.isFinite(hours)) {
+          return NextResponse.json({ error: "Invalid abandoned_cart_idle_hours" }, { status: 400 });
+        }
+        data.abandoned_cart_idle_hours = resolveAbandonedCartIdleHours(hours);
       }
     }
   
@@ -283,6 +301,8 @@ export async function PATCH(req: NextRequest) {
       hero_overlay_subheading_color: null,
       hero_overlay_cta_label_color: null,
       hero_carousel_interval_ms: resolveHeroCarouselIntervalMs(undefined),
+      abandoned_cart_reminders_enabled: true,
+      abandoned_cart_idle_hours: resolveAbandonedCartIdleHours(undefined),
       highlights_section_eyebrow: null,
       highlights_section_heading: null,
       privacy_page_title: null,

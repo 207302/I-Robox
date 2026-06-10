@@ -10,6 +10,12 @@ import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
 import type { MarketingBulkEntity } from "@/lib/admin/marketingBulkDelete";
 import { cloudinaryCardUrl } from "@/lib/images/cloudinaryDeliver";
+import {
+  DEFAULT_ABANDONED_CART_IDLE_HOURS,
+  MAX_ABANDONED_CART_IDLE_HOURS,
+  MIN_ABANDONED_CART_IDLE_HOURS,
+  resolveAbandonedCartIdleHours,
+} from "@/lib/marketing/abandonedCart";
 import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
 
@@ -48,6 +54,8 @@ type SiteSettingsRow = {
   hero_overlay_subheading_color?: string | null;
   hero_overlay_cta_label_color?: string | null;
   hero_carousel_interval_ms?: number | null;
+  abandoned_cart_reminders_enabled?: boolean | null;
+  abandoned_cart_idle_hours?: number | null;
   highlights_section_eyebrow?: string | null;
   highlights_section_heading?: string | null;
   privacy_page_title?: string | null;
@@ -228,6 +236,15 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [freeShippingExclusionQuery, setFreeShippingExclusionQuery] = useState("");
   const deferredFreeShippingExclusionQuery = useDeferredValue(freeShippingExclusionQuery);
   const [freeShippingExclusionsSaving, setFreeShippingExclusionsSaving] = useState(false);
+  const [abandonedCartEnabled, setAbandonedCartEnabled] = useState(
+    initial.settings?.abandoned_cart_reminders_enabled ?? true
+  );
+  const [abandonedCartIdleHours, setAbandonedCartIdleHours] = useState(() =>
+    resolveAbandonedCartIdleHours(
+      initial.settings?.abandoned_cart_idle_hours ?? DEFAULT_ABANDONED_CART_IDLE_HOURS
+    )
+  );
+  const [abandonedCartSaving, setAbandonedCartSaving] = useState(false);
   const st0 = initial.settings;
   const [helpSupportTitle, setHelpSupportTitle] = useState(st0?.help_support_title ?? "");
   const [contactAddress, setContactAddress] = useState(st0?.contact_address ?? "");
@@ -2316,6 +2333,70 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               }}
             >
               {freeShippingSaving ? "Saving…" : "Save threshold"}
+            </button>
+          </section>
+
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
+            <h2 className="text-lg font-semibold">Abandoned cart reminders</h2>
+            <p className="text-sm text-meta-3">
+              Email logged-in customers once when their saved cart has been idle for the set time.
+              The reminder job runs daily via cron ({MIN_ABANDONED_CART_IDLE_HOURS}–
+              {MAX_ABANDONED_CART_IDLE_HOURS} hours).
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={abandonedCartEnabled}
+                onChange={(e) => setAbandonedCartEnabled(e.target.checked)}
+              />
+              <span>Send abandoned cart reminder emails</span>
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium">Idle time before reminder (hours)</span>
+              <input
+                type="number"
+                min={MIN_ABANDONED_CART_IDLE_HOURS}
+                max={MAX_ABANDONED_CART_IDLE_HOURS}
+                step={1}
+                value={abandonedCartIdleHours}
+                disabled={!abandonedCartEnabled}
+                onChange={(e) => setAbandonedCartIdleHours(Number(e.target.value))}
+                className="mt-1 w-full max-w-xs rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm disabled:opacity-60"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={abandonedCartSaving}
+              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setAbandonedCartSaving(true);
+                  const row = await j<SiteSettingsRow>(
+                    await fetch("/api/admin/marketing/settings", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        abandoned_cart_reminders_enabled: abandonedCartEnabled,
+                        abandoned_cart_idle_hours: abandonedCartIdleHours,
+                      }),
+                    })
+                  );
+                  setAbandonedCartEnabled(row.abandoned_cart_reminders_enabled ?? true);
+                  setAbandonedCartIdleHours(
+                    resolveAbandonedCartIdleHours(
+                      row.abandoned_cart_idle_hours ?? DEFAULT_ABANDONED_CART_IDLE_HOURS
+                    )
+                  );
+                  toast.success("Abandoned cart settings saved");
+                  router.refresh();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Failed");
+                } finally {
+                  setAbandonedCartSaving(false);
+                }
+              }}
+            >
+              {abandonedCartSaving ? "Saving…" : "Save abandoned cart settings"}
             </button>
           </section>
 

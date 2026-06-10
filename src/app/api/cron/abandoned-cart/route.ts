@@ -6,6 +6,7 @@ import {
   abandonedCartReminderTextLines,
   buildAbandonedCartReminderLines,
 } from "@/lib/email/abandonedCartReminder";
+import { getAbandonedCartSettings } from "@/lib/marketing/abandonedCart";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";
@@ -25,11 +26,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const minutesRaw = Number(process.env.ABANDONED_CART_MINUTES ?? "");
-    const hasMinuteOverride = Number.isFinite(minutesRaw) && minutesRaw > 0;
-    const hours = Math.min(168, Math.max(1, Number(process.env.ABANDONED_CART_HOURS ?? 48)));
-    const idleMs = hasMinuteOverride ? minutesRaw * 60 * 1000 : hours * 60 * 60 * 1000;
-    const cutoff = new Date(Date.now() - idleMs);
+    const settings = await getAbandonedCartSettings();
+    if (!settings.enabled) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "abandoned_cart_reminders_disabled",
+        source: settings.source,
+        ranAt: new Date().toISOString(),
+      });
+    }
+
+    const cutoff = new Date(Date.now() - settings.idleMs);
 
     const carts = await prisma.carts.findMany({
       where: {
@@ -86,7 +94,8 @@ export async function GET(req: NextRequest) {
       ok: true,
       scanned: carts.length,
       sent,
-      mode: hasMinuteOverride ? `minutes:${minutesRaw}` : `hours:${hours}`,
+      idleHours: settings.idleHours,
+      source: settings.source,
       cutoff: cutoff.toISOString(),
       ranAt: new Date().toISOString(),
     });

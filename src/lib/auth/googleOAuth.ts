@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import crypto from "crypto";
+import { getRequestOrigin } from "@/lib/siteUrl";
 
 export const GOOGLE_OAUTH_STATE_COOKIE = "irobox_google_oauth_state";
 export const GOOGLE_OAUTH_NEXT_COOKIE = "irobox_google_oauth_next";
@@ -17,23 +18,13 @@ export function getGoogleOAuthConfig() {
   return { clientId, clientSecret };
 }
 
+/** Use the live request host so OAuth cookies and redirect_uri match www vs non-www. */
 export function getSiteOrigin(req: NextRequest) {
-  const env = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL ?? process.env.SITE_URL;
-  if (env) {
-    try {
-      return new URL(env).origin;
-    } catch {
-      // fall through
-    }
-  }
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
-  const host = req.headers.get("host");
-  if (!host) return "http://localhost:3000";
-  return `${proto}://${host}`;
+  return getRequestOrigin(req);
 }
 
 export function googleRedirectUri(req: NextRequest) {
-  return `${getSiteOrigin(req)}/api/auth/google/callback`;
+  return `${getRequestOrigin(req)}/api/auth/google/callback`;
 }
 
 /** Safe internal path for post-login redirect (no open redirects). */

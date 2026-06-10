@@ -50,6 +50,21 @@ export async function register() {
     }
   };
 
+  try {
+    const { startAbandonedCartScheduler } = await import("./lib/cron/abandonedCartScheduler");
+    startAbandonedCartScheduler();
+  } catch (err) {
+    console.warn("[instrumentation] Abandoned cart scheduler skipped:", err);
+  }
+
   const { registerPrismaSignalHandlers } = await import("./instrumentation.node");
-  registerPrismaSignalHandlers(disconnect);
+  registerPrismaSignalHandlers(async () => {
+    try {
+      const { stopAbandonedCartScheduler } = await import("./lib/cron/abandonedCartScheduler");
+      stopAbandonedCartScheduler();
+    } catch {
+      /* shutting down */
+    }
+    await disconnect();
+  });
 }

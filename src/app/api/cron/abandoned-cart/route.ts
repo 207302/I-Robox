@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { sendEmail, abandonedCartReminderEmailHtml, isEmailConfigured } from "@/lib/email";
-import {
-  abandonedCartItemSelect,
-  abandonedCartReminderTextLines,
-  buildAbandonedCartReminderLines,
-} from "@/lib/email/abandonedCartReminder";
-import { getAbandonedCartSettings } from "@/lib/marketing/getAbandonedCartSettings";
-import { getSiteBaseUrl } from "@/lib/siteUrl";
-import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
+import { runAbandonedCartReminders } from "@/lib/marketing/runAbandonedCartReminders";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 /**
@@ -26,78 +17,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const settings = await getAbandonedCartSettings();
-    if (!settings.enabled) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "abandoned_cart_reminders_disabled",
-        source: settings.source,
-        ranAt: new Date().toISOString(),
-      });
-    }
-
-    const cutoff = new Date(Date.now() - settings.idleMs);
-
-    const carts = await prisma.carts.findMany({
-      where: {
-        status: "ACTIVE",
-        customer_id: { not: null },
-        abandoned_reminder_sent_at: null,
-        updated_at: { lt: cutoff },
-        cart_items: { some: {} },
-      },
-      select: {
-        id: true,
-        customers: { select: { email: true } },
-        cart_items: {
-          take: 6,
-          select: abandonedCartItemSelect,
-        },
-      },
-      take: 200,
-    });
-
-    let sent = 0;
-    const siteBase = getSiteBaseUrl();
-    const shopUrl = `${siteBase}/shop`;
-
-    for (const c of carts) {
-      const email = c.customers?.email;
-      if (!email || isSyntheticPhoneSignupEmail(email)) continue;
-
-      const lines = buildAbandonedCartReminderLines(c.cart_items, siteBase);
-      const textLines = abandonedCartReminderTextLines(lines);
-
-      if (!isEmailConfigured()) {
-        console.warn("[cron/abandoned-cart] SMTP not configured — skipping");
-        break;
-      }
-      try {
-        await sendEmail({
-          to: email,
-          subject: "You left items in your cart — i-Robox",
-          html: abandonedCartReminderEmailHtml({ shopUrl, lines }),
-          text: `You still have items saved in your cart at i-Robox.\n\n${textLines.join("\n")}\n\nContinue: ${shopUrl}`,
-        });
-        await prisma.carts.update({
-          where: { id: c.id },
-          data: { abandoned_reminder_sent_at: new Date() },
-        });
-        sent += 1;
-      } catch (e) {
-        console.error("[cron/abandoned-cart] send failed", c.id, e);
-      }
-    }
-
-    return NextResponse.json({
-      ok: true,
-      scanned: carts.length,
-      sent,
-      idleHours: settings.idleHours,
-      source: settings.source,
-      cutoff: cutoff.toISOString(),
-      ranAt: new Date().toISOString(),
-    });
+    const result = await runAbandonedCartReminders();
+    return NextResponse.json(result);
   });
 }

@@ -61,7 +61,8 @@ export async function GET(req: NextRequest) {
         redirectUri,
       });
       accessToken = tokens.access_token;
-    } catch {
+    } catch (e) {
+      console.error("[auth/google/callback] token exchange failed", e);
       return redirectWithClearedOauthCookies(req, "/login?error=google_token");
     }
   
@@ -150,7 +151,8 @@ export async function GET(req: NextRequest) {
       const res = redirectWithClearedOauthCookies(req, dest);
       setSessionCookieOnResponse(res, token, SESSION_TTL_SECONDS);
       return res;
-    } catch {
+    } catch (e) {
+      console.error("[auth/google/callback] sign-in failed", e);
       return redirectWithClearedOauthCookies(req, "/login?error=google_failed");
     }
   

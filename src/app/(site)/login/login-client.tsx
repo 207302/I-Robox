@@ -57,12 +57,16 @@ export default function LoginClient() {
   const [newPassword, setNewPassword] = useState("");
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
 
   useEffect(() => {
     const err = searchParams.get("error");
     if (!err || !err.startsWith("google_")) return;
-    toast.error(GOOGLE_ERROR_MESSAGES[err] ?? "Google sign-in failed.");
+    const message = GOOGLE_ERROR_MESSAGES[err] ?? "Google sign-in failed.";
+    setGoogleError(message);
+    const toastTimer = window.setTimeout(() => toast.error(message), 150);
     router.replace("/login", { scroll: false });
+    return () => window.clearTimeout(toastTimer);
   }, [searchParams, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -256,6 +260,15 @@ export default function LoginClient() {
                 ? "Sign in to access your orders, wishlist, and faster checkout."
                 : "Create an account for faster checkout and order tracking."}
           </p>
+
+          {googleError ? (
+            <div
+              role="alert"
+              className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
+            >
+              {googleError}
+            </div>
+          ) : null}
 
           {!pendingUserId && mode !== "forgot" ? (
             <>

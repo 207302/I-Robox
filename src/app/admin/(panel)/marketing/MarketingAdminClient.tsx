@@ -245,6 +245,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     )
   );
   const [abandonedCartSaving, setAbandonedCartSaving] = useState(false);
+  const [abandonedCartRunning, setAbandonedCartRunning] = useState(false);
   const st0 = initial.settings;
   const [helpSupportTitle, setHelpSupportTitle] = useState(st0?.help_support_title ?? "");
   const [contactAddress, setContactAddress] = useState(st0?.contact_address ?? "");
@@ -2340,10 +2341,11 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             <h2 className="text-lg font-semibold">Abandoned cart reminders</h2>
             <p className="text-sm text-meta-3">
               Email logged-in customers once when their saved cart has been idle for the set time.
-              The reminder job runs daily via cron. Use decimals for short tests (e.g.{" "}
-              <span className="font-mono">0.5</span> = 30 min, <span className="font-mono">0.1</span>{" "}
-              = 6 min). Range: {MIN_ABANDONED_CART_IDLE_HOURS}–{MAX_ABANDONED_CART_IDLE_HOURS}{" "}
-              hours.
+              Reminders run automatically every 30 minutes while the site is live (no cron/SSH).
+              Use <strong>Run reminders now</strong> to test immediately. Decimals for short idle
+              times (e.g. <span className="font-mono">0.5</span> = 30 min,{" "}
+              <span className="font-mono">0.1</span> = 6 min). Range: {MIN_ABANDONED_CART_IDLE_HOURS}–
+              {MAX_ABANDONED_CART_IDLE_HOURS} hours.
             </p>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -2366,40 +2368,81 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full max-w-xs rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm disabled:opacity-60"
               />
             </label>
-            <button
-              type="button"
-              disabled={abandonedCartSaving}
-              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-              onClick={async () => {
-                try {
-                  setAbandonedCartSaving(true);
-                  const row = await j<SiteSettingsRow>(
-                    await fetch("/api/admin/marketing/settings", {
-                      method: "PATCH",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({
-                        abandoned_cart_reminders_enabled: abandonedCartEnabled,
-                        abandoned_cart_idle_hours: abandonedCartIdleHours,
-                      }),
-                    })
-                  );
-                  setAbandonedCartEnabled(row.abandoned_cart_reminders_enabled ?? true);
-                  setAbandonedCartIdleHours(
-                    abandonedCartIdleHoursFromMinutes(
-                      row.abandoned_cart_idle_minutes ?? DEFAULT_ABANDONED_CART_IDLE_HOURS * 60
-                    )
-                  );
-                  toast.success("Abandoned cart settings saved");
-                  router.refresh();
-                } catch (err: unknown) {
-                  toast.error(err instanceof Error ? err.message : "Failed");
-                } finally {
-                  setAbandonedCartSaving(false);
-                }
-              }}
-            >
-              {abandonedCartSaving ? "Saving…" : "Save abandoned cart settings"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={abandonedCartSaving}
+                className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    setAbandonedCartSaving(true);
+                    const row = await j<SiteSettingsRow>(
+                      await fetch("/api/admin/marketing/settings", {
+                        method: "PATCH",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                          abandoned_cart_reminders_enabled: abandonedCartEnabled,
+                          abandoned_cart_idle_hours: abandonedCartIdleHours,
+                        }),
+                      })
+                    );
+                    setAbandonedCartEnabled(row.abandoned_cart_reminders_enabled ?? true);
+                    setAbandonedCartIdleHours(
+                      abandonedCartIdleHoursFromMinutes(
+                        row.abandoned_cart_idle_minutes ?? DEFAULT_ABANDONED_CART_IDLE_HOURS * 60
+                      )
+                    );
+                    toast.success("Abandoned cart settings saved");
+                    router.refresh();
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : "Failed");
+                  } finally {
+                    setAbandonedCartSaving(false);
+                  }
+                }}
+              >
+                {abandonedCartSaving ? "Saving…" : "Save abandoned cart settings"}
+              </button>
+              <button
+                type="button"
+                disabled={abandonedCartRunning || !abandonedCartEnabled}
+                className="rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-dark disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    setAbandonedCartRunning(true);
+                    const result = await j<{
+                      ok: boolean;
+                      skipped?: boolean;
+                      reason?: string;
+                      scanned?: number;
+                      sent?: number;
+                      failed?: number;
+                    }>(
+                      await fetch("/api/admin/marketing/abandoned-cart/run", { method: "POST" })
+                    );
+                    if (result.skipped) {
+                      const msg =
+                        result.reason === "smtp_not_configured"
+                          ? "SMTP not configured — set EMAIL_SERVER_* on the server."
+                          : "Abandoned cart reminders are disabled.";
+                      toast.error(msg);
+                      return;
+                    }
+                    const failed = result.failed ?? 0;
+                    toast.success(
+                      `Done — scanned ${result.scanned ?? 0}, sent ${result.sent ?? 0}` +
+                        (failed > 0 ? `, failed ${failed}` : "")
+                    );
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : "Run failed");
+                  } finally {
+                    setAbandonedCartRunning(false);
+                  }
+                }}
+              >
+                {abandonedCartRunning ? "Running…" : "Run reminders now"}
+              </button>
+            </div>
           </section>
 
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">

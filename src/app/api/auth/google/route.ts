@@ -7,6 +7,7 @@ import {
   GOOGLE_OAUTH_STATE_COOKIE,
   buildGoogleAuthorizeUrl,
   getGoogleOAuthConfig,
+  getSiteOrigin,
   googleRedirectUri,
   randomOAuthState,
   sanitizeOAuthNextParam,
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     try {
       config = getGoogleOAuthConfig();
     } catch {
-      return NextResponse.redirect(new URL("/login?error=google_config", req.nextUrl.origin));
+      return NextResponse.redirect(new URL("/login?error=google_config", getSiteOrigin(req)));
     }
   
     const state = randomOAuthState();

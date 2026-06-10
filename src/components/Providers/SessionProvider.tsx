@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { hasCustomerAuthCookie } from "@/lib/auth/clientCookie";
 import {
   AUTH_CHANGED_EVENT,
   displayNameFromUser,
@@ -68,12 +67,9 @@ export function SessionProvider({ children }: SessionProviderProps) {
   useEffect(() => {
     mountedRef.current = true;
 
-    if (!hasCustomerAuthCookie()) {
-      setUser(null);
-      setIsLoading(false);
-    } else {
-      void refresh();
-    }
+    // Always call /api/auth/me — session cookie is httpOnly (not visible in document.cookie).
+    // Google OAuth and other full-page redirects rely on this.
+    void refresh();
 
     const onAuthChanged = () => {
       void refresh();

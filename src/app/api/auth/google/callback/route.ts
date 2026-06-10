@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
   return runApiRoute(async () => {
     const error = req.nextUrl.searchParams.get("error");
     if (error === "access_denied") {
+      console.warn("[auth/google/callback] access_denied");
       return redirectWithClearedOauthCookies(req, "/login?error=google_denied");
     }
   
@@ -40,6 +41,12 @@ export async function GET(req: NextRequest) {
     const nextStored = sanitizeOAuthNextParam(req.cookies.get(GOOGLE_OAUTH_NEXT_COOKIE)?.value ?? null);
   
     if (!code || !state || !storedState || state !== storedState) {
+      console.warn("[auth/google/callback] state mismatch", {
+        hasCode: Boolean(code),
+        hasState: Boolean(state),
+        hasStoredState: Boolean(storedState),
+        stateMatch: Boolean(state && storedState && state === storedState),
+      });
       return redirectWithClearedOauthCookies(req, "/login?error=google_state");
     }
   
@@ -69,16 +76,23 @@ export async function GET(req: NextRequest) {
     let profile: Awaited<ReturnType<typeof fetchGoogleUserInfo>>;
     try {
       profile = await fetchGoogleUserInfo(accessToken);
-    } catch {
+    } catch (e) {
+      console.error("[auth/google/callback] profile fetch failed", e);
       return redirectWithClearedOauthCookies(req, "/login?error=google_profile");
     }
   
     const googleSub = profile.sub;
     const emailRaw = profile.email?.trim().toLowerCase() ?? "";
     if (!googleSub || !emailRaw || !profile.email_verified) {
+      console.warn("[auth/google/callback] unverified or missing email", {
+        hasSub: Boolean(googleSub),
+        hasEmail: Boolean(emailRaw),
+        emailVerified: profile.email_verified,
+      });
       return redirectWithClearedOauthCookies(req, "/login?error=google_email");
     }
     if (!validateEmail(emailRaw)) {
+      console.warn("[auth/google/callback] invalid email format", { emailRaw });
       return redirectWithClearedOauthCookies(req, "/login?error=google_email");
     }
   
@@ -109,6 +123,9 @@ export async function GET(req: NextRequest) {
   
         if (byEmail) {
           if (byEmail.google_sub && byEmail.google_sub !== googleSub) {
+            console.warn("[auth/google/callback] email linked to different Google account", {
+              email: emailRaw,
+            });
             return redirectWithClearedOauthCookies(req, "/login?error=google_link");
           }
           customerId = byEmail.id;
@@ -150,6 +167,7 @@ export async function GET(req: NextRequest) {
       const dest = nextStored.startsWith("/login") ? "/" : nextStored;
       const res = redirectWithClearedOauthCookies(req, dest);
       setSessionCookieOnResponse(res, token, SESSION_TTL_SECONDS);
+      console.info("[auth/google/callback] sign-in OK", { customerId, dest });
       return res;
     } catch (e) {
       console.error("[auth/google/callback] sign-in failed", e);

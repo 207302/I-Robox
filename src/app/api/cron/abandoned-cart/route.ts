@@ -6,7 +6,7 @@ import {
   abandonedCartReminderTextLines,
   buildAbandonedCartReminderLines,
 } from "@/lib/email/abandonedCartReminder";
-import { getAbandonedCartSettings } from "@/lib/marketing/abandonedCart";
+import { getAbandonedCartSettings } from "@/lib/marketing/getAbandonedCartSettings";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";

@@ -48,12 +48,16 @@ export const useCart = () => {
             productId: item.productId,
             lineId: item.id,
             requestedQty: targetQty,
-            maxOrderQuantity: maxOrderQty,
+            maxOrderQuantity: item.maxOrderQuantity ?? existingItem?.maxOrderQuantity,
             availableQuantity: stock,
         });
 
         if (cappedQty <= 0) {
-            toast.error(maxOrderQuantityError(item.name, maxOrderQty));
+            if (item.maxOrderQuantity != null || existingItem?.maxOrderQuantity != null) {
+                toast.error(maxOrderQuantityError(item.name, maxOrderQty));
+            } else {
+                toast.error("Not enough stock available!");
+            }
             return false;
         }
 
@@ -66,7 +70,11 @@ export const useCart = () => {
             }
         }
 
-        dispatch(addItemToCart({ ...item, maxOrderQuantity: maxOrderQty, quantity: addQty }));
+        dispatch(addItemToCart({
+            ...item,
+            maxOrderQuantity: item.maxOrderQuantity ?? existingItem?.maxOrderQuantity,
+            quantity: addQty,
+        }));
         return !cappedByLimit;
     };
 

@@ -69,11 +69,20 @@ export const cart = createSlice({
         if (item.maxOrderQuantity != null) {
           existingItem.maxOrderQuantity = resolveMaxOrderQuantity(item.maxOrderQuantity);
         }
+        if (item.shippingPerUnit != null) {
+          existingItem.shippingPerUnit = Math.max(0, Number(item.shippingPerUnit));
+        }
+        if (item.brandId !== undefined) {
+          existingItem.brandId = item.brandId ?? null;
+        }
       } else {
         state.items.push({
           ...item,
           quantity: cappedQty,
-          maxOrderQuantity: resolveMaxOrderQuantity(item.maxOrderQuantity),
+          maxOrderQuantity:
+            item.maxOrderQuantity != null
+              ? resolveMaxOrderQuantity(item.maxOrderQuantity)
+              : undefined,
         });
       }
     },
@@ -87,9 +96,11 @@ export const cart = createSlice({
 
       if (!existingItem) return;
 
-      const maxOrderQty = resolveMaxOrderQuantity(existingItem.maxOrderQuantity);
-      const totalForProduct = totalCartQuantityForProduct(state.items, existingItem.productId);
-      if (totalForProduct >= maxOrderQty) return;
+      if (existingItem.maxOrderQuantity != null) {
+        const maxOrderQty = resolveMaxOrderQuantity(existingItem.maxOrderQuantity);
+        const totalForProduct = totalCartQuantityForProduct(state.items, existingItem.productId);
+        if (totalForProduct >= maxOrderQty) return;
+      }
 
       const stock = existingItem.availableQuantity;
       if (stock != null && Number.isFinite(stock) && existingItem.quantity >= stock) return;
@@ -140,6 +151,47 @@ export const cart = createSlice({
     },
     loadCartFromStorage: (state, action: PayloadAction<CartItem[]>) => {
       state.items = action.payload.map(normalizeCartItem);
+    },
+    hydrateCartProductMeta: (
+      state,
+      action: PayloadAction<
+        Record<
+          string,
+          {
+            maxOrderQuantity: number;
+            shippingPerUnit: number;
+            brandId: string | null;
+            availableQuantity: number;
+          }
+        >
+      >
+    ) => {
+      const metaByProductId = action.payload;
+      state.items = state.items.flatMap((item) => {
+        const meta = metaByProductId[String(item.productId)];
+        if (!meta) return [item];
+
+        const cappedQty = clampAddToCartQuantity({
+          items: state.items,
+          productId: item.productId,
+          lineId: item.id,
+          requestedQty: item.quantity,
+          maxOrderQuantity: meta.maxOrderQuantity,
+          availableQuantity: meta.availableQuantity,
+        });
+        if (cappedQty <= 0) return [];
+
+        return [
+          {
+            ...item,
+            quantity: cappedQty,
+            maxOrderQuantity: meta.maxOrderQuantity,
+            shippingPerUnit: meta.shippingPerUnit,
+            brandId: meta.brandId,
+            availableQuantity: meta.availableQuantity,
+          },
+        ];
+      });
     },
     toggleCartModal: (state) => {
       state.shouldDisplayCart = !state.shouldDisplayCart;
@@ -193,6 +245,7 @@ export const {
   clearCart,
   removeAllItemsFromCart,
   loadCartFromStorage,
+  hydrateCartProductMeta,
   toggleCartModal,
   setCartModalOpen,
 } = cart.actions;

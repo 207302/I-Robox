@@ -40,8 +40,11 @@ function previewItemFromBody(row: Record<string, unknown>): PreviewItem | null {
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
-    const body = await readJsonBody(req);
-    const rawItems = Array.isArray(body.items) ? body.items : [];
+    const parsed = await readJsonBody(req);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    const rawItems = Array.isArray(parsed.body.items) ? parsed.body.items : [];
     const items: PreviewItem[] = rawItems
       .map((row: Record<string, unknown>) => previewItemFromBody(row))
       .filter((row): row is PreviewItem => row != null);

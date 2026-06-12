@@ -51,14 +51,16 @@ export function canIncreaseCartQuantity(input: {
   availableQuantity?: number;
   currentLineQuantity: number;
 }): { ok: true } | { ok: false; reason: "max_order" | "stock"; maxOrderQty: number } {
-  const maxOrderQty = resolveMaxOrderQuantity(input.maxOrderQuantity);
-  const totalForProduct = totalCartQuantityForProduct(input.items, input.productId);
-  if (totalForProduct >= maxOrderQty) {
-    return { ok: false, reason: "max_order", maxOrderQty };
+  if (input.maxOrderQuantity != null) {
+    const maxOrderQty = resolveMaxOrderQuantity(input.maxOrderQuantity);
+    const totalForProduct = totalCartQuantityForProduct(input.items, input.productId);
+    if (totalForProduct >= maxOrderQty) {
+      return { ok: false, reason: "max_order", maxOrderQty };
+    }
   }
   const stock = input.availableQuantity;
   if (stock != null && Number.isFinite(stock) && input.currentLineQuantity >= stock) {
-    return { ok: false, reason: "stock", maxOrderQty };
+    return { ok: false, reason: "stock", maxOrderQty: resolveMaxOrderQuantity(input.maxOrderQuantity) };
   }
   return { ok: true };
 }
@@ -72,10 +74,13 @@ export function clampAddToCartQuantity(input: {
   availableQuantity?: number;
 }): number {
   const requested = Math.max(1, Math.floor(input.requestedQty));
-  const maxOrderQty = resolveMaxOrderQuantity(input.maxOrderQuantity);
-  const otherLinesQty = totalCartQuantityForProduct(input.items, input.productId, input.lineId);
-  const roomByMax = Math.max(0, maxOrderQty - otherLinesQty);
-  let qty = Math.min(requested, roomByMax);
+  let qty = requested;
+  if (input.maxOrderQuantity != null) {
+    const maxOrderQty = resolveMaxOrderQuantity(input.maxOrderQuantity);
+    const otherLinesQty = totalCartQuantityForProduct(input.items, input.productId, input.lineId);
+    const roomByMax = Math.max(0, maxOrderQty - otherLinesQty);
+    qty = Math.min(qty, roomByMax);
+  }
   const stock = input.availableQuantity;
   if (stock != null && Number.isFinite(stock)) {
     qty = Math.min(qty, Math.max(0, stock));

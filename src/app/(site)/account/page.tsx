@@ -40,6 +40,7 @@ export default async function AccountPage() {
 
   const displayEmail =
     user?.email && !isSyntheticPhoneSignupEmail(user.email) ? user.email : null;
+  const needsRecoveryEmail = Boolean(user?.email && isSyntheticPhoneSignupEmail(user.email));
 
   return (
     <section className="pt-36 pb-16">
@@ -73,7 +74,7 @@ export default async function AccountPage() {
                 </div>
               </dl>
             </div>
-            <ChangePasswordCard userId={session.sub} />
+            <ChangePasswordCard userId={session.sub} needsRecoveryEmail={needsRecoveryEmail} />
           </div>
 
           <div className="flex flex-col gap-8">

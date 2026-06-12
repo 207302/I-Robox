@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
+import { linkRecoveryEmailAfterOtp } from "@/lib/auth/linkRecoveryEmailAfterOtp";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 export async function POST(req: NextRequest) {
@@ -67,7 +68,9 @@ export async function POST(req: NextRequest) {
         data: { used_at: new Date() },
       });
     });
-  
+
+    await linkRecoveryEmailAfterOtp(userId, otpRecord.id);
+
     return NextResponse.json({ ok: true });
   
   });}

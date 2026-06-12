@@ -6,7 +6,15 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { sendEmail } from "@/lib/email";
 import { validateCommonEmailProvider, validateEmail } from "@/lib/validateEmai";
 import { getSession } from "@/lib/auth/session";
-import { cleanText, isUuid, normalizePhone, readJsonBody, hasSuspiciousInput } from "@/lib/validation/input";
+import {
+  cleanText,
+  isUuid,
+  normalizeEmail,
+  normalizePhone,
+  readJsonBody,
+  hasSuspiciousInput,
+} from "@/lib/validation/input";
+import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 function generateOtpCode() {
@@ -33,6 +41,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
     const identifier = cleanText(body.identifier, 320);
+    const recoveryEmailRaw = cleanText(body.recoveryEmail, 320);
     const requestedUserId = typeof body.userId === "string" ? body.userId : "";
     const session = await getSession();
   
@@ -68,7 +77,44 @@ export async function POST(req: NextRequest) {
     if (requestedUserId && session?.sub && session.sub !== user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
-  
+
+    const phoneOnlyAccount = isSyntheticPhoneSignupEmail(user.email);
+    let otpDeliveryEmail = user.email;
+
+    if (phoneOnlyAccount) {
+      if (!recoveryEmailRaw) {
+        return NextResponse.json(
+          {
+            error: "This account has no email on file. Enter a Gmail address to receive your OTP.",
+            needsRecoveryEmail: true,
+            userId: user.id,
+          },
+          { status: 400 }
+        );
+      }
+      const normalizedRecoveryEmail = normalizeEmail(recoveryEmailRaw);
+      if (!validateEmail(normalizedRecoveryEmail)) {
+        return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
+      }
+      if (!validateCommonEmailProvider(normalizedRecoveryEmail)) {
+        return NextResponse.json(
+          { error: "Use a common email provider (Gmail, Yahoo, Outlook, etc.)" },
+          { status: 400 }
+        );
+      }
+      const emailTaken = await prisma.customers.findFirst({
+        where: { email: normalizedRecoveryEmail, NOT: { id: user.id } },
+        select: { id: true },
+      });
+      if (emailTaken) {
+        return NextResponse.json(
+          { error: "That email is already linked to another account" },
+          { status: 409 }
+        );
+      }
+      otpDeliveryEmail = normalizedRecoveryEmail;
+    }
+
     const otpCode = generateOtpCode();
     const otpCodeHash = await bcrypt.hash(otpCode, 12);
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -76,14 +122,14 @@ export async function POST(req: NextRequest) {
     await prisma.signup_email_otps.create({
       data: {
         customer_id: user.id,
-        email: user.email,
+        email: otpDeliveryEmail,
         code_hash: otpCodeHash,
         expires_at: otpExpiresAt,
       },
     });
-  
+
     const emailResult = await sendEmail({
-      to: user.email,
+      to: otpDeliveryEmail,
       subject: "Your password reset OTP code",
       html: `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
@@ -99,6 +145,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       userId: user.id,
       emailSent: !emailResult?.skipped,
+      sentTo: otpDeliveryEmail,
       ...(canExposeOtpForDebug() && emailResult?.skipped ? { devOtp: otpCode } : {}),
     });
   

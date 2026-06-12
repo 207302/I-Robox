@@ -54,6 +54,9 @@ export default function LoginClient() {
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
   const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [needsRecoveryEmail, setNeedsRecoveryEmail] = useState(false);
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -132,20 +135,53 @@ export default function LoginClient() {
       toast.error("Enter your email or phone first");
       return;
     }
+
+    const trimmedId = identifier.trim();
+    const looksLikeEmail = trimmedId.includes("@");
+    if (trimmedId && !looksLikeEmail && !recoveryEmail.trim()) {
+      setNeedsRecoveryEmail(true);
+      toast.error("Enter your Gmail address below to receive the OTP.");
+      return;
+    }
+
+    if (needsRecoveryEmail || !looksLikeEmail) {
+      const email = recoveryEmail.trim().toLowerCase();
+      if (!email) {
+        toast.error("Enter your Gmail address to receive the OTP");
+        return;
+      }
+      if (!validateCommonEmailProvider(email)) {
+        toast.error("Use a common email provider (Gmail, Yahoo, Outlook, etc.)");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth/request-password-otp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ identifier }),
+        body: JSON.stringify({
+          identifier,
+          ...(!looksLikeEmail || needsRecoveryEmail ? { recoveryEmail: recoveryEmail.trim() } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Could not send OTP");
+      if (!res.ok) {
+        if (data?.needsRecoveryEmail) {
+          setNeedsRecoveryEmail(true);
+          if (typeof data?.userId === "string") setResetUserId(data.userId);
+        }
+        throw new Error(data?.error || "Could not send OTP");
+      }
       setResetUserId(typeof data?.userId === "string" ? data.userId : null);
       setDevOtpHint(typeof data?.devOtp === "string" ? data.devOtp : null);
+      setOtpSentTo(typeof data?.sentTo === "string" ? data.sentTo : null);
       setMode("forgot");
       toast.success(
-        data?.emailSent ? "OTP sent successfully." : "Email is not configured. Use the dev OTP shown."
+        data?.emailSent
+          ? `OTP sent to ${data?.sentTo ?? "your email"}.`
+          : "Email is not configured. Use the dev OTP shown."
       );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -172,6 +208,9 @@ export default function LoginClient() {
       setOtp("");
       setNewPassword("");
       setResetUserId(null);
+      setRecoveryEmail("");
+      setNeedsRecoveryEmail(false);
+      setOtpSentTo(null);
       setDevOtpHint(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -255,7 +294,9 @@ export default function LoginClient() {
           </h1>
           <p className="mt-2 text-sm text-meta-3">
             {mode === "forgot"
-              ? "Use the OTP sent to your email to set a new password."
+              ? otpSentTo
+                ? `Use the OTP sent to ${otpSentTo} to set a new password.`
+                : "Use the OTP sent to your email to set a new password."
               : mode === "login"
                 ? "Sign in to access your orders, wishlist, and faster checkout."
                 : "Create an account for faster checkout and order tracking."}
@@ -367,19 +408,42 @@ export default function LoginClient() {
                   {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
                 </button>
                 {mode === "login" ? (
-                  <button
-                    type="button"
-                    onClick={handleRequestPasswordOtp}
-                    disabled={loading}
-                    className="w-full text-sm font-medium text-blue hover:underline disabled:opacity-60"
-                  >
-                    Forgot password?
-                  </button>
+                  <>
+                    {needsRecoveryEmail || (identifier.trim() && !identifier.trim().includes("@")) ? (
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium text-dark">
+                          Email for OTP
+                        </span>
+                        <input
+                          type="email"
+                          value={recoveryEmail}
+                          onChange={(e) => setRecoveryEmail(e.target.value)}
+                          placeholder="you@gmail.com"
+                          autoComplete="email"
+                          className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                        />
+                        <span className="mt-1 block text-xs text-meta-4">
+                          Required for mobile-number accounts — OTP is sent here, not to your phone.
+                        </span>
+                      </label>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleRequestPasswordOtp}
+                      disabled={loading}
+                      className="w-full text-sm font-medium text-blue hover:underline disabled:opacity-60"
+                    >
+                      Forgot password?
+                    </button>
+                  </>
                 ) : null}
               </form>
             </>
           ) : mode === "forgot" ? (
             <form onSubmit={handleResetPassword} className="mt-6 space-y-4">
+              {otpSentTo ? (
+                <p className="text-sm text-meta-3">OTP sent to {otpSentTo}</p>
+              ) : null}
               {devOtpHint ? (
                 <p className="rounded-md bg-yellow-light-4 px-3 py-2 text-xs text-dark">
                   Dev OTP (email not configured): <b>{devOtpHint}</b>
@@ -421,6 +485,9 @@ export default function LoginClient() {
                   setOtp("");
                   setNewPassword("");
                   setResetUserId(null);
+                  setRecoveryEmail("");
+                  setNeedsRecoveryEmail(false);
+                  setOtpSentTo(null);
                   setDevOtpHint(null);
                 }}
                 className="w-full rounded-lg border border-gray-3 bg-white px-4 py-2.5 text-sm font-medium text-meta-3 hover:text-dark transition disabled:opacity-60"

@@ -2,30 +2,54 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { validateCommonEmailProvider } from "@/lib/validateEmai";
 import PasswordInput from "./PasswordInput";
 
 type Props = {
   userId: string;
+  needsRecoveryEmail?: boolean;
 };
 
-export default function ChangePasswordCard({ userId }: Props) {
+export default function ChangePasswordCard({ userId, needsRecoveryEmail = false }: Props) {
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
 
   async function handleSendOtp() {
+    if (needsRecoveryEmail) {
+      const email = recoveryEmail.trim().toLowerCase();
+      if (!email) {
+        toast.error("Enter your Gmail address to receive the OTP");
+        return;
+      }
+      if (!validateCommonEmailProvider(email)) {
+        toast.error("Use a common email provider (Gmail, Yahoo, Outlook, etc.)");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/auth/request-password-otp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({
+          userId,
+          ...(needsRecoveryEmail ? { recoveryEmail: recoveryEmail.trim() } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not send OTP");
       setDevOtpHint(typeof data?.devOtp === "string" ? data.devOtp : null);
-      toast.success(data?.emailSent ? "OTP sent to your email." : "Use the dev OTP shown.");
+      setOtpSentTo(typeof data?.sentTo === "string" ? data.sentTo : null);
+      toast.success(
+        data?.emailSent
+          ? `OTP sent to ${data?.sentTo ?? "your email"}.`
+          : "Use the dev OTP shown."
+      );
     } catch (err: any) {
       toast.error(err?.message || "Something went wrong");
     } finally {
@@ -48,6 +72,7 @@ export default function ChangePasswordCard({ userId }: Props) {
       setOtp("");
       setNewPassword("");
       setDevOtpHint(null);
+      setOtpSentTo(null);
     } catch (err: any) {
       toast.error(err?.message || "Something went wrong");
     } finally {
@@ -59,8 +84,28 @@ export default function ChangePasswordCard({ userId }: Props) {
     <div className="rounded-2xl border border-gray-3 bg-white p-6">
       <h2 className="text-lg font-semibold text-dark">Change password</h2>
       <p className="mt-2 text-sm text-meta-3">
-        Request an OTP and use it to set a new password.
+        {needsRecoveryEmail
+          ? "Your account was created with a mobile number only. Enter a Gmail address to receive the OTP, then set a new password."
+          : "Request an OTP and use it to set a new password."}
       </p>
+
+      {needsRecoveryEmail ? (
+        <label className="mt-4 block">
+          <span className="mb-1 block text-sm font-medium text-dark">Email for OTP</span>
+          <input
+            type="email"
+            value={recoveryEmail}
+            onChange={(e) => setRecoveryEmail(e.target.value)}
+            placeholder="you@gmail.com"
+            autoComplete="email"
+            className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+          />
+          <span className="mt-1 block text-xs text-meta-4">
+            Use Gmail, Yahoo, Outlook, or another common provider.
+          </span>
+        </label>
+      ) : null}
+
       <button
         type="button"
         onClick={handleSendOtp}
@@ -69,17 +114,24 @@ export default function ChangePasswordCard({ userId }: Props) {
       >
         Send OTP
       </button>
+
+      {otpSentTo ? (
+        <p className="mt-3 text-xs text-meta-3">OTP sent to {otpSentTo}</p>
+      ) : null}
+
       {devOtpHint ? (
         <p className="mt-3 rounded-md bg-yellow-light-4 px-3 py-2 text-xs text-dark">
           Dev OTP (email not configured): <b>{devOtpHint}</b>
         </p>
       ) : null}
+
       <form onSubmit={handleChangePassword} className="mt-4 space-y-3">
         <input
           value={otp}
           onChange={(e) => setOtp(e.target.value)}
           placeholder="OTP"
           required
+          inputMode="numeric"
           className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />
         <PasswordInput

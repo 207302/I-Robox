@@ -37,6 +37,7 @@ import {
 } from "@/lib/marketing/freeShipping";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { allocateNextOrderNumber, formatOrderReference } from "@/lib/orders/orderNumber";
+import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 type CheckoutItem = {
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
         shipping_per_unit: true,
         max_order_quantity: true,
         category_id: true,
+        brand_id: true,
       },
     });
     const productMap = new Map(dbProducts.map((p) => [p.id, p]));
@@ -128,11 +130,24 @@ export async function POST(req: NextRequest) {
       if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
         return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
       }
-      const p = productMap.get(item.productId)!;
-      const maxOrderQty = Math.max(1, Number(p.max_order_quantity ?? 99));
-      if (item.quantity > maxOrderQty) {
-        return NextResponse.json({ error: `${p.name} allows max ${maxOrderQty} per order` }, { status: 400 });
+    }
+    try {
+      assertMaxOrderQuantities(items, productMap);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.startsWith("MAX_ORDER_QTY_EXCEEDED:")) {
+        const [, productName, maxRaw] = msg.split(":");
+        const maxQty = Number(maxRaw);
+        return NextResponse.json(
+          {
+            error: Number.isFinite(maxQty)
+              ? `${productName || "This item"} allows max ${maxQty} per order`
+              : "One or more items exceed the per-order quantity limit",
+          },
+          { status: 400 }
+        );
       }
+      throw e;
     }
   
     let checkoutUserId: string | null = null;

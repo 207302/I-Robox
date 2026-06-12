@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { expandCategoryIdsWithDescendants } from "@/lib/shop/categoryTree";
 
 export type CartLineForCoupon = {
   productId: string;
@@ -50,6 +51,8 @@ export async function fetchCouponForCart(code: string): Promise<CouponForCart | 
     },
   });
   if (!c) return null;
+  const rawCategoryIds = c.coupon_categories.map((x) => x.category_id);
+  const categoryIds = await expandCategoryIdsWithDescendants(rawCategoryIds);
   return {
     id: c.id,
     code: c.code,
@@ -60,7 +63,7 @@ export async function fetchCouponForCart(code: string): Promise<CouponForCart | 
     ends_at: c.ends_at,
     max_uses: c.max_uses,
     max_uses_per_user: c.max_uses_per_user,
-    categoryIds: c.coupon_categories.map((x) => x.category_id),
+    categoryIds,
     brandIds: c.coupon_brands.map((x) => x.brand_id),
     productIds: c.coupon_products.map((x) => x.product_id),
   };
@@ -77,19 +80,19 @@ export function lineMatchesCouponScope(line: CartLineForCoupon, scope: CouponSco
   const allowedBrands = new Set(scope.brandIds);
   const allowedProducts = new Set(scope.productIds);
 
-  if (
-    scope.categoryIds.length > 0 &&
-    (!line.categoryId || !allowedCategories.has(line.categoryId))
-  ) {
-    return false;
+  const matches: boolean[] = [];
+  if (scope.categoryIds.length > 0) {
+    matches.push(line.categoryId != null && allowedCategories.has(line.categoryId));
   }
-  if (scope.brandIds.length > 0 && (!line.brandId || !allowedBrands.has(line.brandId))) {
-    return false;
+  if (scope.brandIds.length > 0) {
+    matches.push(line.brandId != null && allowedBrands.has(line.brandId));
   }
-  if (scope.productIds.length > 0 && !allowedProducts.has(line.productId)) {
-    return false;
+  if (scope.productIds.length > 0) {
+    matches.push(allowedProducts.has(line.productId));
   }
-  return true;
+
+  // Inclusion lists are combined with OR — a line qualifies if it matches any configured scope.
+  return matches.some(Boolean);
 }
 
 export function eligibleCouponLines<T extends CartLineForCoupon>(lines: T[], scope: CouponScope): T[] {

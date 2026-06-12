@@ -20,6 +20,7 @@ type ProductActionsProps = {
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
+  maxOrderQuantity?: number;
   color?: string;
   size?: string;
 };
@@ -37,7 +38,7 @@ export default function ProductActions(props: ProductActionsProps) {
       return;
     }
 
-    addItem({
+    const added = addItem({
       id: props.lineId,
       productId: props.productId,
       variantId: props.variantId ?? null,
@@ -48,13 +49,14 @@ export default function ProductActions(props: ProductActionsProps) {
       image: props.image,
       slug: props.slug,
       availableQuantity: props.quantity,
+      maxOrderQuantity: props.maxOrderQuantity,
       shippingPerUnit: Number(props.shippingPerUnit ?? 0),
       brandId: props.brandId ?? null,
       color: props.color ?? "",
       size: props.size ?? "",
       quantity: 1,
     });
-    toast.success("Product added to cart!");
+    if (added) toast.success("Product added to cart!");
   }
 
   function handleWishlist() {

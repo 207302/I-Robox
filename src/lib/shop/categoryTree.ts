@@ -154,3 +154,18 @@ export async function categoryIdsForFilterSlugs(slugs: string[]): Promise<Set<st
   }
   return idSet;
 }
+
+/** Expand admin-selected category ids to include all descendant categories. */
+export async function expandCategoryIdsWithDescendants(categoryIds: string[]): Promise<string[]> {
+  if (categoryIds.length === 0) return [];
+  const tree = await loadCategoryTreeRows();
+  if (tree.length === 0) return [...new Set(categoryIds)];
+  const childrenByParent = buildChildrenIndex(tree);
+  const out = new Set<string>();
+  for (const id of categoryIds) {
+    for (const descId of descendantCategoryIdsFromIndex(id, childrenByParent)) {
+      out.add(descId);
+    }
+  }
+  return [...out];
+}

@@ -760,6 +760,7 @@ export default function ShopLiveExperience({
             ageGroup: item.ageGroup,
             diecastScale: item.diecastScale,
             shippingPerUnit: item.shippingPerUnit,
+            brandId: item.brandId ?? null,
             productVariants: item.productVariants,
             product_images: item.product_images,
             image: item.image,

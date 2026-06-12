@@ -50,6 +50,8 @@ const SingleItem = ({ item }: { item: Product }) => {
     image: defaultVariant?.image ? defaultVariant.image : "",
     slug: item?.slug,
     availableQuantity: item.quantity,
+    maxOrderQuantity: item.maxOrderQuantity,
+    brandId: item.brandId ?? null,
     color: defaultVariant?.color ? defaultVariant.color : "",
     size: defaultVariant?.size ? defaultVariant.size : "",
   };
@@ -70,9 +72,8 @@ const SingleItem = ({ item }: { item: Product }) => {
   // add to cart
   const handleAddToCart = () => {
     if (item.quantity > 0) {
-      // @ts-ignore
-      addItem(cartItem);
-      toast.success("Product added to cart!");
+      const added = addItem(cartItem);
+      if (added) toast.success("Product added to cart!");
     } else {
       toast.error("This product is out of stock!");
     }

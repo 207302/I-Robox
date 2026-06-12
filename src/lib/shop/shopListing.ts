@@ -27,6 +27,8 @@ export type ShopListingItem = {
   shippingPerUnit: number;
   slug: string;
   quantity: number;
+  maxOrderQuantity: number;
+  brandId?: string | null;
   updatedAt: Date;
   reviews: number;
   product_images: { url: string; sort_order: number }[];
@@ -74,6 +76,8 @@ function mapProductsToItems(
     updated_at: Date;
     sku: string | null;
     shipping_per_unit: { toString(): string } | number | null;
+    max_order_quantity: number | null;
+    brand_id: string | null;
     product_images: { url: string; sort_order: number }[];
     product_variants: {
       name: string | null;
@@ -107,6 +111,8 @@ function mapProductsToItems(
       shippingPerUnit: Number(p.shipping_per_unit ?? 0),
       slug: p.slug,
       quantity,
+      maxOrderQuantity: p.max_order_quantity ?? 99,
+      brandId: p.brand_id ?? null,
       updatedAt: p.updated_at,
       reviews: 0,
       product_images: images,
@@ -169,6 +175,8 @@ async function executeShopListingFromState(
     updated_at: true,
     sku: true,
     shipping_per_unit: true,
+    max_order_quantity: true,
+    brand_id: true,
     product_images: { select: { url: true, sort_order: true } },
     product_variants: {
       select: {

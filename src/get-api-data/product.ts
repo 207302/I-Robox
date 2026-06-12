@@ -49,6 +49,8 @@ export const getNewArrivalsProduct = unstable_cache(
         product_images: { select: { url: true, sort_order: true } },
         sku: true,
         shipping_per_unit: true,
+        max_order_quantity: true,
+        brand_id: true,
       },
       take: 24
     });
@@ -62,6 +64,8 @@ export const getNewArrivalsProduct = unstable_cache(
       discountedPrice: item.discounted_price ? Number(item.discounted_price) : null,
       slug: item.slug,
       quantity: getInventoryQuantity(item.inventory),
+      maxOrderQuantity: item.max_order_quantity ?? 99,
+      brandId: item.brand_id ?? null,
       sku: item.sku ?? "",
       shippingPerUnit: Number(item.shipping_per_unit ?? 0),
       diecastScale: item.diecast_scales?.ratio ?? null,
@@ -111,6 +115,8 @@ const bestSellerProductSelect = {
   product_images: { select: { url: true, sort_order: true } },
   sku: true,
   shipping_per_unit: true,
+  max_order_quantity: true,
+  brand_id: true,
 } satisfies Prisma.productsSelect;
 
 type BestSellerProductRow = Prisma.productsGetPayload<{
@@ -127,6 +133,8 @@ const mapProductToHomeCard = (item: BestSellerProductRow) => ({
   discountedPrice: item.discounted_price ? Number(item.discounted_price) : null,
   slug: item.slug,
   quantity: getInventoryQuantity(item.inventory),
+  maxOrderQuantity: item.max_order_quantity ?? 99,
+  brandId: item.brand_id ?? null,
   sku: item.sku ?? "",
   shippingPerUnit: Number(item.shipping_per_unit ?? 0),
   diecastScale: item.diecast_scales?.ratio ?? null,
@@ -261,6 +269,7 @@ async function loadProductBySlug(slug: string) {
       inventory: { select: { available_quantity: true } },
       sku: true,
       shipping_per_unit: true,
+      max_order_quantity: true,
     },
   });
   if (!product) return null;
@@ -285,9 +294,10 @@ async function loadProductBySlug(slug: string) {
     discountedPrice: flashPrice ?? (product.discounted_price ? Number(product.discounted_price) : null),
     slug: product.slug,
     quantity: getInventoryQuantity(product.inventory),
+    maxOrderQuantity: product.max_order_quantity ?? 99,
+    brandId: product.brand_id ?? null,
     sku: product.sku ?? "",
     shippingPerUnit: Number(product.shipping_per_unit ?? 0),
-    brandId: product.brand_id,
     tags: [],
     offers: "",
     updatedAt: product.updated_at,

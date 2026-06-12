@@ -10,6 +10,7 @@ import { buildCheckoutContext } from "@/lib/checkout/buildCheckoutContext";
 import { unsealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, verifyRazorpayPaymentSignature } from "@/lib/payments/razorpay";
 import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
+import { allocateNextOrderNumber } from "@/lib/orders/orderNumber";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -101,10 +102,14 @@ export async function POST(req: NextRequest) {
           },
           select: { id: true },
         });
-  
+
+        const order_number = await allocateNextOrderNumber(tx);
+
         const order = await tx.orders.create({
           data: {
+            order_number,
             customer_id: ctx.checkoutUserId,
+            status: "PENDING",
             payment_status: "SUCCEEDED",
             subtotal_amount: ctx.subtotal,
             discount_amount: ctx.discount,
@@ -120,7 +125,7 @@ export async function POST(req: NextRequest) {
             is_gift: ctx.isGift,
             gift_message: ctx.giftMessage,
           },
-          select: { id: true, customer_id: true },
+          select: { id: true, customer_id: true, order_number: true },
         });
   
         for (const li of ctx.lineItems) {
@@ -197,6 +202,7 @@ export async function POST(req: NextRequest) {
         {
           ok: true,
           orderId: created.id,
+          orderNumber: created.order_number,
           accessToken,
           checkoutLinkedAs: ctx.checkoutLinkedAs,
           passwordSetupIncluded: Boolean(ctx.newAccountPasswordSetup),
@@ -205,6 +211,11 @@ export async function POST(req: NextRequest) {
         { status: 201 }
       );
     } catch (e: any) {
+      console.error("[razorpay/verify] order creation failed", {
+        message: e?.message,
+        code: e?.code,
+        meta: e?.meta,
+      });
       if (String(e?.message ?? "") === "OUT_OF_STOCK") {
         return NextResponse.json({ error: "Item went out of stock while paying" }, { status: 409 });
       }

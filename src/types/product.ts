@@ -8,6 +8,8 @@ export type Product = {
   shippingPerUnit?: number;
   slug: string;
   quantity: number;
+  maxOrderQuantity?: number;
+  brandId?: string | null;
   updatedAt: Date;
   reviews: number;
   shortDescription: string;

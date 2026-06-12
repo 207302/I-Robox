@@ -24,6 +24,7 @@ import {
   formatVariantLabel,
   pickDefaultVariant,
 } from "@/lib/cart/cartLine";
+import { resolveMaxOrderQuantity } from "@/lib/cart/maxOrderQuantity";
 import type { CartItem } from "@/redux/features/cart-slice";
 import ReviewStar from "../Shop/ReviewStar";
 import {
@@ -71,6 +72,13 @@ const QuickViewModal = () => {
   const cartLineId = product?.id
     ? buildCartLineId(String(product.id), defaultVariant?.id, hasVariants)
     : "";
+  const maxOrderQty = resolveMaxOrderQuantity(
+    (product as { maxOrderQuantity?: number }).maxOrderQuantity
+  );
+  const maxSelectableQty = Math.min(
+    product?.quantity ?? 0,
+    maxOrderQty
+  );
 
   // preview modal
   const handlePreviewSlider = () => {
@@ -98,13 +106,17 @@ const QuickViewModal = () => {
       image: cardImage,
       slug: product?.slug,
       availableQuantity: product.quantity,
+      maxOrderQuantity: maxOrderQty,
+      brandId: (product as { brandId?: string | null }).brandId ?? null,
       color: defaultVariant?.color ? defaultVariant.color : "",
       size: defaultVariant?.size ? defaultVariant.size : "",
     };
     if (product.quantity > 0) {
-      addItem(cartItem);
-      toast.success("Product added to cart!");
-      closeModal();
+      const added = addItem({ ...cartItem, quantity });
+      if (added) {
+        toast.success("Product added to cart!");
+        closeModal();
+      }
     } else {
       toast.error("This product is out of stock!");
     }
@@ -400,8 +412,11 @@ const QuickViewModal = () => {
 
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={() => setQuantity(quantity + 1)}
-                          className="flex items-center justify-center w-10 h-10 duration-200 ease-out rounded-lg bg-gray-2 text-dark hover:text-blue"
+                          onClick={() =>
+                            setQuantity((q) => Math.min(maxSelectableQty, q + 1))
+                          }
+                          disabled={quantity >= maxSelectableQty}
+                          className="flex items-center justify-center w-10 h-10 duration-200 ease-out rounded-lg bg-gray-2 text-dark hover:text-blue disabled:opacity-50"
                         >
                           <span className="sr-only">Increase quantity</span>
                           <PlusIcon />

@@ -24,6 +24,7 @@ import {
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { generatePasswordSetupSecret, PASSWORD_SETUP_TTL_MS } from "@/lib/auth/passwordSetupToken";
+import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
 import bcrypt from "bcrypt";
 
 type CheckoutItem = {
@@ -131,12 +132,8 @@ export async function buildCheckoutContext(input: {
     if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
       throw new Error("INVALID_QUANTITY");
     }
-    const p = productMap.get(item.productId)!;
-    const maxOrderQty = Math.max(1, Number(p.max_order_quantity ?? 99));
-    if (item.quantity > maxOrderQty) {
-      throw new Error(`MAX_ORDER_QTY_EXCEEDED:${p.name}:${maxOrderQty}`);
-    }
   }
+  assertMaxOrderQuantities(items, productMap);
 
   let checkoutUserId: string | null = null;
   let checkoutEmail = email;

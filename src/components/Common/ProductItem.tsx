@@ -108,6 +108,8 @@ function ProductItemInner({
       image: cardImage,
       slug: item?.slug,
       availableQuantity: item.quantity,
+      maxOrderQuantity: item.maxOrderQuantity,
+      brandId: item.brandId ?? null,
       color: cartVariant?.color ? cartVariant.color : "",
       size: cartVariant?.size ? cartVariant.size : "",
     }),
@@ -125,8 +127,8 @@ function ProductItemInner({
 
   const handleAddToCart = useCallback(() => {
     if (item.quantity > 0) {
-      addItem(cartItem);
-      toast.success("Product added to cart!");
+      const added = addItem(cartItem);
+      if (added) toast.success("Product added to cart!");
     } else {
       toast.error("This product is out of stock!");
     }

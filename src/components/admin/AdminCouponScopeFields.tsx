@@ -61,7 +61,8 @@ export function AdminCouponScopeFields({
       <div>
         <span className="mb-2 block text-sm font-medium text-dark">Allowed categories (optional)</span>
         <p className="text-xs text-meta-3 mb-2">
-          Discount applies only to cart lines in these categories. Other items are unchanged.
+          Discount applies to cart lines in these categories (including all subcategories). Other
+          items are unchanged.
         </p>
         <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
           {categories.length === 0 ? (
@@ -89,7 +90,7 @@ export function AdminCouponScopeFields({
       <div>
         <span className="mb-2 block text-sm font-medium text-dark">Allowed brands (optional)</span>
         <p className="text-xs text-meta-3 mb-2">
-          If any are selected, <strong>every</strong> cart line must belong to one of these brands.
+          Discount applies to cart lines from these brands. Other items are unchanged.
         </p>
         <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
           {brands.length === 0 ? (

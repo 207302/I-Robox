@@ -175,6 +175,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               quantity={product.quantity}
               shippingPerUnit={product.shippingPerUnit ?? 0}
               brandId={product.brandId ?? null}
+              maxOrderQuantity={product.maxOrderQuantity}
               variants={variantsForSelector}
               fallbackImage={galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER}
               galleryId={galleryId}

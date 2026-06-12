@@ -1,4 +1,9 @@
 import { normalizeCartItem } from "@/lib/cart/cartLine";
+import {
+  clampAddToCartQuantity,
+  resolveMaxOrderQuantity,
+  totalCartQuantityForProduct,
+} from "@/lib/cart/maxOrderQuantity";
 import { createSelector, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../store";
 
@@ -23,6 +28,7 @@ export type CartItem = {
   image?: string;
   slug?: string;
   availableQuantity?: number;
+  maxOrderQuantity?: number;
   color?: string;
   size?: string;
   attribute?: any;
@@ -46,13 +52,28 @@ export const cart = createSlice({
     addItemToCart: (state, action: PayloadAction<CartItem>) => {
       const item = normalizeCartItem(action.payload);
       const existingItem = state.items.find((i) => i.id === item.id);
+      const requestedQty = item.quantity || 1;
+      const cappedQty = clampAddToCartQuantity({
+        items: state.items,
+        productId: item.productId,
+        lineId: item.id,
+        requestedQty: existingItem ? existingItem.quantity + requestedQty : requestedQty,
+        maxOrderQuantity: item.maxOrderQuantity,
+        availableQuantity: item.availableQuantity,
+      });
+
+      if (cappedQty <= 0) return;
 
       if (existingItem) {
-        existingItem.quantity += item.quantity || 1;
+        existingItem.quantity = cappedQty;
+        if (item.maxOrderQuantity != null) {
+          existingItem.maxOrderQuantity = resolveMaxOrderQuantity(item.maxOrderQuantity);
+        }
       } else {
         state.items.push({
           ...item,
-          quantity: item.quantity || 1,
+          quantity: cappedQty,
+          maxOrderQuantity: resolveMaxOrderQuantity(item.maxOrderQuantity),
         });
       }
     },
@@ -64,9 +85,16 @@ export const cart = createSlice({
       const itemId = action.payload;
       const existingItem = state.items.find((item) => item.id === itemId);
 
-      if (existingItem) {
-        existingItem.quantity += 1;
-      }
+      if (!existingItem) return;
+
+      const maxOrderQty = resolveMaxOrderQuantity(existingItem.maxOrderQuantity);
+      const totalForProduct = totalCartQuantityForProduct(state.items, existingItem.productId);
+      if (totalForProduct >= maxOrderQty) return;
+
+      const stock = existingItem.availableQuantity;
+      if (stock != null && Number.isFinite(stock) && existingItem.quantity >= stock) return;
+
+      existingItem.quantity += 1;
     },
     decrementItem: (state, action: PayloadAction<string | number>) => {
       const itemId = action.payload;
@@ -86,9 +114,23 @@ export const cart = createSlice({
       const { id, quantity } = action.payload;
       const existingItem = state.items.find((item) => item.id === id);
 
-      if (existingItem) {
-        existingItem.quantity = quantity;
+      if (!existingItem) return;
+
+      const cappedQty = clampAddToCartQuantity({
+        items: state.items,
+        productId: existingItem.productId,
+        lineId: id,
+        requestedQty: quantity,
+        maxOrderQuantity: existingItem.maxOrderQuantity,
+        availableQuantity: existingItem.availableQuantity,
+      });
+
+      if (cappedQty <= 0) {
+        state.items = state.items.filter((item) => item.id !== id);
+        return;
       }
+
+      existingItem.quantity = cappedQty;
     },
     clearCart: (state) => {
       state.items = [];

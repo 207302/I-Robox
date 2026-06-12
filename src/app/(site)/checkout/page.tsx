@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
 import { formatPrice } from "@/utils/formatePrice";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
+import { checkoutItemsFromCart } from "@/lib/checkout/checkoutCartItems";
 import { toRazorpayPrefillContact } from "@/lib/marketing/contactPhoneUtils";
 import { useSession } from "@/hooks/useSession";
 import { usePublicMarketing } from "@/hooks/usePublicMarketing";
@@ -24,6 +25,7 @@ export default function CheckoutPage() {
   const { data: marketingData } = usePublicMarketing();
   const { cartDetails, totalPrice, clearCart } = useCart();
   const items = useMemo(() => Object.values(cartDetails ?? {}), [cartDetails]);
+  const checkoutItems = useMemo(() => checkoutItemsFromCart(items), [items]);
 
   const [loading, setLoading] = useState(false);
   const [couponCode, setCouponCode] = useState("");
@@ -38,22 +40,78 @@ export default function CheckoutPage() {
   const [signedInLabel, setSignedInLabel] = useState<string | null>(null);
   const [freeShippingThresholdInr, setFreeShippingThresholdInr] = useState<number | null>(2000);
   const [freeShippingExcludedBrandIds, setFreeShippingExcludedBrandIds] = useState<string[]>([]);
+  const [deliveryCharge, setDeliveryCharge] = useState(0);
+  const [shippingPreviewLoading, setShippingPreviewLoading] = useState(false);
 
   const previewSubtotal = Number(totalPrice || 0);
 
-  const deliveryCharge = useMemo(() => {
-    return orderShippingInrFromLines({
-      subtotalBeforeDiscount: previewSubtotal,
-      lines: items.map((item) => ({
-        quantity: Number(item.quantity || 0),
-        shippingPerUnit: Math.max(0, Number(item.shippingPerUnit ?? 0)),
-        lineSubtotal: Number(item.price || 0) * Number(item.quantity || 0),
-        brandId: item.brandId ?? null,
-      })),
-      freeShippingThresholdInr,
-      freeShippingExcludedBrandIds,
-    });
-  }, [items, previewSubtotal, freeShippingThresholdInr, freeShippingExcludedBrandIds]);
+  useEffect(() => {
+    if (!items.length) {
+      setDeliveryCharge(0);
+      return;
+    }
+
+    if (checkoutItems.length === 0) {
+      setDeliveryCharge(0);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setShippingPreviewLoading(true);
+      try {
+        const res = await fetch("/api/checkout/shipping-preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            items: items.map((item) => ({
+              id: item.id,
+              productId: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok) {
+          setDeliveryCharge(Number(data.deliveryCharge ?? 0));
+          const threshold = data.freeShippingThresholdInr;
+          if (typeof threshold === "number" || threshold === null) {
+            setFreeShippingThresholdInr(threshold);
+          }
+          if (Array.isArray(data.freeShippingExcludedBrandIds)) {
+            setFreeShippingExcludedBrandIds(data.freeShippingExcludedBrandIds);
+          }
+          return;
+        }
+
+        setDeliveryCharge(
+          orderShippingInrFromLines({
+            subtotalBeforeDiscount: previewSubtotal,
+            lines: items.map((item) => ({
+              quantity: Number(item.quantity || 0),
+              shippingPerUnit: Math.max(0, Number(item.shippingPerUnit ?? 0)),
+              lineSubtotal: Number(item.price || 0) * Number(item.quantity || 0),
+              brandId: item.brandId ?? null,
+            })),
+            freeShippingThresholdInr,
+            freeShippingExcludedBrandIds,
+          })
+        );
+      } catch {
+        if (!cancelled) setDeliveryCharge(0);
+      } finally {
+        if (!cancelled) setShippingPreviewLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preview API is source of truth; fallback reads latest marketing state once per cart change
+  }, [items, checkoutItems, previewSubtotal]);
   const previewDiscount = couponBreakdown?.discount ?? 0;
   const previewTotal = Math.max(0, previewSubtotal - previewDiscount) + deliveryCharge;
 
@@ -120,11 +178,15 @@ export default function CheckoutPage() {
       toast.error("Your cart is empty");
       return;
     }
+    if (checkoutItems.length === 0) {
+      toast.error("Some cart items are invalid. Refresh the page or re-add items to cart.");
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
-        items: items.map((i) => ({
-          productId: String(i.productId ?? i.id),
+        items: checkoutItems.map((i) => ({
+          productId: i.productId,
           quantity: i.quantity,
         })),
         address,
@@ -189,7 +251,11 @@ export default function CheckoutPage() {
                 : "";
             router.replace(`/orders/${verifyData.orderId}${tokenQuery}`);
           } catch (err: any) {
-            toast.error(err?.message || "Payment was received but verification failed");
+            toast.error(
+              err?.message ||
+                "Payment succeeded but we could not create your order. Contact support with your payment receipt — do not pay again.",
+              { duration: 8000 }
+            );
           } finally {
             setLoading(false);
           }
@@ -345,7 +411,9 @@ export default function CheckoutPage() {
               ) : null}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-meta-3">Delivery charge</span>
-                <span className="font-medium text-dark">{formatPrice(deliveryCharge)}</span>
+                <span className="font-medium text-dark">
+                  {shippingPreviewLoading ? "…" : formatPrice(deliveryCharge)}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm border-t border-gray-3 pt-3">
                 <span className="font-medium text-dark">Total</span>

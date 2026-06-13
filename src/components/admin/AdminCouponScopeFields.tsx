@@ -56,6 +56,56 @@ export function AdminCouponScopeFields({
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [products, filteredProducts, selectedProducts]);
 
+  const allCategoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
+  const allBrandIds = useMemo(() => brands.map((b) => b.id), [brands]);
+  const allProductIds = useMemo(() => products.map((p) => p.id), [products]);
+
+  const allCategoriesSelected =
+    categories.length > 0 && categoryIds.length === categories.length;
+  const allBrandsSelected = brands.length > 0 && brandIds.length === brands.length;
+  const allProductsSelected = products.length > 0 && productIds.length === products.length;
+
+  function ScopeSelectAllBar({
+    selectedCount,
+    totalCount,
+    allSelected,
+    onSelectAll,
+    onClear,
+  }: {
+    selectedCount: number;
+    totalCount: number;
+    allSelected: boolean;
+    onSelectAll: () => void;
+    onClear: () => void;
+  }) {
+    if (totalCount === 0) return null;
+    return (
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-meta-3">
+          {selectedCount} of {totalCount} selected
+        </span>
+        <div className="flex items-center gap-3 text-xs font-medium">
+          <button
+            type="button"
+            disabled={allSelected}
+            onClick={onSelectAll}
+            className="text-blue hover:underline disabled:opacity-50 disabled:no-underline"
+          >
+            Select all
+          </button>
+          <button
+            type="button"
+            disabled={selectedCount === 0}
+            onClick={onClear}
+            className="text-meta-3 hover:text-dark hover:underline disabled:opacity-50 disabled:no-underline"
+          >
+            Clear all
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div>
@@ -64,6 +114,13 @@ export function AdminCouponScopeFields({
           Discount applies to cart lines in these categories (including all subcategories). Other
           items are unchanged.
         </p>
+        <ScopeSelectAllBar
+          selectedCount={categoryIds.length}
+          totalCount={categories.length}
+          allSelected={allCategoriesSelected}
+          onSelectAll={() => onCategoryIdsChange(allCategoryIds)}
+          onClear={() => onCategoryIdsChange([])}
+        />
         <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
           {categories.length === 0 ? (
             <p className="text-sm text-meta-3">No categories found.</p>
@@ -92,6 +149,13 @@ export function AdminCouponScopeFields({
         <p className="text-xs text-meta-3 mb-2">
           Discount applies to cart lines from these brands. Other items are unchanged.
         </p>
+        <ScopeSelectAllBar
+          selectedCount={brandIds.length}
+          totalCount={brands.length}
+          allSelected={allBrandsSelected}
+          onSelectAll={() => onBrandIdsChange(allBrandIds)}
+          onClear={() => onBrandIdsChange([])}
+        />
         <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
           {brands.length === 0 ? (
             <p className="text-sm text-meta-3">No brands found.</p>
@@ -127,9 +191,13 @@ export function AdminCouponScopeFields({
           placeholder="Search product name, brand, SKU…"
           className="mb-2 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />
-        {productIds.length > 0 ? (
-          <p className="mb-2 text-xs text-meta-3">{productIds.length} product(s) selected</p>
-        ) : null}
+        <ScopeSelectAllBar
+          selectedCount={productIds.length}
+          totalCount={products.length}
+          allSelected={allProductsSelected}
+          onSelectAll={() => onProductIdsChange(allProductIds)}
+          onClear={() => onProductIdsChange([])}
+        />
         <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
           {products.length === 0 ? (
             <p className="text-sm text-meta-3">Loading products…</p>

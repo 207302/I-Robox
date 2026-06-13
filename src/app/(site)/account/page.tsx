@@ -7,6 +7,7 @@ import ChangePasswordCard from "@/components/Auth/ChangePasswordCard";
 import WishlistAccountCard from "@/components/Account/WishlistAccountCard";
 import AccountAddressesCard from "@/components/Account/AccountAddressesCard";
 import AccountPhoneCard from "@/components/Account/AccountPhoneCard";
+import AccountProfileCard from "@/components/Account/AccountProfileCard";
 import { mapDbAddressToSaved } from "@/lib/account/savedAddress";
 
 export const metadata = {
@@ -32,7 +33,7 @@ export default async function AccountPage() {
 
   const user = await prisma.customers.findUnique({
     where: { id: session.sub },
-    select: { email: true, name: true, phone: true },
+    select: { email: true, name: true, phone: true, google_sub: true },
   });
 
   const addresses = await prisma.addresses.findMany({
@@ -56,6 +57,7 @@ export default async function AccountPage() {
   const displayEmail =
     user?.email && !isSyntheticPhoneSignupEmail(user.email) ? user.email : null;
   const needsRecoveryEmail = Boolean(user?.email && isSyntheticPhoneSignupEmail(user.email));
+  const emailManagedByGoogle = Boolean(user?.google_sub);
 
   return (
     <section className="pt-36 pb-16">
@@ -72,19 +74,11 @@ export default async function AccountPage() {
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,_1fr)_360px]">
           <div className="space-y-8">
-            <div className="rounded-2xl border border-gray-3 bg-white p-6">
-              <h2 className="text-lg font-semibold text-dark">Profile</h2>
-              <dl className="mt-4 space-y-3 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-meta-3">Name</dt>
-                  <dd className="font-medium text-dark">{user?.name ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-meta-3">Email</dt>
-                  <dd className="font-medium text-dark">{displayEmail ?? "—"}</dd>
-                </div>
-              </dl>
-            </div>
+            <AccountProfileCard
+              initialName={user?.name ?? null}
+              initialEmail={displayEmail}
+              emailManagedByGoogle={emailManagedByGoogle}
+            />
 
             <AccountPhoneCard initialPhone={user?.phone ?? null} />
             <ChangePasswordCard userId={session.sub} needsRecoveryEmail={needsRecoveryEmail} />

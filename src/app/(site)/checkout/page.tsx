@@ -457,7 +457,10 @@ export default function CheckoutPage() {
                       value={(address as any)[key]}
                       onChange={(e) => {
                         setAddress((a) => ({ ...a, [key]: e.target.value }));
-                        if (selectedAddressId !== "new") setSelectedAddressId("new");
+                        // Email is checkout-only (not stored on saved addresses); keep selection.
+                        if (key !== "email" && selectedAddressId !== "new") {
+                          setSelectedAddressId("new");
+                        }
                       }}
                       className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
                       required={key !== "line2"}

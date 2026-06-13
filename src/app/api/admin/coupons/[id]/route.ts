@@ -4,6 +4,7 @@ import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import {
   cleanText,
   hasSuspiciousInput,
@@ -192,4 +193,64 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ ok: true, id }, { status: 200 });
   
   });}
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return runApiRoute(async () => {
+    try {
+      assertSameOrigin(req);
+      await rateLimitStrict(`admin_coupons_delete:${req.ip ?? "unknown"}`, 1);
+    } catch (e: any) {
+      if (e?.message === "BAD_ORIGIN") {
+        return NextResponse.json({ error: "Bad origin" }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    const auth = await requireAdminWrite();
+    if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const { id } = await ctx.params;
+    if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const coupon = await prisma.coupons.findUnique({
+      where: { id },
+      select: { id: true, code: true },
+    });
+    if (!coupon) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const code = coupon.code.trim().toUpperCase();
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        const settings = await tx.site_marketing_settings.findUnique({
+          where: { id: SITE_MARKETING_SETTINGS_ID },
+          select: { first_visit_coupon_code: true },
+        });
+        if (settings?.first_visit_coupon_code?.trim().toUpperCase() === code) {
+          await tx.site_marketing_settings.update({
+            where: { id: SITE_MARKETING_SETTINGS_ID },
+            data: { first_visit_coupon_code: null },
+          });
+        }
+
+        await tx.marketing_popups.updateMany({
+          where: { suggested_coupon_code: code },
+          data: { suggested_coupon_code: null },
+        });
+
+        await tx.coupons.delete({ where: { id } });
+      });
+    } catch (e: any) {
+      if (e?.code === "P2003") {
+        return NextResponse.json(
+          { error: "Cannot delete this coupon because it is still referenced elsewhere." },
+          { status: 409 }
+        );
+      }
+      console.error("[coupons DELETE]", e);
+      return NextResponse.json({ error: "Could not delete coupon" }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  });
+}
 

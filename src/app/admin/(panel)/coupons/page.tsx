@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminCouponDeleteButton } from "@/components/admin/AdminCouponDeleteButton";
 import { prisma } from "@/lib/prisma";
 
 export const metadata = {
@@ -64,6 +65,8 @@ export default async function AdminCouponsPage() {
                   <Link href={`/admin/coupons/${c.id}`} className="text-sm font-medium text-blue hover:underline">
                     Edit
                   </Link>
+                  <span className="mx-2 text-meta-4">|</span>
+                  <AdminCouponDeleteButton couponId={c.id} couponCode={c.code} />
                 </td>
               </tr>
             ))}

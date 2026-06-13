@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { AdminCouponDeleteButton } from "@/components/admin/AdminCouponDeleteButton";
 import { AdminCouponScopeFields } from "@/components/admin/AdminCouponScopeFields";
 
 type TaxonomyItem = { id: string; name: string; slug: string };
@@ -110,13 +111,21 @@ export default function EditCouponPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-dark">Edit coupon</h1>
-        <button
-          disabled={loading}
-          onClick={save}
-          className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
-        >
-          {loading ? "Saving…" : "Save"}
-        </button>
+        <div className="flex items-center gap-3">
+          <AdminCouponDeleteButton
+            couponId={id}
+            couponCode={form.code ?? "this coupon"}
+            redirectTo="/admin/coupons"
+            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition disabled:opacity-60"
+          />
+          <button
+            disabled={loading}
+            onClick={save}
+            className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
+          >
+            {loading ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">

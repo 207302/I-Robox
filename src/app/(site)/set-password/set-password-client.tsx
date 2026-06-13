@@ -61,9 +61,9 @@ function SetPasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-3 bg-white p-8 shadow-sm space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-dark">Choose your password</h1>
+        <h1 className="text-xl font-semibold text-dark">Set your password</h1>
         <p className="mt-1 text-sm text-meta-3">
-          Set a password for your account so you can sign in to track orders.
+          Enter and confirm a new password for your account.
         </p>
       </div>
       <div>

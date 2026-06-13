@@ -74,3 +74,62 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     });
   });
 }
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return runApiRoute(async () => {
+    try {
+      assertSameOrigin(req);
+      await rateLimitStorefront(
+        `account_address_delete:ip:${req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"}`,
+        1
+      );
+    } catch (e: any) {
+      if (e?.message === "BAD_ORIGIN") {
+        return NextResponse.json({ error: "Bad origin" }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    const session = await getSession();
+    if (!session?.sub) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    try {
+      await rateLimitStorefront(`account_address_delete:user:${session.sub}`, 1);
+    } catch {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    const { id } = await ctx.params;
+    if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const owned = await prisma.addresses.findFirst({
+      where: { id, customer_id: session.sub },
+      select: { id: true, is_default_shipping: true },
+    });
+    if (!owned) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.addresses.delete({ where: { id } });
+
+      if (owned.is_default_shipping) {
+        const nextPrimary = await tx.addresses.findFirst({
+          where: { customer_id: session.sub },
+          orderBy: { created_at: "asc" },
+          select: { id: true },
+        });
+        if (nextPrimary) {
+          await tx.addresses.updateMany({
+            where: { customer_id: session.sub },
+            data: { is_default_shipping: false, is_default_billing: false },
+          });
+          await tx.addresses.update({
+            where: { id: nextPrimary.id },
+            data: { is_default_shipping: true, is_default_billing: true },
+          });
+        }
+      }
+    });
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  });
+}

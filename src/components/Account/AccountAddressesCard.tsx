@@ -29,6 +29,11 @@ const ADDRESS_FIELDS = [
   ["country", "Country", true],
 ] as const;
 
+type AddressModalState =
+  | { mode: "add" }
+  | { mode: "edit"; id: string }
+  | null;
+
 type Props = {
   addresses: SavedAddressRecord[];
 };
@@ -49,56 +54,80 @@ function addressToForm(addr: SavedAddressRecord): AddressForm {
 export default function AccountAddressesCard({ addresses: initialAddresses }: Props) {
   const router = useRouter();
   const [addresses, setAddresses] = useState(initialAddresses);
-  const [showForm, setShowForm] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [primaryLoadingId, setPrimaryLoadingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editLoading, setEditLoading] = useState(false);
+  const [modal, setModal] = useState<AddressModalState>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [primaryLoadingId, setPrimaryLoadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     setAddresses(initialAddresses);
   }, [initialAddresses]);
 
-  function openAddForm() {
-    setEditingId(null);
-    setShowForm((open) => !open);
-    if (!showForm) setForm(EMPTY_FORM);
+  useEffect(() => {
+    if (!modal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !saving) closeModal();
+    }
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [modal, saving]);
+
+  function openAddModal() {
+    setForm(EMPTY_FORM);
+    setModal({ mode: "add" });
   }
 
-  function startEdit(addr: SavedAddressRecord) {
-    setShowForm(false);
-    setEditingId(addr.id);
-    setEditForm(addressToForm(addr));
+  function openEditModal(addr: SavedAddressRecord) {
+    setForm(addressToForm(addr));
+    setModal({ mode: "edit", id: addr.id });
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditForm(EMPTY_FORM);
+  function closeModal() {
+    if (saving) return;
+    setModal(null);
+    setForm(EMPTY_FORM);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleModalSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    if (!modal) return;
+    setSaving(true);
     try {
-      const res = await fetch("/api/account/addresses", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const isEdit = modal.mode === "edit";
+      const res = await fetch(
+        isEdit ? `/api/account/addresses/${modal.id}` : "/api/account/addresses",
+        {
+          method: isEdit ? "PUT" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(form),
+        }
+      );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Could not save address");
+      if (!res.ok) {
+        throw new Error(data?.error || (isEdit ? "Could not update address" : "Could not save address"));
+      }
 
       const saved = data?.address as SavedAddressRecord | undefined;
       if (saved?.id) {
-        setAddresses((prev) => {
-          const cleared = saved.isPrimary
-            ? prev.map((a) => ({ ...a, isPrimary: false }))
-            : prev;
-          return [saved, ...cleared];
-        });
-      } else {
+        if (isEdit) {
+          setAddresses((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
+        } else {
+          setAddresses((prev) => {
+            const cleared = saved.isPrimary
+              ? prev.map((a) => ({ ...a, isPrimary: false }))
+              : prev;
+            return [saved, ...cleared];
+          });
+        }
+      } else if (!isEdit) {
         const listRes = await fetch("/api/account/addresses");
         const listData = await listRes.json().catch(() => ({}));
         if (Array.isArray(listData?.addresses)) {
@@ -106,43 +135,41 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
         }
       }
 
-      toast.success("Address saved");
-      setForm(EMPTY_FORM);
-      setShowForm(false);
+      toast.success(isEdit ? "Address updated" : "Address saved");
+      closeModal();
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       toast.error(message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
-  async function handleEditSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editingId) return;
-    setEditLoading(true);
+  async function handleDelete(addr: SavedAddressRecord) {
+    const ok = window.confirm(`Delete address for ${addr.full_name}? This cannot be undone.`);
+    if (!ok) return;
+    setDeletingId(addr.id);
     try {
-      const res = await fetch(`/api/account/addresses/${editingId}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(editForm),
-      });
+      const res = await fetch(`/api/account/addresses/${addr.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Could not update address");
+      if (!res.ok) throw new Error(data?.error || "Could not delete address");
 
-      const saved = data?.address as SavedAddressRecord | undefined;
-      if (saved?.id) {
-        setAddresses((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
+      const listRes = await fetch("/api/account/addresses");
+      const listData = await listRes.json().catch(() => ({}));
+      if (Array.isArray(listData?.addresses)) {
+        setAddresses(listData.addresses as SavedAddressRecord[]);
+      } else {
+        setAddresses((prev) => prev.filter((a) => a.id !== addr.id));
       }
-      toast.success("Address updated");
-      cancelEdit();
+
+      toast.success("Address deleted");
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       toast.error(message);
     } finally {
-      setEditLoading(false);
+      setDeletingId(null);
     }
   }
 
@@ -167,17 +194,13 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
     }
   }
 
-  function renderAddressFields(
-    value: AddressForm,
-    onChange: (next: AddressForm) => void,
-    idPrefix: string
-  ) {
+  function renderAddressFields() {
     return ADDRESS_FIELDS.map(([key, label, required]) => (
-      <label key={`${idPrefix}-${key}`} className="block">
+      <label key={key} className="block">
         <span className="mb-1 block text-sm font-medium text-dark">{label}</span>
         <input
-          value={value[key]}
-          onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+          value={form[key]}
+          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
           required={required}
           className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />
@@ -186,51 +209,30 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
   }
 
   return (
-    <aside className="h-fit rounded-2xl border border-gray-3 bg-white p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-dark">Addresses</h2>
-        <button
-          type="button"
-          onClick={openAddForm}
-          className="text-sm font-medium text-blue hover:underline"
-        >
-          {showForm ? "Cancel" : "Add address"}
-        </button>
-      </div>
+    <>
+      <aside className="h-fit rounded-2xl border border-gray-3 bg-white p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-dark">Addresses</h2>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="text-sm font-medium text-blue hover:underline"
+          >
+            Add address
+          </button>
+        </div>
 
-      {addresses.length === 0 ? (
-        <p className="mt-3 text-sm text-meta-3">No saved addresses yet.</p>
-      ) : (
-        <div className="mt-4 space-y-3">
-          {addresses.map((a) => (
-            <div
-              key={a.id}
-              className={`rounded-xl border p-4 ${
-                a.isPrimary ? "border-blue bg-blue/5" : "border-gray-3"
-              }`}
-            >
-              {editingId === a.id ? (
-                <form onSubmit={handleEditSubmit} className="space-y-3">
-                  {renderAddressFields(editForm, setEditForm, a.id)}
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <button
-                      type="submit"
-                      disabled={editLoading}
-                      className="inline-flex rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
-                    >
-                      {editLoading ? "Saving…" : "Save changes"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={editLoading}
-                      onClick={cancelEdit}
-                      className="inline-flex rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-meta-3 hover:text-dark transition disabled:opacity-60"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : (
+        {addresses.length === 0 ? (
+          <p className="mt-3 text-sm text-meta-3">No saved addresses yet.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {addresses.map((a) => (
+              <div
+                key={a.id}
+                className={`rounded-xl border p-4 ${
+                  a.isPrimary ? "border-blue bg-blue/5" : "border-gray-3"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -251,7 +253,7 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <button
                       type="button"
-                      onClick={() => startEdit(a)}
+                      onClick={() => openEditModal(a)}
                       className="text-sm font-medium text-blue hover:underline"
                     >
                       Edit
@@ -266,26 +268,73 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
                         {primaryLoadingId === a.id ? "Saving…" : "Set primary"}
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      disabled={deletingId === a.id}
+                      onClick={() => void handleDelete(a)}
+                      className="text-sm font-medium text-red-600 hover:underline disabled:opacity-60"
+                    >
+                      {deletingId === a.id ? "Deleting…" : "Delete"}
+                    </button>
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </aside>
 
-      {showForm ? (
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3 border-t border-gray-3 pt-4">
-          {renderAddressFields(form, setForm, "new")}
+      {modal ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="address-modal-title"
+        >
           <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
-          >
-            {loading ? "Saving…" : "Save address"}
-          </button>
-        </form>
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 bg-dark/40"
+            onClick={closeModal}
+          />
+          <div className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-3 bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="address-modal-title" className="text-lg font-semibold text-dark">
+                {modal.mode === "add" ? "Add address" : "Edit address"}
+              </h3>
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={saving}
+                className="text-sm font-medium text-meta-3 hover:text-dark disabled:opacity-60"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleModalSubmit} className="mt-4 space-y-3">
+              {renderAddressFields()}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : modal.mode === "add" ? "Save address" : "Save changes"}
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={closeModal}
+                  className="inline-flex rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-meta-3 hover:text-dark transition disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       ) : null}
-    </aside>
+    </>
   );
 }

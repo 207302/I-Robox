@@ -21,7 +21,7 @@ export default function LogoutButton() {
 
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       toast.success("Signed out");
-      router.push("/login");
+      router.push("/");
       router.refresh();
     } catch (err: any) {
       toast.error(err?.message || "Could not log out");

@@ -77,10 +77,10 @@ export default async function AccountPage() {
             <AccountProfileCard
               initialName={user?.name ?? null}
               initialEmail={displayEmail}
-              emailManagedByGoogle={emailManagedByGoogle}
+              signedInWithGoogle={emailManagedByGoogle}
             />
 
-            <AccountPhoneCard initialPhone={user?.phone ?? null} />
+            <AccountPhoneCard initialPhone={user?.phone ?? null} otpEmail={displayEmail} />
             <ChangePasswordCard userId={session.sub} needsRecoveryEmail={needsRecoveryEmail} />
           </div>
 

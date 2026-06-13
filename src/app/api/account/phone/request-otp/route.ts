@@ -5,7 +5,10 @@ import {
   phoneConflictErrorMessage,
   phoneLookupVariants,
 } from "@/lib/auth/phoneAccount";
-import { verifyPhoneChangeOtp } from "@/lib/auth/phoneChangeOtp";
+import {
+  createPhoneChangeOtp,
+  resolvePhoneChangeOtpEmail,
+} from "@/lib/auth/phoneChangeOtp";
 import {
   indianMobileErrorMessage,
   isValidIndianMobile,
@@ -17,12 +20,12 @@ import { rateLimitStorefront } from "@/lib/security/rateLimit";
 import { cleanText, hasSuspiciousInput, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
-export async function PUT(req: NextRequest) {
+export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
     try {
       assertSameOrigin(req);
       await rateLimitStorefront(
-        `account_phone_put:ip:${req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"}`,
+        `account_phone_otp:ip:${req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"}`,
         1
       );
     } catch (e: any) {
@@ -36,7 +39,7 @@ export async function PUT(req: NextRequest) {
     if (!session?.sub) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {
-      await rateLimitStorefront(`account_phone_put:user:${session.sub}`, 1);
+      await rateLimitStorefront(`account_phone_otp:user:${session.sub}`, 1);
     } catch {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
@@ -45,12 +48,8 @@ export async function PUT(req: NextRequest) {
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
     const rawPhone = cleanText(parsed.body.phone, 30);
-    const otp = cleanText(parsed.body.otp, 10);
     if (!rawPhone) {
       return NextResponse.json({ error: "Mobile number is required" }, { status: 400 });
-    }
-    if (!otp || !/^\d{6}$/.test(otp)) {
-      return NextResponse.json({ error: "Enter the 6-digit OTP sent to your email" }, { status: 400 });
     }
     if (hasSuspiciousInput(rawPhone)) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
@@ -66,13 +65,13 @@ export async function PUT(req: NextRequest) {
 
     const current = await prisma.customers.findUnique({
       where: { id: session.sub },
-      select: { phone: true },
+      select: { phone: true, email: true },
     });
     if (!current) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
     const currentVariants = current.phone ? phoneLookupVariants(current.phone) : [];
     if (currentVariants.includes(newPhone) || current.phone === newPhone) {
-      return NextResponse.json({ ok: true, phone: newPhone });
+      return NextResponse.json({ error: "This is already your mobile number" }, { status: 400 });
     }
 
     const conflict = await findCustomerPhoneConflict(newPhone, session.sub);
@@ -80,20 +79,28 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: phoneConflictErrorMessage() }, { status: 409 });
     }
 
-    const verified = await verifyPhoneChangeOtp({
-      customerId: session.sub,
-      newPhone,
-      otp,
-    });
-    if (!verified.ok) {
-      return NextResponse.json({ error: verified.error }, { status: verified.status });
+    const otpEmail = resolvePhoneChangeOtpEmail(current.email);
+    if (!otpEmail) {
+      return NextResponse.json(
+        {
+          error: "Add a Gmail address to your profile before changing your mobile number.",
+          needsEmail: true,
+        },
+        { status: 400 }
+      );
     }
 
-    await prisma.customers.update({
-      where: { id: session.sub },
-      data: { phone: newPhone },
+    const { emailSent, devOtp } = await createPhoneChangeOtp({
+      customerId: session.sub,
+      newPhone,
+      email: otpEmail,
     });
 
-    return NextResponse.json({ ok: true, phone: newPhone });
+    return NextResponse.json({
+      ok: true,
+      sentTo: otpEmail,
+      emailSent,
+      ...(devOtp ? { devOtp } : {}),
+    });
   });
 }

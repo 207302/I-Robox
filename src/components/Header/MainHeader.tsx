@@ -212,6 +212,8 @@ const MainHeader = ({
       setAccountOpen(false);
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       toast.success("Signed out");
+      router.push("/");
+      router.refresh();
     } catch (err: any) {
       toast.error(err?.message || "Could not log out");
     }

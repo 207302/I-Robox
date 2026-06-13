@@ -188,7 +188,8 @@ export async function POST(req: NextRequest) {
         await runPostOrderFulfillment({
           orderId: created.id,
           productIds,
-          checkoutEmail: ctx.checkoutEmail,
+          checkoutFormEmail: ctx.address.email,
+          accountEmail: ctx.accountEmail,
           newAccountPasswordSetup: ctx.newAccountPasswordSetup,
           audit: {
             customerId: ctx.checkoutUserId,

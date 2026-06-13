@@ -5,6 +5,9 @@ import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import LogoutButton from "@/components/Auth/LogoutButton";
 import ChangePasswordCard from "@/components/Auth/ChangePasswordCard";
 import WishlistAccountCard from "@/components/Account/WishlistAccountCard";
+import AccountAddressesCard from "@/components/Account/AccountAddressesCard";
+import AccountPhoneCard from "@/components/Account/AccountPhoneCard";
+import { mapDbAddressToSaved } from "@/lib/account/savedAddress";
 
 export const metadata = {
   title: "Account | i-Robox",
@@ -34,8 +37,20 @@ export default async function AccountPage() {
 
   const addresses = await prisma.addresses.findMany({
     where: { customer_id: session.sub },
-    orderBy: { created_at: "desc" },
-    take: 10,
+    orderBy: [{ is_default_shipping: "desc" }, { created_at: "desc" }],
+    take: 20,
+    select: {
+      id: true,
+      full_name: true,
+      phone: true,
+      line1: true,
+      line2: true,
+      city: true,
+      state: true,
+      postal_code: true,
+      country: true,
+      is_default_shipping: true,
+    },
   });
 
   const displayEmail =
@@ -68,42 +83,15 @@ export default async function AccountPage() {
                   <dt className="text-meta-3">Email</dt>
                   <dd className="font-medium text-dark">{displayEmail ?? "—"}</dd>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-meta-3">Phone</dt>
-                  <dd className="font-medium text-dark">{user?.phone ?? "—"}</dd>
-                </div>
               </dl>
             </div>
+
+            <AccountPhoneCard initialPhone={user?.phone ?? null} />
             <ChangePasswordCard userId={session.sub} needsRecoveryEmail={needsRecoveryEmail} />
           </div>
 
           <div className="flex flex-col gap-8">
-            <aside className="h-fit rounded-2xl border border-gray-3 bg-white p-6">
-              <h2 className="text-lg font-semibold text-dark">Addresses</h2>
-              {addresses.length === 0 ? (
-                <p className="mt-3 text-sm text-meta-3">No saved addresses yet.</p>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {addresses.map((a) => (
-                    <div key={a.id} className="rounded-xl border border-gray-3 p-4">
-                      <div className="font-semibold text-dark">{a.full_name}</div>
-                      <div className="mt-1 text-sm text-meta-3">
-                        {a.line1}
-                        {a.line2 ? `, ${a.line2}` : ""}, {a.city}, {a.state} {a.postal_code}
-                      </div>
-                      <div className="mt-1 text-sm text-meta-3">{a.phone}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <Link
-                href="/checkout"
-                className="mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition"
-              >
-                Use checkout to add address
-              </Link>
-            </aside>
+            <AccountAddressesCard addresses={addresses.map(mapDbAddressToSaved)} />
 
             <section className="h-fit rounded-2xl border border-gray-3 bg-white p-6">
               <WishlistAccountCard />
@@ -114,4 +102,3 @@ export default async function AccountPage() {
     </section>
   );
 }
-

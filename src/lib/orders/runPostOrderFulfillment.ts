@@ -14,11 +14,18 @@ import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { prisma } from "@/lib/prisma";
+import {
+  collectOrderNotificationEmails,
+  sendEmailToRecipients,
+} from "@/lib/orders/orderNotificationEmails";
 
 export type PostOrderFulfillmentInput = {
   orderId: string;
   productIds: string[];
-  checkoutEmail: string;
+  /** Email typed on the checkout form. */
+  checkoutFormEmail: string;
+  /** Registered account email when the buyer was signed in. */
+  accountEmail?: string | null;
   newAccountPasswordSetup?: { setupUrl: string } | null;
   audit?: {
     customerId: string | null;
@@ -29,7 +36,14 @@ export type PostOrderFulfillmentInput = {
 
 /** Non-critical work after payment is confirmed (shipping API, email, alerts). */
 export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) {
-  const { orderId, productIds, checkoutEmail, newAccountPasswordSetup, audit } = input;
+  const {
+    orderId,
+    productIds,
+    checkoutFormEmail,
+    accountEmail,
+    newAccountPasswordSetup,
+    audit,
+  } = input;
 
   try {
     await ensureOrderShipmentCreated(orderId);
@@ -69,7 +83,8 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
     console.error("[postOrderFulfillment] store order email failed", err);
   }
 
-  if (!checkoutEmail) return;
+  const recipients = collectOrderNotificationEmails(checkoutFormEmail, accountEmail);
+  if (recipients.length === 0) return;
 
   const orderRow = await prisma.orders.findUnique({
     where: { id: orderId },
@@ -85,8 +100,8 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
   }
 
   try {
-    await sendEmail({
-      to: checkoutEmail,
+    await sendEmailToRecipients({
+      recipients,
       subject: "Order placed successfully",
       html: orderConfirmedCustomerEmailHtml({ orderId: orderRef, lines: orderLines }),
       text: orderConfirmedCustomerEmailText({ orderId: orderRef, lines: orderLines }),
@@ -99,16 +114,16 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
     try {
       const loginUrl = `${getSiteBaseUrl()}/login`;
       await sendEmail({
-        to: checkoutEmail,
+        to: checkoutFormEmail,
         subject: "Set your password to view your orders | i-Robox",
         html: newGuestAccountPasswordEmailHtml({
-          email: checkoutEmail,
+          email: checkoutFormEmail,
           setupUrl: newAccountPasswordSetup.setupUrl,
           orderId: orderRef,
           loginUrl,
         }),
         text: newGuestAccountPasswordEmailText({
-          email: checkoutEmail,
+          email: checkoutFormEmail,
           setupUrl: newAccountPasswordSetup.setupUrl,
           orderId: orderRef,
           loginUrl,

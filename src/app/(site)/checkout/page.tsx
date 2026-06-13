@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
@@ -10,6 +10,11 @@ import { checkoutItemsFromCart } from "@/lib/checkout/checkoutCartItems";
 import { toRazorpayPrefillContact } from "@/lib/marketing/contactPhoneUtils";
 import { useSession } from "@/hooks/useSession";
 import { usePublicMarketing } from "@/hooks/usePublicMarketing";
+import {
+  formatSavedAddressLabel,
+  savedAddressToCheckoutFields,
+  type SavedAddressRecord,
+} from "@/lib/account/savedAddress";
 
 declare global {
   interface Window {
@@ -42,6 +47,10 @@ export default function CheckoutPage() {
   const [freeShippingExcludedBrandIds, setFreeShippingExcludedBrandIds] = useState<string[]>([]);
   const [deliveryCharge, setDeliveryCharge] = useState(0);
   const [shippingPreviewLoading, setShippingPreviewLoading] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddressRecord[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("new");
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const hasAppliedPrimaryAddress = useRef(false);
 
   const previewSubtotal = Number(totalPrice || 0);
 
@@ -149,6 +158,59 @@ export default function CheckoutPage() {
     postal_code: "",
     country: "India",
   });
+
+  function checkoutEmailForUser(): string {
+    return user?.email?.trim() ?? "";
+  }
+
+  function applySavedAddress(saved: SavedAddressRecord) {
+    const email = address.email.trim() || checkoutEmailForUser();
+    setAddress(savedAddressToCheckoutFields(saved, email));
+  }
+
+  useEffect(() => {
+    if (sessionLoading || !user?.id) {
+      setSavedAddresses([]);
+      setSelectedAddressId("new");
+      hasAppliedPrimaryAddress.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    setAddressesLoading(true);
+    void fetch("/api/account/addresses")
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.addresses) ? (data.addresses as SavedAddressRecord[]) : [];
+        setSavedAddresses(list);
+
+        if (!hasAppliedPrimaryAddress.current) {
+          const primary = list.find((a) => a.isPrimary);
+          if (primary) {
+            const email = checkoutEmailForUser();
+            setAddress((current) =>
+              savedAddressToCheckoutFields(primary, current.email.trim() || email)
+            );
+            setSelectedAddressId(primary.id);
+          } else {
+            setSelectedAddressId("new");
+          }
+          hasAppliedPrimaryAddress.current = true;
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSavedAddresses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setAddressesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply primary once per sign-in
+  }, [sessionLoading, user?.id]);
 
   useEffect(() => {
     if (sessionLoading || !user?.id) return;
@@ -337,6 +399,44 @@ export default function CheckoutPage() {
                   </p>
                 </div>
               ) : null}
+              {user?.id && savedAddresses.length > 0 ? (
+                <label className="mt-4 block">
+                  <span className="mb-1 block text-sm font-medium text-dark">Saved address</span>
+                  <select
+                    value={selectedAddressId}
+                    disabled={addressesLoading}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedAddressId(value);
+                      if (value === "new") {
+                        setAddress((a) => ({
+                          full_name: "",
+                          email: a.email,
+                          phone: user?.phone?.trim() ?? "",
+                          line1: "",
+                          line2: "",
+                          city: "",
+                          state: "",
+                          postal_code: "",
+                          country: "India",
+                        }));
+                        return;
+                      }
+                      const saved = savedAddresses.find((a) => a.id === value);
+                      if (saved) applySavedAddress(saved);
+                    }}
+                    className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                  >
+                    <option value="new">Enter a new address</option>
+                    {savedAddresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.isPrimary ? "Primary — " : ""}
+                        {formatSavedAddressLabel(a)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {(
                   [
@@ -355,7 +455,10 @@ export default function CheckoutPage() {
                     <span className="mb-1 block text-sm font-medium text-dark">{label}</span>
                     <input
                       value={(address as any)[key]}
-                      onChange={(e) => setAddress((a) => ({ ...a, [key]: e.target.value }))}
+                      onChange={(e) => {
+                        setAddress((a) => ({ ...a, [key]: e.target.value }));
+                        if (selectedAddressId !== "new") setSelectedAddressId("new");
+                      }}
                       className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
                       required={key !== "line2"}
                     />

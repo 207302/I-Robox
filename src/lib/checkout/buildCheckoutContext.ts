@@ -24,6 +24,7 @@ import {
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { generatePasswordSetupSecret, PASSWORD_SETUP_TTL_MS } from "@/lib/auth/passwordSetupToken";
+import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
 import bcrypt from "bcrypt";
 
@@ -39,7 +40,10 @@ type SessionLike = {
 
 export type CheckoutContext = {
   checkoutUserId: string | null;
+  /** Email entered on the checkout form. */
   checkoutEmail: string;
+  /** Registered account email when signed in (may differ from checkout form). */
+  accountEmail: string | null;
   checkoutLinkedAs: "session" | "existing_customer" | "new_customer";
   newAccountPasswordSetup: { setupUrl: string } | null;
   lineItems: {
@@ -137,6 +141,7 @@ export async function buildCheckoutContext(input: {
 
   let checkoutUserId: string | null = null;
   let checkoutEmail = email;
+  let accountEmail: string | null = null;
   let checkoutLinkedAs: "session" | "existing_customer" | "new_customer";
 
   const guestCheckout = false;
@@ -144,7 +149,14 @@ export async function buildCheckoutContext(input: {
   if (!guestCheckout && session?.sub) {
     checkoutLinkedAs = "session";
     checkoutUserId = session.sub;
-    checkoutEmail = normalizeEmail(session.email ?? email);
+    const registered = await prisma.customers.findUnique({
+      where: { id: session.sub },
+      select: { email: true },
+    });
+    const registeredEmail = registered?.email ?? session.email ?? null;
+    if (registeredEmail && !isSyntheticPhoneSignupEmail(registeredEmail)) {
+      accountEmail = normalizeEmail(registeredEmail);
+    }
   } else {
     checkoutLinkedAs = "existing_customer";
   }
@@ -305,6 +317,7 @@ export async function buildCheckoutContext(input: {
   return {
     checkoutUserId,
     checkoutEmail,
+    accountEmail,
     checkoutLinkedAs,
     newAccountPasswordSetup,
     lineItems,

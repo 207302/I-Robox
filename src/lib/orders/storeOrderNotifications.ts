@@ -85,10 +85,10 @@ export async function notifyStoreNewOrder(orderId: string) {
 
   const orderRef = formatOrderReference(order);
   const adminUrl = `${getSiteBaseUrl()}/admin/orders/${order.id}`;
-  const customerEmail = order.customers?.email ?? "—";
-  const customerName = order.customers?.name?.trim() || "—";
-  const customerPhone = order.customers?.phone?.trim() || "—";
   const shipping = order.addresses_orders_shipping_address_idToaddresses;
+  const customerEmail = order.customers?.email ?? "—";
+  const customerName = order.customers?.name?.trim() || shipping?.full_name?.trim() || "—";
+  const customerPhone = shipping?.phone?.trim() || order.customers?.phone?.trim() || "—";
 
   const itemsHtml = order.order_items
     .map(

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { safeSiteMarketingSettingsFindUnique } from "@/lib/db/safeReads";
 import { getSession } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
-import { sendEmail, orderPendingCustomerEmailHtml, orderPendingCustomerEmailText } from "@/lib/email";
+import { orderPendingCustomerEmailHtml, orderPendingCustomerEmailText, isEmailConfigured } from "@/lib/email";
 import { loadOrderEmailLines } from "@/lib/email/orderEmailLines";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
@@ -38,6 +38,11 @@ import {
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { allocateNextOrderNumber, formatOrderReference } from "@/lib/orders/orderNumber";
 import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
+import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
+import {
+  collectOrderNotificationEmails,
+  sendEmailToRecipients,
+} from "@/lib/orders/orderNotificationEmails";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 type CheckoutItem = {
@@ -152,12 +157,20 @@ export async function POST(req: NextRequest) {
   
     let checkoutUserId: string | null = null;
     let checkoutEmail = email;
+    let accountEmail: string | null = null;
     let checkoutLinkedAs: "session" | "existing_customer" | "new_customer";
-  
+
     if (!guestCheckout && session?.sub) {
       checkoutLinkedAs = "session";
       checkoutUserId = session.sub;
-      checkoutEmail = normalizeEmail(session.email ?? email);
+      const registered = await prisma.customers.findUnique({
+        where: { id: session.sub },
+        select: { email: true },
+      });
+      const registeredEmail = registered?.email ?? session.email ?? null;
+      if (registeredEmail && !isSyntheticPhoneSignupEmail(registeredEmail)) {
+        accountEmail = normalizeEmail(registeredEmail);
+      }
     } else {
       checkoutLinkedAs = "existing_customer";
     }
@@ -401,7 +414,8 @@ export async function POST(req: NextRequest) {
       userAgent: req.headers.get("user-agent"),
     });
   
-    if (checkoutEmail) {
+    const notificationRecipients = collectOrderNotificationEmails(checkoutEmail, accountEmail);
+    if (notificationRecipients.length > 0) {
       try {
         const passwordSetup = newAccountPasswordSetup
           ? { email: checkoutEmail, setupUrl: newAccountPasswordSetup.setupUrl }
@@ -413,8 +427,8 @@ export async function POST(req: NextRequest) {
           console.error("[checkout] order line images failed", lineErr);
         }
         const orderRef = formatOrderReference(order);
-        const mailResult = await sendEmail({
-          to: checkoutEmail,
+        await sendEmailToRecipients({
+          recipients: notificationRecipients,
           subject: newAccountPasswordSetup
             ? "Order received — set your password (see email)"
             : "Order created (pending payment)",
@@ -429,7 +443,7 @@ export async function POST(req: NextRequest) {
             passwordSetup,
           }),
         });
-        if (mailResult.skipped && newAccountPasswordSetup?.setupUrl) {
+        if (!isEmailConfigured() && newAccountPasswordSetup?.setupUrl) {
           console.warn(
             "[checkout] SMTP not configured (EMAIL_SERVER_* / EMAIL_FROM) — email skipped. Local set-password URL:\n%s",
             newAccountPasswordSetup.setupUrl

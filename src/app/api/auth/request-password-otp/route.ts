@@ -79,9 +79,41 @@ export async function POST(req: NextRequest) {
     }
 
     const phoneOnlyAccount = isSyntheticPhoneSignupEmail(user.email);
-    let otpDeliveryEmail = user.email;
+    const linkedEmail = normalizeEmail(user.email);
+    const resetStartedWithPhone = !requestedUserId && !byEmail && Boolean(byPhone);
+    let otpDeliveryEmail = linkedEmail;
 
-    if (phoneOnlyAccount) {
+    if (!phoneOnlyAccount) {
+      if (resetStartedWithPhone || recoveryEmailRaw) {
+        if (!recoveryEmailRaw) {
+          return NextResponse.json(
+            {
+              error: "Enter the Gmail address linked to this mobile number to receive your OTP.",
+              needsRecoveryEmail: true,
+              userId: user.id,
+            },
+            { status: 400 }
+          );
+        }
+        const normalizedRecoveryEmail = normalizeEmail(recoveryEmailRaw);
+        if (!validateEmail(normalizedRecoveryEmail)) {
+          return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
+        }
+        if (!validateCommonEmailProvider(normalizedRecoveryEmail)) {
+          return NextResponse.json(
+            { error: "Use a common email provider (Gmail, Yahoo, Outlook, etc.)" },
+            { status: 400 }
+          );
+        }
+        if (normalizedRecoveryEmail !== linkedEmail) {
+          return NextResponse.json(
+            { error: "This mobile number is linked to another Gmail account." },
+            { status: 400 }
+          );
+        }
+        otpDeliveryEmail = normalizedRecoveryEmail;
+      }
+    } else if (phoneOnlyAccount) {
       if (!recoveryEmailRaw) {
         return NextResponse.json(
           {

@@ -5,6 +5,8 @@ import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { formatPrice } from "@/utils/formatePrice";
 import { formatOrderReference } from "@/utils/orderNumber";
+import OrderTracking from "@/components/OrderTracking";
+import { resolveOrderTrackingStatus, syncShipmozoTrackingForOrder } from "@/lib/shipping/shipmozoTracking";
 
 type Props = {
   params: Promise<{ orderId: string }>;
@@ -30,6 +32,11 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
       created_at: true,
       is_gift: true,
       gift_message: true,
+      awb_number: true,
+      carrier: true,
+      shipment_status: true,
+      shipment_updated_at: true,
+      shipment_location: true,
       order_items: {
         select: { id: true, product_name: true, quantity: true, unit_price: true, subtotal_amount: true },
       },
@@ -68,6 +75,58 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
       </section>
     );
   }
+
+  await syncShipmozoTrackingForOrder(orderId);
+
+  const refreshed = await prisma.orders.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      order_number: true,
+      customer_id: true,
+      status: true,
+      payment_status: true,
+      subtotal_amount: true,
+      discount_amount: true,
+      total_amount: true,
+      created_at: true,
+      is_gift: true,
+      gift_message: true,
+      awb_number: true,
+      carrier: true,
+      shipment_status: true,
+      shipment_updated_at: true,
+      shipment_location: true,
+      order_items: {
+        select: { id: true, product_name: true, quantity: true, unit_price: true, subtotal_amount: true },
+      },
+      shipments: { select: { status: true, tracking_number: true, carrier: true } },
+      addresses_orders_shipping_address_idToaddresses: {
+        select: {
+          full_name: true,
+          phone: true,
+          line1: true,
+          line2: true,
+          city: true,
+          state: true,
+          postal_code: true,
+          country: true,
+        },
+      },
+    },
+  });
+  if (refreshed) {
+    Object.assign(order, refreshed);
+  }
+
+  const trackingStatus = resolveOrderTrackingStatus({
+    shipment_status: order.shipment_status,
+    awb_number: order.awb_number,
+    legacy_shipment_status: order.shipments?.status ? String(order.shipments.status) : null,
+    legacy_tracking_number: order.shipments?.tracking_number ?? null,
+  });
+  const trackingAwb = order.awb_number ?? order.shipments?.tracking_number ?? null;
+  const trackingCarrier = order.carrier ?? order.shipments?.carrier ?? null;
 
   return (
     <section className="pt-36 pb-16">
@@ -168,15 +227,22 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
 
             <div className="rounded-2xl border border-gray-3 bg-white p-5">
               <h2 className="text-lg font-semibold text-dark">Shipment</h2>
-              {order.shipments ? (
-                <div className="mt-3 text-sm text-meta-3 space-y-1">
-                  <div>Status: <b className="text-dark">{String(order.shipments.status)}</b></div>
-                  <div>Carrier: <b className="text-dark">{order.shipments.carrier ?? "—"}</b></div>
-                  <div>Tracking: <b className="text-dark">{order.shipments.tracking_number ?? "—"}</b></div>
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-meta-3">Shipment will be created after payment confirmation.</p>
-              )}
+              <OrderTracking
+                status={trackingStatus}
+                awb_number={trackingAwb}
+                carrier={trackingCarrier}
+                shipment_updated_at={order.shipment_updated_at?.toISOString() ?? null}
+              />
+              {order.shipment_location ? (
+                <p className="mt-3 text-sm text-meta-3">
+                  Latest location: <span className="text-dark">{order.shipment_location}</span>
+                </p>
+              ) : null}
+              {!order.shipments && trackingStatus === "ORDER_PLACED" ? (
+                <p className="mt-3 text-sm text-meta-3">
+                  Shipment will be created after payment confirmation.
+                </p>
+              ) : null}
             </div>
 
             {order.is_gift ? (

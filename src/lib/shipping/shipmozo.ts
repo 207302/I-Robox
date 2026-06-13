@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
+import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
 
@@ -60,6 +61,42 @@ async function callShipmozo(
       !("result" in parsed) ||
       String((parsed as ShipmozoResponse).result ?? "") === "1");
   return { ok: logicalOk, status: res.status, parsed, raw };
+}
+
+export type ShipmozoTrackOrderResult = {
+  ok: boolean;
+  current_status?: string;
+  status_time?: string;
+  courier?: string;
+  awb_number?: string;
+  error?: string;
+};
+
+export async function fetchShipmozoTrackOrder(awb: string): Promise<ShipmozoTrackOrderResult> {
+  const awbNumber = awb.trim();
+  if (!awbNumber) return { ok: false, error: "missing_awb" };
+  if (!isShipmozoConfigured()) return { ok: false, error: "shipmozo_not_configured" };
+
+  const res = await callShipmozo(
+    `/track-order?awb_number=${encodeURIComponent(awbNumber)}`,
+    "GET"
+  );
+  if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
+    return { ok: false, error: "track_order_request_failed" };
+  }
+
+  const data = (res.parsed as ShipmozoResponse).data;
+  if (!data || typeof data !== "object") {
+    return { ok: false, error: "invalid_track_order_response" };
+  }
+
+  return {
+    ok: true,
+    current_status: String(data.current_status ?? "").trim() || undefined,
+    status_time: data.status_time ? String(data.status_time) : undefined,
+    courier: data.courier ? String(data.courier) : undefined,
+    awb_number: data.awb_number ? String(data.awb_number) : awbNumber,
+  };
 }
 
 function normalizeIndiaPhone(raw: string): string {
@@ -269,6 +306,22 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
       status: awb ? "CREATED" : "PENDING",
     },
   });
+  if (awb) {
+    await prisma.orders.update({
+      where: { id: orderId },
+      data: {
+        awb_number: awb,
+        carrier: courier || "Shipmozo",
+        shipment_status: "PICKUP_GENERATED",
+        shipment_updated_at: new Date(),
+      },
+    });
+    try {
+      await sendPickupEmail(orderId);
+    } catch (emailErr) {
+      console.error("[shipmozo-booking] pickup email failed", { orderId, emailErr });
+    }
+  }
   await appendShipmozoMetadata(orderId, {
     status: awb ? "booked" : "pending",
     awb_number: awb || null,

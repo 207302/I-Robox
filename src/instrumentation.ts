@@ -57,11 +57,24 @@ export async function register() {
     console.warn("[instrumentation] Abandoned cart scheduler skipped:", err);
   }
 
+  try {
+    const { startShipmozoTrackingScheduler } = await import("./lib/cron/shipmozoTrackingScheduler");
+    startShipmozoTrackingScheduler();
+  } catch (err) {
+    console.warn("[instrumentation] ShipMozo tracking scheduler skipped:", err);
+  }
+
   const { registerPrismaSignalHandlers } = await import("./instrumentation.node");
   registerPrismaSignalHandlers(async () => {
     try {
       const { stopAbandonedCartScheduler } = await import("./lib/cron/abandonedCartScheduler");
       stopAbandonedCartScheduler();
+    } catch {
+      /* shutting down */
+    }
+    try {
+      const { stopShipmozoTrackingScheduler } = await import("./lib/cron/shipmozoTrackingScheduler");
+      stopShipmozoTrackingScheduler();
     } catch {
       /* shutting down */
     }

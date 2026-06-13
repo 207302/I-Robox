@@ -347,6 +347,11 @@ model orders {
   payment_provider                                String?                  @db.VarChar(80)
   is_gift                                         Boolean                  @default(false)
   gift_message                                    String?
+  awb_number                                      String?                  @db.VarChar(255)
+  carrier                                         String?                  @db.VarChar(120)
+  shipment_status                                 String                   @default("ORDER_PLACED") @db.VarChar(40)
+  shipment_updated_at                             DateTime?                @db.Timestamptz(6)
+  shipment_location                               String?                  @db.VarChar(255)
   created_at                                      DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at                                      DateTime                 @default(now()) @db.Timestamptz(6)
   coupon_usages                                   coupon_usages[]
@@ -362,6 +367,8 @@ model orders {
   @@index([created_at], map: "idx_orders_created_at")
   @@index([status], map: "idx_orders_status")
   @@index([customer_id], map: "idx_orders_customer_id")
+  @@index([awb_number], map: "idx_orders_awb_number")
+  @@index([shipment_status], map: "idx_orders_shipment_status")
 }
 
 model product_images {

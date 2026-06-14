@@ -14,9 +14,43 @@ import {
 } from "@/lib/images/cloudinaryDeliver";
 import { resolveHeroCarouselIntervalMs } from "@/lib/marketing/heroCarousel";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
+import type { Metadata } from "next";
+import { JsonLdScript } from "@/lib/seo/jsonLd";
+import { SEO_SITE_URL } from "@/lib/seo/constants";
+import { buildSocialMetadata } from "@/lib/seo/metadata";
 
 /** ISR: keep in sync with `HOME_PAGE_REVALIDATE_SECONDS` in homePageCache.ts */
 export const revalidate = 300;
+
+const HOME_TITLE = "i-robox | RC Toys, Diecast Models & Collectibles in India";
+const HOME_DESCRIPTION =
+  "Shop RC cars, diecast models, and collectibles at i-robox. Premium toys delivered across India with secure checkout and fast support.";
+
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  ...buildSocialMetadata({
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    path: "/",
+  }),
+};
+
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "i-robox",
+  url: SEO_SITE_URL,
+  description: HOME_DESCRIPTION,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: `${SEO_SITE_URL}/shop?q={search_term_string}`,
+    },
+    "query-input": "required name=search_term_string",
+  },
+};
 
 const FALLBACK_HIGHLIGHT_IMAGE =
   "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";
@@ -170,6 +204,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <JsonLdScript id="website-jsonld" data={websiteJsonLd} />
       <Home
         heroSlides={heroSlides}
         heroOverlay={heroOverlay}

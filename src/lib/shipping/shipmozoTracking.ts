@@ -4,6 +4,10 @@ import { isUuid } from "@/lib/validation/input";
 import { fetchShipmozoTrackOrder } from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
+  notifyCustomerAfterShipmozoUpdate,
+  type ShipmentSnapshot,
+} from "@/lib/orders/customerOrderNotifications";
+import {
   SHIPMOZO_TRACKING_STEPS,
   type ShipmozoTrackingStatus,
 } from "@/lib/shipping/shipmozoTrackingConstants";
@@ -143,6 +147,52 @@ export type ShipmozoWebhookPayload = {
   location?: string;
 };
 
+function shipmentSnapshotFromRow(
+  row: { status: unknown; carrier: string | null; tracking_number: string | null } | null | undefined
+): ShipmentSnapshot | null {
+  if (!row) return null;
+  return {
+    status: String(row.status),
+    carrier: row.carrier,
+    tracking_number: row.tracking_number,
+  };
+}
+
+async function sendShipmozoCustomerEmails(input: {
+  orderId: string;
+  previousOrderStatus: string;
+  nextOrderStatus: string;
+  previousShipment: ShipmentSnapshot | null;
+  nextShipment: ShipmentSnapshot | null;
+  previousTrackingStep: string;
+  nextTrackingStep: string;
+  shouldSendPickupEmail: boolean;
+}) {
+  let pickupEmailSent = false;
+  if (input.shouldSendPickupEmail) {
+    try {
+      const pickup = await sendPickupEmail(input.orderId);
+      pickupEmailSent = Boolean(pickup.ok);
+    } catch (emailErr) {
+      console.error("[shipmozo-update] pickup email failed", {
+        orderId: input.orderId,
+        emailErr,
+      });
+    }
+  }
+
+  await notifyCustomerAfterShipmozoUpdate({
+    orderId: input.orderId,
+    previousOrderStatus: input.previousOrderStatus,
+    nextOrderStatus: input.nextOrderStatus,
+    previousShipment: input.previousShipment,
+    nextShipment: input.nextShipment,
+    previousTrackingStep: input.previousTrackingStep,
+    nextTrackingStep: input.nextTrackingStep,
+    skipGenericBecausePickupEmailSent: pickupEmailSent,
+  });
+}
+
 export async function applyShipmozoWebhookUpdate(payload: ShipmozoWebhookPayload) {
   const statusRaw = String(payload.status ?? "").trim();
   const mappedStatus = normalizeShipmozoWebhookStatus(statusRaw);
@@ -158,15 +208,30 @@ export async function applyShipmozoWebhookUpdate(payload: ShipmozoWebhookPayload
     return { ok: false as const, error: "Order not found", status: 404 };
   }
 
+  const before = await prisma.orders.findUnique({
+    where: { id: order.id },
+    select: {
+      status: true,
+      shipment_status: true,
+      shipments: { select: { status: true, carrier: true, tracking_number: true } },
+    },
+  });
+  if (!before) {
+    return { ok: false as const, error: "Order not found", status: 404 };
+  }
+
   const awb = (payload.awb ?? "").trim() || undefined;
   const carrier = (payload.carrier ?? "").trim() || undefined;
   const location = (payload.location ?? "").trim() || undefined;
   const updatedAt = payload.timestamp ? new Date(payload.timestamp) : new Date();
   const shipmentEnum = mapTrackingStatusToShipmentEnum(mappedStatus);
 
-  const previousStatus = order.shipment_status;
+  const previousTrackingStep = before.shipment_status ?? "ORDER_PLACED";
   const shouldSendPickupEmail =
-    mappedStatus === "PICKUP_GENERATED" && previousStatus !== "PICKUP_GENERATED";
+    mappedStatus === "PICKUP_GENERATED" && previousTrackingStep !== "PICKUP_GENERATED";
+
+  const previousOrderStatus = String(before.status);
+  const previousShipment = shipmentSnapshotFromRow(before.shipments);
 
   await prisma.$transaction(async (tx) => {
     const existingShipment = await tx.shipments.findUnique({
@@ -236,15 +301,66 @@ export async function applyShipmozoWebhookUpdate(payload: ShipmozoWebhookPayload
     }
   });
 
+  const after = await prisma.orders.findUnique({
+    where: { id: order.id },
+    select: {
+      status: true,
+      shipments: { select: { status: true, carrier: true, tracking_number: true } },
+    },
+  });
+
+  const nextOrderStatus = String(after?.status ?? previousOrderStatus);
+  const nextShipment = shipmentSnapshotFromRow(after?.shipments ?? null);
+
+  const statusUnchanged =
+    previousTrackingStep === mappedStatus &&
+    previousOrderStatus === nextOrderStatus &&
+    !shipmentSnapshotChanged(previousShipment, nextShipment, awb, carrier);
+
+  if (!statusUnchanged) {
+    try {
+      await sendShipmozoCustomerEmails({
+        orderId: order.id,
+        previousOrderStatus,
+        nextOrderStatus,
+        previousShipment,
+        nextShipment,
+        previousTrackingStep,
+        nextTrackingStep: mappedStatus,
+        shouldSendPickupEmail,
+      });
+    } catch (notifyErr) {
+      console.error("[shipmozo-update] customer notify failed", {
+        orderId: order.id,
+        notifyErr,
+      });
+    }
+  }
+
   return {
     ok: true as const,
     orderId: order.id,
-    previousStatus,
+    previousStatus: previousTrackingStep,
     mappedStatus,
     shouldSendPickupEmail,
     awb: awb ?? null,
     carrier: carrier ?? null,
   };
+}
+
+function shipmentSnapshotChanged(
+  prev: ShipmentSnapshot | null,
+  next: ShipmentSnapshot | null,
+  awb?: string,
+  carrier?: string
+) {
+  if (!prev && !next) return Boolean(awb || carrier);
+  if (!prev || !next) return true;
+  return (
+    prev.status !== next.status ||
+    (prev.carrier ?? "") !== (next.carrier ?? "") ||
+    (prev.tracking_number ?? "") !== (next.tracking_number ?? "")
+  );
 }
 
 const DEFAULT_SYNC_MIN_AGE_MS = 10 * 60 * 1000;
@@ -302,14 +418,6 @@ export async function syncShipmozoTrackingForOrder(
     });
 
     if (!result.ok) return result;
-
-    if (result.shouldSendPickupEmail) {
-      try {
-        await sendPickupEmail(result.orderId);
-      } catch (emailErr) {
-        console.error("[shipmozo-sync] pickup email failed", { orderId, emailErr });
-      }
-    }
 
     return { ok: true as const, orderId, mappedStatus: result.mappedStatus };
   } catch (err) {

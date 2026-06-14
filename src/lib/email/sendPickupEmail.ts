@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { shipmozoTrackingBarEmailHtml, shipmozoTrackingBarEmailText } from "@/lib/email/shipmozoTrackingBarEmail";
 
 const BRAND_RED = "#E63946";
 const TRACK_URL = "https://panel.shipmozo.com/track-order";
@@ -36,6 +37,7 @@ export function pickupEmailHtml(input: {
     <p style="margin:0 0 16px;">
       Your order <strong>#${orderRef}</strong> has been picked up and is now with <strong>${carrier}</strong>.
     </p>
+    ${shipmozoTrackingBarEmailHtml({ status: "PICKUP_GENERATED", includeDetails: false })}
     <div style="background:#f8f8f8;border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:0 0 20px;">
       <p style="margin:0 0 8px;font-size:13px;color:#555;">AWB / Tracking number</p>
       <p style="margin:0;font-size:18px;font-weight:700;color:#111;letter-spacing:0.04em;">${awb}</p>
@@ -109,6 +111,8 @@ export async function sendPickupEmail(orderId: string) {
     `Hi ${customerName},`,
     "",
     `Your order #${orderRef} has been picked up and is now with ${carrier}.`,
+    "",
+    shipmozoTrackingBarEmailText("PICKUP_GENERATED"),
     "",
     `AWB / Tracking number: ${awb}`,
     `Track: ${TRACK_URL}`,

@@ -83,7 +83,7 @@ export default function MarketingSiteEffects() {
           <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl bg-gray-1">
                   <Image
                     src={popup.image_url}
-                    alt=""
+                    alt={popup.title ? `${popup.title} — i-robox` : "i-robox promotion"}
                     fill
                     className="object-cover"
                     sizes="(max-width: 512px) 100vw, 512px"

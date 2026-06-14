@@ -13,6 +13,7 @@ import { updateproductDetails } from "@/redux/features/product-details";
 import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { AppDispatch, useAppSelector } from "@/redux/store";
 import { formatPrice } from "@/utils/formatePrice";
+import { productImageAlt } from "@/lib/seo/metadata";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -255,7 +256,7 @@ const QuickViewModal = () => {
                             >
                               <Image
                                 src={thumb}
-                                alt="thumbnail"
+                                alt={`${product.title} — thumbnail ${key + 1} | i-robox`}
                                 width={61}
                                 height={61}
                                 className="aspect-square object-contain"
@@ -281,7 +282,7 @@ const QuickViewModal = () => {
 
                         <Image
                           src={mainImage}
-                          alt={product.title || "product preview"}
+                          alt={productImageAlt(product.title)}
                           fill
                           className="object-contain p-2 sm:p-4"
                           sizes="(max-width: 640px) 100vw, 526px"
@@ -310,7 +311,7 @@ const QuickViewModal = () => {
                             >
                               <Image
                                 src={thumb}
-                                alt="thumbnail"
+                                alt={`${product.title} — thumbnail ${key + 1} | i-robox`}
                                 fill
                                 className="object-contain p-2"
                                 loading="lazy"

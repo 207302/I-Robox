@@ -4,6 +4,7 @@ import { usePreviewSlider } from "@/app/context/PreviewSliderContext";
 import { FullScreenIcon } from "@/assets/icons";
 import SafeProductImage from "@/components/Common/SafeProductImage";
 import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
+import { productImageAlt } from "@/lib/seo/metadata";
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 
 const SWIPE_THRESHOLD = 40;
@@ -251,7 +252,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 >
                   <SafeProductImage
                     src={resolveProductImageSrc(src)}
-                    alt={`${title} image ${index + 1}`}
+                    alt={index === 0 ? productImageAlt(title) : `${title} — view ${index + 1} | i-robox`}
                     fill
                     sizes="(max-width: 1024px) 100vw, 50vw"
                     className="object-contain p-2 sm:p-4"
@@ -266,7 +267,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
         ) : images[0] ? (
           <SafeProductImage
             src={resolveProductImageSrc(images[0])}
-            alt={`${title} image 1`}
+            alt={productImageAlt(title)}
             fill
             sizes="(max-width: 1024px) 100vw, 50vw"
             className="object-contain p-2 sm:p-4"
@@ -310,7 +311,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 >
                   <SafeProductImage
                     src={resolveProductImageSrc(thumbnail)}
-                    alt={`${title} thumbnail ${index + 1}`}
+                    alt={`${title} — thumbnail ${index + 1} | i-robox`}
                     fill
                     sizes="(max-width: 1024px) 33vw, 16vw"
                     className="object-contain p-2"
@@ -353,7 +354,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
             >
               <SafeProductImage
                 src={resolveProductImageSrc(thumbnail)}
-                alt={`${title} thumbnail ${index + 1}`}
+                alt={`${title} — thumbnail ${index + 1} | i-robox`}
                 fill
                 sizes="(max-width: 1024px) 33vw, 16vw"
                 className="object-contain p-2"

@@ -354,7 +354,7 @@ const MainHeader = ({
                 <Link className="block shrink-0" href="/">
                   <Image
                     src={headerLogoSrc}
-                    alt="Site logo"
+                    alt="i-robox logo"
                     width={88}
                     height={88}
                     quality={90}
@@ -380,7 +380,7 @@ const MainHeader = ({
               <Link className="pointer-events-auto block" href="/">
                 <Image
                   src={headerLogoSrc}
-                  alt="Site logo"
+                  alt="i-robox logo"
                   width={88}
                   height={88}
                   quality={90}

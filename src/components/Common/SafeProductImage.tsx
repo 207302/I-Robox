@@ -19,7 +19,7 @@ export default function SafeProductImage({ src, alt, ...props }: Props) {
     <Image
       {...props}
       src={imgSrc}
-      alt={alt ?? "Product image"}
+      alt={alt ?? "Product at i-robox"}
       onError={() => {
         setImgSrc((current) =>
           current === PRODUCT_IMAGE_REMOTE_FALLBACK

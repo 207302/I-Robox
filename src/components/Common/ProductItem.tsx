@@ -26,6 +26,7 @@ import {
   pickDefaultVariant,
 } from "@/lib/cart/cartLine";
 import { formatPrice } from "@/utils/formatePrice";
+import { productImageAlt } from "@/lib/seo/metadata";
 
 const Tooltip = dynamic(() => import("./Tooltip"), { ssr: false });
 
@@ -182,7 +183,7 @@ function ProductItemInner({
           <SafeProductImage
             src={cardImageDelivery.src}
             {...(cardImageDelivery.srcSet ? { srcSet: cardImageDelivery.srcSet } : {})}
-            alt={item.title || "product-image"}
+            alt={productImageAlt(item.title)}
             width={640}
             height={640}
             sizes={cardImageSizes}

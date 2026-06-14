@@ -2,16 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, Fragment } from "react";
 import toast from "react-hot-toast";
 import { formatPrice } from "@/utils/formatePrice";
 import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import { AdminPagination } from "@/components/admin/AdminPagination";
+import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
 import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
 
 const PAGE_SIZE = 50;
 const MAX_BULK_DELETE = 50;
+const TABLE_COL_COUNT = 7;
+
+export type AdminOrderProductThumb = {
+  productId: string;
+  slug: string;
+  name: string;
+  imageUrl: string | null;
+  quantity: number;
+};
 
 export type AdminOrderRow = {
   id: string;
@@ -24,6 +34,7 @@ export type AdminOrderRow = {
   customerName: string | null;
   customerEmail: string | null;
   productNames: string;
+  products: AdminOrderProductThumb[];
 };
 
 type AdminOrdersTableProps = {
@@ -57,6 +68,18 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
   const searching = query !== deferredQuery;
   const bulk = useBulkSelection();
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
+  const tableColSpan = TABLE_COL_COUNT + (canDelete ? 1 : 0);
+
+  function toggleExpanded(orderId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }
 
   const filtered = useMemo(
     () => filterOrders(orders, deferredQuery),
@@ -196,6 +219,7 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-meta-3 border-b border-gray-3">
+              <th className="py-3 px-2 w-10" aria-hidden />
               {canDelete ? (
                 <th className="py-3 px-4 w-10">
                   <input
@@ -220,49 +244,111 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
             </tr>
           </thead>
           <tbody>
-            {paged.map((o) => (
-              <tr
-                key={o.id}
-                className={`border-b border-gray-3 ${bulk.isSelected(o.id) ? "bg-blue/5" : ""}`}
-              >
-                {canDelete ? (
-                  <td className="py-3 px-4">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select order ${o.id}`}
-                      checked={bulk.isSelected(o.id)}
-                      onChange={() => bulk.toggleOne(o.id)}
-                      disabled={bulkDeleting}
-                      className="h-4 w-4 rounded border-gray-3"
-                    />
-                  </td>
-                ) : null}
-                <td className="py-3 px-4">
-                  <div className="font-semibold text-dark font-mono tracking-wide">{o.orderId}</div>
-                  <div className="text-xs text-meta-4">{o.createdAtLabel}</div>
-                </td>
-                <td className="py-3 px-4 text-dark">
-                  <div className="font-medium">{o.customerName ?? "Guest"}</div>
-                  {o.customerEmail ? (
-                    <div className="text-xs text-meta-4 break-all">{o.customerEmail}</div>
-                  ) : null}
-                </td>
-                <td className="py-3 px-4 text-dark">{o.status}</td>
-                <td className="py-3 px-4 text-dark">{o.paymentStatus}</td>
-                <td className="py-3 px-4 text-dark">{formatPrice(o.totalAmount)}</td>
-                <td className="py-3 px-4">
-                  <Link
-                    href={`/admin/orders/${o.id}`}
-                    className="text-sm font-medium text-blue hover:underline"
+            {paged.map((o) => {
+              const expanded = expandedIds.has(o.id);
+              return (
+                <Fragment key={o.id}>
+                  <tr
+                    className={`border-b border-gray-3 ${bulk.isSelected(o.id) ? "bg-blue/5" : ""}`}
                   >
-                    View / update
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                    <td className="py-3 px-2 align-middle">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(o.id)}
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? "Hide" : "Show"} products in order ${o.orderId}`}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-3 text-meta-3 hover:border-blue hover:text-blue"
+                      >
+                        <svg
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden
+                          className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.06z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    </td>
+                    {canDelete ? (
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select order ${o.id}`}
+                          checked={bulk.isSelected(o.id)}
+                          onChange={() => bulk.toggleOne(o.id)}
+                          disabled={bulkDeleting}
+                          className="h-4 w-4 rounded border-gray-3"
+                        />
+                      </td>
+                    ) : null}
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-dark font-mono tracking-wide">{o.orderId}</div>
+                      <div className="text-xs text-meta-4">{o.createdAtLabel}</div>
+                    </td>
+                    <td className="py-3 px-4 text-dark">
+                      <div className="font-medium">{o.customerName ?? "Guest"}</div>
+                      {o.customerEmail ? (
+                        <div className="text-xs text-meta-4 break-all">{o.customerEmail}</div>
+                      ) : null}
+                    </td>
+                    <td className="py-3 px-4 text-dark">{o.status}</td>
+                    <td className="py-3 px-4 text-dark">{o.paymentStatus}</td>
+                    <td className="py-3 px-4 text-dark">{formatPrice(o.totalAmount)}</td>
+                    <td className="py-3 px-4">
+                      <Link
+                        href={`/admin/orders/${o.id}`}
+                        className="text-sm font-medium text-blue hover:underline"
+                      >
+                        View / update
+                      </Link>
+                    </td>
+                  </tr>
+                  {expanded ? (
+                    <tr className="border-b border-gray-3 bg-gray-1/60">
+                      <td colSpan={tableColSpan} className="px-4 py-3">
+                        {o.products.length > 0 ? (
+                          <div className="flex flex-wrap items-start gap-3 pl-1">
+                            {o.products.map((product) => (
+                              <Link
+                                key={product.productId}
+                                href={`/shop/${product.slug}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={product.name}
+                                className="group relative shrink-0 rounded-lg border border-transparent p-1 transition hover:border-gray-3 hover:bg-white"
+                              >
+                                <AdminProductThumbnail
+                                  url={product.imageUrl}
+                                  alt={product.name}
+                                  size={56}
+                                />
+                                {product.quantity > 1 ? (
+                                  <span className="absolute -right-1 -top-1 rounded-full bg-dark px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                    ×{product.quantity}
+                                  </span>
+                                ) : null}
+                                <span className="mt-1 block max-w-[72px] truncate text-center text-[10px] text-meta-3 group-hover:text-blue">
+                                  {product.name}
+                                </span>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-meta-3">No product thumbnails for this order.</p>
+                        )}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
             {paged.length === 0 ? (
               <tr>
-                <td className="py-6 px-4 text-sm text-meta-3" colSpan={canDelete ? 7 : 6}>
+                <td className="py-6 px-4 text-sm text-meta-3" colSpan={tableColSpan}>
                   {q ? "No matching orders." : "No orders yet."}
                 </td>
               </tr>

@@ -5,6 +5,7 @@ import {
   orderConfirmedCustomerEmailText,
   newGuestAccountPasswordEmailHtml,
   newGuestAccountPasswordEmailText,
+  type EmailAttachment,
 } from "@/lib/email";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { loadOrderEmailLines } from "@/lib/email/orderEmailLines";
@@ -14,6 +15,7 @@ import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { prisma } from "@/lib/prisma";
+import { generateOrderInvoicePdf } from "@/lib/invoices/generateOrderInvoicePdf";
 import {
   collectOrderNotificationEmails,
   sendEmailToRecipients,
@@ -100,11 +102,28 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
   }
 
   try {
+    let attachments: EmailAttachment[] | undefined;
+    try {
+      const invoice = await generateOrderInvoicePdf(orderId);
+      if (invoice) {
+        attachments = [
+          {
+            filename: invoice.filename,
+            content: Buffer.from(invoice.data),
+            contentType: "application/pdf",
+          },
+        ];
+      }
+    } catch (invoiceErr) {
+      console.error("[postOrderFulfillment] invoice pdf failed", invoiceErr);
+    }
+
     await sendEmailToRecipients({
       recipients,
       subject: "Order placed successfully",
       html: orderConfirmedCustomerEmailHtml({ orderId: orderRef, lines: orderLines }),
       text: orderConfirmedCustomerEmailText({ orderId: orderRef, lines: orderLines }),
+      attachments,
     });
   } catch (err) {
     console.error("[postOrderFulfillment] order email failed", err);

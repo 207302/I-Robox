@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import { applyShipmozoWebhookUpdate } from "@/lib/shipping/shipmozoTracking";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -51,17 +50,6 @@ export async function POST(req: NextRequest) {
           error: result.error,
         });
         return NextResponse.json({ error: result.error }, { status: result.status });
-      }
-
-      if (result.shouldSendPickupEmail) {
-        try {
-          await sendPickupEmail(result.orderId);
-        } catch (emailErr) {
-          console.error("[shipmozo-webhook] pickup email failed", {
-            orderId: result.orderId,
-            emailErr,
-          });
-        }
       }
 
       return NextResponse.json({ success: true }, { status: 200 });

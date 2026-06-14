@@ -18,12 +18,19 @@ export function isEmailConfigured() {
   );
 }
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer | Uint8Array;
+  contentType?: string;
+};
+
 export async function sendEmail(input: {
   to: string;
   subject: string;
   html: string;
   /** Plain-text part — improves deliverability and shows the link if HTML is clipped. */
   text?: string;
+  attachments?: EmailAttachment[];
 }) {
   if (!isEmailConfigured()) return { ok: false, skipped: true };
 
@@ -43,6 +50,15 @@ export async function sendEmail(input: {
     subject: input.subject,
     html: input.html,
     ...(input.text ? { text: input.text } : {}),
+    ...(input.attachments?.length
+      ? {
+          attachments: input.attachments.map((file) => ({
+            filename: file.filename,
+            content: Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content),
+            contentType: file.contentType ?? "application/octet-stream",
+          })),
+        }
+      : {}),
   });
 
   return { ok: true };
@@ -175,7 +191,7 @@ export function orderConfirmedCustomerEmailHtml(input: {
 }) {
   return orderEmailTemplate({
     heading: "Order placed successfully",
-    message: "Your payment was successful and your order is now confirmed.",
+    message: "Your payment was successful and your order is now confirmed. Your invoice is attached to this email.",
     orderId: input.orderId,
     lines: input.lines,
   });
@@ -188,7 +204,7 @@ export function orderConfirmedCustomerEmailText(input: {
 }) {
   return orderEmailTextBody({
     heading: "Order placed successfully",
-    message: "Your payment was successful and your order is now confirmed.",
+    message: "Your payment was successful and your order is now confirmed. Your invoice is attached to this email.",
     orderId: input.orderId,
     lines: input.lines,
   });

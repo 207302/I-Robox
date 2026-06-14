@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { HOME_PRODUCT_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { formatPrice } from "@/utils/formatePrice";
+import { productImageAlt } from "@/lib/seo/metadata";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 export type HomeProductCardItem = {
@@ -29,7 +30,7 @@ export default function HomeProductCard({
       <div className="relative aspect-square bg-gray-2">
         <Image
           src={item.image}
-          alt={item.title}
+          alt={productImageAlt(item.title)}
           fill
           sizes={HOME_PRODUCT_CARD_SIZES}
           className="object-cover"

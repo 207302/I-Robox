@@ -61,7 +61,7 @@ const HeroCarousal = ({ sliders }: { sliders: any }) => {
             <div>
               <Image
                 src={slider?.sliderImage ? slider?.sliderImage! : "/no image"}
-                alt="headphone"
+                alt={slider?.product?.title ? `${slider.product.title} at i-robox` : "Featured product at i-robox"}
                 width={320}
                 height={400}
                 loading="eager"

@@ -13,6 +13,12 @@ import ProductReviewComposer from "@/components/Shop/ProductReviewComposer";
 import { getApprovedReviewsForProduct } from "@/lib/queries/productReviews";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 import { getProductSlugsForStaticGeneration } from "@/lib/shop/productStaticParams";
+import { JsonLdScript } from "@/lib/seo/jsonLd";
+import {
+  buildSocialMetadata,
+  truncateMetaDescription,
+} from "@/lib/seo/metadata";
+import { buildProductJsonLd } from "@/lib/seo/productSchema";
 
 /** ISR: keep in sync with `PRODUCT_PAGE_REVALIDATE_SECONDS` in cache/constants.ts */
 export const revalidate = 300;
@@ -36,11 +42,25 @@ export async function generateMetadata({
 }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const product = await getProductBySlugCached(slug);
-  if (!product) return { title: "Product Not Found | i-Robox" };
+  if (!product) return { title: "Product Not Found | i-robox" };
+
+  const title = `${product.title} | i-robox`;
+  const description =
+    truncateMetaDescription(product.description || product.shortDescription) ||
+    `Buy ${product.title} online at i-robox — RC toys, diecast models, and collectibles with delivery across India.`;
+  const image =
+    product.product_images?.slice().sort((a, b) => a.sort_order - b.sort_order)[0]?.url ??
+    PRODUCT_IMAGE_PLACEHOLDER;
 
   return {
-    title: `${product.title} | Shop | i-Robox`,
-    description: product.description || `Buy ${product.title} at i-Robox.`,
+    title,
+    description,
+    ...buildSocialMetadata({
+      title,
+      description,
+      path: `/shop/${product.slug}`,
+      image,
+    }),
   };
 }
 
@@ -72,9 +92,25 @@ export default async function ProductPage({ params }: ProductPageProps) {
     };
   });
   const galleryId = `product-gallery-${product.id}`;
+  const primaryImage = galleryImagesSafe[0] || PRODUCT_IMAGE_PLACEHOLDER;
+  const productDescription =
+    truncateMetaDescription(product.description || product.shortDescription) ||
+    `Buy ${product.title} online at i-robox.`;
+  const offerPrice = product.discountedPrice ?? product.price;
+  const productJsonLd = buildProductJsonLd({
+    name: product.title,
+    description: productDescription,
+    image: primaryImage,
+    sku: product.sku || product.slug,
+    brand: product.brand?.name ?? null,
+    slug: product.slug,
+    price: offerPrice,
+    inStock: product.quantity > 0,
+  });
 
   return (
     <>
+      <JsonLdScript id="product-jsonld" data={productJsonLd} />
       <LcpImagePrelink
         imageUrl={galleryImagesSafe[0]}
         sizes="(max-width: 1024px) 100vw, 50vw"

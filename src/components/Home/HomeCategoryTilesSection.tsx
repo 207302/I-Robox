@@ -54,7 +54,7 @@ export default function HomeCategoryTilesSection({ categories }: HomeCategoryTil
                     <div className="relative aspect-[5/3] w-full shrink-0 bg-gray-2">
                       <Image
                         src={cat.image}
-                        alt={cat.name}
+                        alt={`${cat.name} collection at i-robox`}
                         fill
                         sizes="(max-width: 640px) 200px, 240px"
                         className="object-cover"

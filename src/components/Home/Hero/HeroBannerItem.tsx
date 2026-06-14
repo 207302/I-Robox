@@ -42,7 +42,7 @@ export default function HeroBannerItem({ bannerItem }: { bannerItem: any }) {
         <div className="w-1/2">
           <Image
             src={bannerItem?.bannerImage}
-            alt="mobile image"
+            alt={bannerItem?.bannerName ? `${bannerItem.bannerName} at i-robox` : "Featured banner at i-robox"}
             width={170}
             height={210}
           />

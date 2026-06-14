@@ -110,7 +110,7 @@ const MobileMenu = ({
                     headerLogo ||
                     DEFAULT_HEADER_LOGO
                   }
-                  alt="Site logo"
+                  alt="i-robox logo"
                   width={88}
                   height={88}
                   quality={90}

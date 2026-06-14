@@ -48,7 +48,7 @@ export default function SiteSearchPreloader({ onDone }: Props) {
     >
       <Image
         src={LOGO}
-        alt="i-Robox"
+        alt="i-robox logo"
         width={88}
         height={88}
         quality={90}

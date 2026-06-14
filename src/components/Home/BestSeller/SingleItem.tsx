@@ -17,6 +17,7 @@ import {
   pickDefaultVariant,
 } from "@/lib/cart/cartLine";
 import { formatPrice } from "@/utils/formatePrice";
+import { productImageAlt } from "@/lib/seo/metadata";
 
 const SingleItem = ({ item }: { item: Product }) => {
   const hasVariants = (item?.productVariants?.length ?? 0) > 0;
@@ -147,7 +148,7 @@ const SingleItem = ({ item }: { item: Product }) => {
           <Link href={`/shop/${item?.slug}`}>
             <Image
               src={defaultVariant?.image ? defaultVariant.image : ""}
-              alt={item.title || "product-image"}
+              alt={productImageAlt(item.title)}
               width={280}
               height={280}
             />

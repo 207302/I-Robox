@@ -3,10 +3,20 @@ import ContactSection from "@/components/Contact/ContactSection";
 import { prepareQuickLinkContentForHtml } from "@/lib/marketing/prepareQuickLinkContentHtml";
 import { getQuickLinkPageContent } from "@/lib/marketing/quickLinkPages";
 import { getStoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
+import { buildSocialMetadata } from "@/lib/seo/metadata";
+
+const CONTACT_TITLE = "Contact Us | i-robox";
+const CONTACT_DESCRIPTION =
+  "Contact i-robox for orders, product questions, and support. We help with RC toys, diecast models, and collectibles across India.";
 
 export const metadata: Metadata = {
-  title: "Contact Us | i-Robox",
-  description: "Get in touch with i-Robox for orders, products, and support.",
+  title: CONTACT_TITLE,
+  description: CONTACT_DESCRIPTION,
+  ...buildSocialMetadata({
+    title: CONTACT_TITLE,
+    description: CONTACT_DESCRIPTION,
+    path: "/contact",
+  }),
 };
 
 export default async function ContactPage() {

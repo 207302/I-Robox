@@ -3,6 +3,7 @@ import Image from "next/image";
 import { useCart } from "@/hooks/useCart";
 import { useRouter } from "next/navigation";
 import { formatPrice } from "@/utils/formatePrice";
+import { productImageAlt } from "@/lib/seo/metadata";
 
 const SingleItem = ({ item }: any) => {
   const { removeItem, handleCartClick } = useCart();
@@ -24,7 +25,7 @@ const SingleItem = ({ item }: any) => {
         <div className="flex items-center justify-center rounded-[10px] bg-gray-3 w-22.5 h-22.5 shrink-0 overflow-hidden relative">
           <Image
             src={item.image}
-            alt="product"
+            alt={productImageAlt(item.name)}
             fill
             sizes="64px"
             className="object-cover"

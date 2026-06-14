@@ -11,6 +11,7 @@ import {
   PRODUCT_IMAGE_PLACEHOLDER,
 } from "@/lib/shop/productCardImage";
 import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
+import { productImageAlt } from "@/lib/seo/metadata";
 import { useAppSelector } from "@/redux/store";
 
 const PreviewSliderModal = () => {
@@ -170,7 +171,7 @@ const PreviewSliderModal = () => {
                 <div className="relative mx-auto flex h-[min(80vh,720px)] w-full max-w-4xl items-center justify-center">
                   <SafeProductImage
                     src={resolveProductImageSrc(src || PRODUCT_IMAGE_PLACEHOLDER)}
-                    alt={`${title} image ${key + 1}`}
+                    alt={productImageAlt(title)}
                     width={900}
                     height={900}
                     className="mx-auto max-h-[min(80vh,720px)] w-auto max-w-full object-contain"

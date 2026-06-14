@@ -24,6 +24,7 @@ import { notifyCustomerOrderOrShipmentUpdate } from "@/lib/orders/customerOrderN
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { compactOrderId } from "@/lib/orders/orderNumber";
+import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 
 function formatPaymentMethod(provider: string | null, paymentStatus: string): string {
   const p = (provider ?? "").trim().toLowerCase();
@@ -77,10 +78,17 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         order_items: {
           select: {
             id: true,
+            product_id: true,
             product_name: true,
             quantity: true,
             unit_price: true,
             subtotal_amount: true,
+            products: {
+              select: {
+                slug: true,
+                product_images: adminProductImageSelect,
+              },
+            },
           },
         },
       },
@@ -137,7 +145,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
           : { id: null, carrier: "", tracking_number: "", status: "PENDING", shipmozo: null },
         items: order.order_items.map((it) => ({
           id: it.id,
+          product_id: it.product_id,
           product_name: it.product_name,
+          product_slug: it.products?.slug ?? null,
+          product_image_url: it.products ? firstProductImageUrl(it.products) : null,
           quantity: it.quantity,
           unit_price: Number(it.unit_price),
           subtotal_amount: Number(it.subtotal_amount),

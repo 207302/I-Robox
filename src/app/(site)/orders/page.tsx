@@ -1,12 +1,34 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
-import { formatPrice } from "@/utils/formatePrice";
+import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
+import {
+  CustomerOrdersList,
+  type CustomerOrderRow,
+} from "@/components/orders/CustomerOrdersList";
 import { formatOrderReference } from "@/utils/orderNumber";
 
 export const metadata = {
   title: "Orders | i-Robox",
 };
+
+function formatShippingLine(
+  address: {
+    line1: string;
+    line2: string | null;
+    city: string;
+    state: string;
+    postal_code: string;
+  } | null
+): string | null {
+  if (!address) return null;
+  const parts = [
+    address.line1,
+    address.line2,
+    `${address.city}, ${address.state} ${address.postal_code}`,
+  ].filter(Boolean);
+  return parts.join(", ") || null;
+}
 
 export default async function OrdersPage() {
   const session = await getSession();
@@ -37,12 +59,57 @@ export default async function OrdersPage() {
       status: true,
       payment_status: true,
       total_amount: true,
-      created_at: true,
       addresses_orders_shipping_address_idToaddresses: {
         select: { line1: true, line2: true, city: true, state: true, postal_code: true },
       },
-      order_items: { select: { product_name: true, quantity: true }, take: 2 },
+      order_items: {
+        select: {
+          product_id: true,
+          product_name: true,
+          quantity: true,
+          products: {
+            select: {
+              slug: true,
+              product_images: adminProductImageSelect,
+            },
+          },
+        },
+      },
     },
+  });
+
+  const rows: CustomerOrderRow[] = orders.map((o) => {
+    const productMap = new Map<
+      string,
+      { productId: string; slug: string; name: string; imageUrl: string | null; quantity: number }
+    >();
+
+    for (const item of o.order_items) {
+      const slug = item.products?.slug?.trim() ?? "";
+      if (!slug) continue;
+      const existing = productMap.get(item.product_id);
+      if (existing) {
+        existing.quantity += item.quantity;
+        continue;
+      }
+      productMap.set(item.product_id, {
+        productId: item.product_id,
+        slug,
+        name: item.product_name,
+        imageUrl: item.products ? firstProductImageUrl(item.products) : null,
+        quantity: item.quantity,
+      });
+    }
+
+    return {
+      id: o.id,
+      orderRef: formatOrderReference(o),
+      status: String(o.status),
+      paymentStatus: String(o.payment_status),
+      totalAmount: Number(o.total_amount),
+      shippingLine: formatShippingLine(o.addresses_orders_shipping_address_idToaddresses),
+      products: [...productMap.values()],
+    };
   });
 
   return (
@@ -50,7 +117,7 @@ export default async function OrdersPage() {
       <div className="w-full px-4 mx-auto max-w-5xl sm:px-8 xl:px-0">
         <h1 className="text-2xl font-semibold text-dark mb-8">Orders</h1>
 
-        {orders.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="rounded-2xl border border-gray-3 bg-white p-8 text-center">
             <p className="text-sm text-meta-3">No orders yet.</p>
             <Link
@@ -62,55 +129,9 @@ export default async function OrdersPage() {
             </Link>
           </div>
         ) : (
-          <div className="rounded-2xl border border-gray-3 bg-white divide-y divide-gray-3">
-            {orders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/orders/${o.id}`}
-                className="p-4 sm:p-6 block hover:bg-gray-1 transition"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm text-meta-3">Order</div>
-                    <div className="font-semibold text-dark">{formatOrderReference(o)}</div>
-                    {o.addresses_orders_shipping_address_idToaddresses ? (
-                      <div className="mt-1 text-xs text-meta-3 line-clamp-1">
-                        {o.addresses_orders_shipping_address_idToaddresses.line1}
-                        {o.addresses_orders_shipping_address_idToaddresses.line2
-                          ? `, ${o.addresses_orders_shipping_address_idToaddresses.line2}`
-                          : ""}
-                        , {o.addresses_orders_shipping_address_idToaddresses.city},{" "}
-                        {o.addresses_orders_shipping_address_idToaddresses.state}{" "}
-                        {o.addresses_orders_shipping_address_idToaddresses.postal_code}
-                      </div>
-                    ) : null}
-                    {o.order_items.length ? (
-                      <div className="mt-1 text-xs text-meta-3 line-clamp-1">
-                        {o.order_items
-                          .map((it) => `${it.product_name} x${it.quantity}`)
-                          .join(", ")}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="text-sm">
-                    <div className="text-meta-3">Total</div>
-                    <div className="font-semibold text-dark">{formatPrice(Number(o.total_amount))}</div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="text-meta-3">Status</div>
-                    <div className="font-semibold text-dark">{String(o.status)}</div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="text-meta-3">Payment</div>
-                    <div className="font-semibold text-dark">{String(o.payment_status)}</div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <CustomerOrdersList orders={rows} />
         )}
       </div>
     </section>
   );
 }
-

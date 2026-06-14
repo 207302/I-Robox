@@ -28,6 +28,11 @@ const quickLinks = [
     label: "Contact",
     href: "/contact",
   },
+  {
+    id: 6,
+    label: "Sitemap",
+    href: "/sitemap.xml",
+  },
 ];
 
 type Props = {

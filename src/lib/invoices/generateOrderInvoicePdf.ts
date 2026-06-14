@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
+import { embedInvoiceBrandLogo } from "@/lib/invoices/invoiceBrandLogo";
 
 const SELLER_NAME = "I-Robox";
 const SELLER_EMAIL = "iroboxtoys@gmail.com";
@@ -171,6 +172,7 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
   const page = pdfDoc.addPage([595.28, 841.89]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const brandLogo = await embedInvoiceBrandLogo(pdfDoc);
   const { height, width } = page.getSize();
   let y = height - 40;
 
@@ -209,8 +211,29 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
   const leftW = 280;
   const rightW = width - rightX - 40;
 
-  let yLeft = y;
-  yLeft = drawWrapped(SELLER_NAME, leftX, yLeft, leftW, { bold: true, size: 16, lineHeight: 18 });
+  const logoSize = 32;
+  const brandFontSize = 18;
+  const brandGap = 10;
+  const brandNameWidth = fontBold.widthOfTextAtSize(SELLER_NAME, brandFontSize);
+  const brandBlockWidth = (brandLogo ? logoSize + brandGap : 0) + brandNameWidth;
+  const brandStartX = (width - brandBlockWidth) / 2;
+  const brandTextY = y - 14;
+
+  if (brandLogo) {
+    page.drawImage(brandLogo, {
+      x: brandStartX,
+      y: brandTextY - logoSize + 12,
+      width: logoSize,
+      height: logoSize,
+    });
+  }
+  drawText(SELLER_NAME, brandStartX + (brandLogo ? logoSize + brandGap : 0), brandTextY, {
+    bold: true,
+    size: brandFontSize,
+  });
+
+  const brandBottomY = y - logoSize - 6;
+  let yLeft = brandBottomY;
   yLeft = drawWrapped(`Email: ${SELLER_EMAIL}`, leftX, yLeft, leftW, { size: 10, lineHeight: 12 });
   yLeft = drawWrapped(`GSTIN ${SELLER_GSTIN || "--"}`, leftX, yLeft, leftW, { size: 10, lineHeight: 12 });
 

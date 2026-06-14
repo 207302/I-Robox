@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
+import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
 import { formatPrice } from "@/utils/formatePrice";
 
 function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
@@ -159,6 +160,12 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
           <h1 className="text-2xl font-semibold text-dark">Order</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/api/admin/orders/${id}/invoice/download`}
+            className="rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-dark hover:bg-gray-1 transition"
+          >
+            Download invoice
+          </a>
           {canDelete ? (
             <button
               type="button"
@@ -321,19 +328,58 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
       <div className="rounded-2xl border border-gray-3 bg-white p-6 space-y-3">
         <h2 className="text-lg font-semibold text-dark">Items</h2>
         <ul className="space-y-3 text-sm text-dark">
-          {data.items?.map((it: any) => (
-            <li key={it.id} className="flex justify-between gap-4 border-b border-gray-3 pb-2 last:border-0">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{it.product_name}</div>
-                <div className="text-xs text-meta-3 mt-0.5">
-                  {formatPrice(Number(it.unit_price ?? 0))} × {it.quantity}
+          {data.items?.map((it: any) => {
+            const productHref = it.product_slug ? `/shop/${it.product_slug}` : null;
+            const thumb = (
+              <AdminProductThumbnail
+                url={it.product_image_url}
+                alt={it.product_name}
+                size={48}
+              />
+            );
+            return (
+              <li
+                key={it.id}
+                className="flex items-center justify-between gap-4 border-b border-gray-3 pb-3 last:border-0"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  {productHref ? (
+                    <Link
+                      href={productHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={it.product_name}
+                      className="shrink-0 rounded-lg border border-transparent p-0.5 transition hover:border-gray-3"
+                    >
+                      {thumb}
+                    </Link>
+                  ) : (
+                    <div className="shrink-0">{thumb}</div>
+                  )}
+                  <div className="min-w-0">
+                    {productHref ? (
+                      <Link
+                        href={productHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate font-medium text-dark hover:text-blue hover:underline"
+                      >
+                        {it.product_name}
+                      </Link>
+                    ) : (
+                      <div className="truncate font-medium">{it.product_name}</div>
+                    )}
+                    <div className="text-xs text-meta-3 mt-0.5">
+                      {formatPrice(Number(it.unit_price ?? 0))} × {it.quantity}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <span className="shrink-0 font-medium">
-                {formatPrice(Number(it.subtotal_amount ?? 0))}
-              </span>
-            </li>
-          ))}
+                <span className="shrink-0 font-medium">
+                  {formatPrice(Number(it.subtotal_amount ?? 0))}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>

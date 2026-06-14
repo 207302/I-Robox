@@ -299,12 +299,20 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
                     <td className="py-3 px-4 text-dark">{o.paymentStatus}</td>
                     <td className="py-3 px-4 text-dark">{formatPrice(o.totalAmount)}</td>
                     <td className="py-3 px-4">
-                      <Link
-                        href={`/admin/orders/${o.id}`}
-                        className="text-sm font-medium text-blue hover:underline"
-                      >
-                        View / update
-                      </Link>
+                      <div className="flex flex-col gap-1">
+                        <Link
+                          href={`/admin/orders/${o.id}`}
+                          className="text-sm font-medium text-blue hover:underline"
+                        >
+                          View / update
+                        </Link>
+                        <a
+                          href={`/api/admin/orders/${o.id}/invoice/download`}
+                          className="text-sm font-medium text-meta-3 hover:text-blue hover:underline"
+                        >
+                          Invoice
+                        </a>
+                      </div>
                     </td>
                   </tr>
                   {expanded ? (

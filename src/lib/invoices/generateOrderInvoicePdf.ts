@@ -206,54 +206,89 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
     return cy;
   };
 
-  const leftX = 40;
-  const rightX = 340;
-  const leftW = 280;
-  const rightW = width - rightX - 40;
+  const drawRightAligned = (
+    text: string,
+    rightEdge: number,
+    yy: number,
+    opts?: { bold?: boolean; size?: number; lineHeight?: number }
+  ) => {
+    const size = opts?.size ?? 10;
+    const lineHeight = opts?.lineHeight ?? size + 2;
+    const useBold = Boolean(opts?.bold);
+    const useFont = useBold ? fontBold : font;
+    const textWidth = useFont.widthOfTextAtSize(text, size);
+    drawText(text, rightEdge - textWidth, yy, { bold: useBold, size });
+    return yy - lineHeight;
+  };
 
-  const logoSize = 32;
-  const brandFontSize = 18;
+  const marginX = 40;
+  const leftX = marginX;
+  const rightEdge = width - marginX;
+  const detailSize = 10;
+  const detailLineHeight = 12;
+
+  const logoSize = 36;
+  const brandFontSize = 20;
   const brandGap = 10;
   const brandNameWidth = fontBold.widthOfTextAtSize(SELLER_NAME, brandFontSize);
   const brandBlockWidth = (brandLogo ? logoSize + brandGap : 0) + brandNameWidth;
   const brandStartX = (width - brandBlockWidth) / 2;
-  const brandTextY = y - 14;
+  const leftW = Math.max(120, brandStartX - leftX - 12);
+
+  // One header row — left (contact), center (logo + name), right (order meta) top-aligned.
+  const headerStartY = y;
+  const headerRowHeight = 4 * detailLineHeight + 4;
+
+  let yLeft = headerStartY;
+  yLeft = drawWrapped(`Email: ${SELLER_EMAIL}`, leftX, yLeft, leftW, {
+    size: detailSize,
+    lineHeight: detailLineHeight,
+  });
+  yLeft = drawWrapped(`GSTIN ${SELLER_GSTIN || "--"}`, leftX, yLeft, leftW, {
+    size: detailSize,
+    lineHeight: detailLineHeight,
+  });
+
+  const orderRef = formatOrderReference(order);
+  let yRight = headerStartY;
+  yRight = drawRightAligned(`Order ${orderRef}`, rightEdge, yRight, {
+    bold: true,
+    size: detailSize,
+    lineHeight: detailLineHeight,
+  });
+  yRight = drawRightAligned(
+    `Order Date ${formatDateDdMmYy(order.created_at)}`,
+    rightEdge,
+    yRight,
+    { size: detailSize, lineHeight: detailLineHeight }
+  );
+  yRight = drawRightAligned(`Invoice No ${orderRef.replace(/-/g, "")}`, rightEdge, yRight, {
+    size: detailSize,
+    lineHeight: detailLineHeight,
+  });
+  yRight = drawRightAligned(`Invoice Date ${formatDateDdMmYy(new Date())}`, rightEdge, yRight, {
+    size: detailSize,
+    lineHeight: detailLineHeight,
+  });
+
+  const brandCenterY = headerStartY - headerRowHeight / 2;
+  const brandTextBaseline = brandCenterY + brandFontSize * 0.32;
+  const logoY = brandCenterY - logoSize / 2;
 
   if (brandLogo) {
     page.drawImage(brandLogo, {
       x: brandStartX,
-      y: brandTextY - logoSize + 12,
+      y: logoY,
       width: logoSize,
       height: logoSize,
     });
   }
-  drawText(SELLER_NAME, brandStartX + (brandLogo ? logoSize + brandGap : 0), brandTextY, {
+  drawText(SELLER_NAME, brandStartX + (brandLogo ? logoSize + brandGap : 0), brandTextBaseline, {
     bold: true,
     size: brandFontSize,
   });
 
-  const brandBottomY = y - logoSize - 6;
-  let yLeft = brandBottomY;
-  yLeft = drawWrapped(`Email: ${SELLER_EMAIL}`, leftX, yLeft, leftW, { size: 10, lineHeight: 12 });
-  yLeft = drawWrapped(`GSTIN ${SELLER_GSTIN || "--"}`, leftX, yLeft, leftW, { size: 10, lineHeight: 12 });
-
-  const orderRef = formatOrderReference(order);
-  let yRight = y - 4;
-  yRight = drawWrapped(`Order ${orderRef}`, rightX, yRight, rightW, { bold: true, size: 10, lineHeight: 12 });
-  yRight = drawWrapped(`Order Date ${formatDateDdMmYy(order.created_at)}`, rightX, yRight, rightW, {
-    size: 10,
-    lineHeight: 12,
-  });
-  yRight = drawWrapped(`Invoice No ${orderRef.replace(/-/g, "")}`, rightX, yRight, rightW, {
-    size: 10,
-    lineHeight: 12,
-  });
-  yRight = drawWrapped(`Invoice Date ${formatDateDdMmYy(new Date())}`, rightX, yRight, rightW, {
-    size: 10,
-    lineHeight: 12,
-  });
-
-  y = Math.min(yLeft, yRight) - 8;
+  y = Math.min(yLeft, yRight, headerStartY - headerRowHeight) - 8;
   drawLine(page, 40, y, width - 40, y);
   y -= 18;
 

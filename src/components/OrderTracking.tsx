@@ -5,9 +5,9 @@ import {
   SHIPMOZO_TRACKING_STEPS,
   type ShipmozoTrackingStatus,
 } from "@/lib/shipping/shipmozoTrackingConstants";
+import { shipmozoPublicTrackUrl } from "@/lib/shipping/shipmozoPublicTrackUrl";
 
 const BRAND_RED = "#E63946";
-const TRACK_URL = "https://panel.shipmozo.com/track-order";
 
 const STEP_LABELS: Record<ShipmozoTrackingStatus, string> = {
   ORDER_PLACED: "Order Placed",
@@ -142,7 +142,7 @@ export default function OrderTracking({
         ) : null}
         {awb_number ? (
           <a
-            href={TRACK_URL}
+            href={shipmozoPublicTrackUrl(awb_number)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex text-sm font-medium hover:underline"

@@ -4,7 +4,7 @@ import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { embedInvoiceBrandLogo } from "@/lib/invoices/invoiceBrandLogo";
 
 const SELLER_NAME = "I-Robox";
-const SELLER_EMAIL = "iroboxtoys@gmail.com";
+const SELLER_EMAIL = "info@i-robox.com";
 const SELLER_GSTIN = process.env.SELLER_GSTIN || process.env.SHIPMOZO_GSTIN || "";
 
 export type OrderInvoicePdf = {

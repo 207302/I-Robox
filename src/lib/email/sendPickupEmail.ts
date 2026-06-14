@@ -3,9 +3,9 @@ import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { shipmozoTrackingBarEmailHtml, shipmozoTrackingBarEmailText } from "@/lib/email/shipmozoTrackingBarEmail";
+import { shipmozoPublicTrackUrl } from "@/lib/shipping/shipmozoPublicTrackUrl";
 
 const BRAND_RED = "#E63946";
-const TRACK_URL = "https://panel.shipmozo.com/track-order";
 
 function escapeHtml(value: string) {
   return value
@@ -25,7 +25,7 @@ export function pickupEmailHtml(input: {
   const orderRef = escapeHtml(input.orderRef);
   const carrier = escapeHtml(input.carrier || "our courier partner");
   const awb = escapeHtml(input.awbNumber);
-  const trackUrl = TRACK_URL;
+  const trackUrl = shipmozoPublicTrackUrl(input.awbNumber);
 
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.6;color:#111;max-width:560px;margin:0 auto;">
@@ -115,7 +115,7 @@ export async function sendPickupEmail(orderId: string) {
     shipmozoTrackingBarEmailText("PICKUP_GENERATED"),
     "",
     `AWB / Tracking number: ${awb}`,
-    `Track: ${TRACK_URL}`,
+    `Track: ${shipmozoPublicTrackUrl(awb)}`,
     "",
     "Questions? Reply to this email or visit i-robox.com",
   ].join("\n");

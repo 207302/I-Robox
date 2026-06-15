@@ -23,7 +23,6 @@ export default function CartServerSync() {
             quantity: i.quantity,
           }))
           .filter((i) => i.productId.length > 10 && i.quantity > 0);
-        if (payload.length === 0) return;
         await fetch("/api/account/cart-sync", {
           method: "POST",
           headers: { "content-type": "application/json" },

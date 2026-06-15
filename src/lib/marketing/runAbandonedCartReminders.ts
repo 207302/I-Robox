@@ -8,6 +8,8 @@ import {
 import { getAbandonedCartSettings } from "@/lib/marketing/getAbandonedCartSettings";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
+import { purchasedProductIdsAfterCartUpdate } from "@/lib/cart/abandonedCartEligibility";
+import { clearCustomerServerCart } from "@/lib/cart/clearCustomerServerCart";
 
 export type AbandonedCartRunResult =
   | {
@@ -65,6 +67,8 @@ export async function runAbandonedCartReminders(): Promise<AbandonedCartRunResul
     },
     select: {
       id: true,
+      customer_id: true,
+      updated_at: true,
       customers: { select: { email: true } },
       cart_items: {
         take: 6,
@@ -83,7 +87,31 @@ export async function runAbandonedCartReminders(): Promise<AbandonedCartRunResul
     const email = c.customers?.email;
     if (!email || isSyntheticPhoneSignupEmail(email)) continue;
 
-    const lines = buildAbandonedCartReminderLines(c.cart_items, siteBase);
+    const customerId = c.customer_id;
+    if (!customerId) continue;
+
+    const cartProductIds = c.cart_items.map((item) => item.product_id);
+    const purchasedIds = await purchasedProductIdsAfterCartUpdate({
+      customerId,
+      cartUpdatedAt: c.updated_at,
+      productIds: cartProductIds,
+    });
+
+    const remainingItems =
+      purchasedIds.size > 0
+        ? c.cart_items.filter((item) => !purchasedIds.has(item.product_id))
+        : c.cart_items;
+
+    if (remainingItems.length === 0) {
+      try {
+        await clearCustomerServerCart(customerId);
+      } catch (err) {
+        console.error("[abandoned-cart] clear stale cart failed", c.id, err);
+      }
+      continue;
+    }
+
+    const lines = buildAbandonedCartReminderLines(remainingItems, siteBase);
     const textLines = abandonedCartReminderTextLines(lines);
 
     try {

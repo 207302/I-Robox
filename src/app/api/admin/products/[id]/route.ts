@@ -11,6 +11,7 @@ import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { deleteProductById, destroyCloudinaryImages } from "@/lib/admin/deleteProduct";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
+import { parseProductPackageFieldsIn } from "@/lib/admin/productPackageFields";
 
 function parseShippingPerUnitIn(body: Record<string, unknown>): number | { error: string } | undefined {
   if (body.shipping_per_unit === undefined) return undefined;
@@ -52,6 +53,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         max_order_quantity: true,
         sku: true,
         hsn_code: true,
+        weight_g: true,
         description: true,
         short_description: true,
         is_active: true,
@@ -277,6 +279,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       const mq = parseMaxOrderQuantityIn(body as Record<string, unknown>);
       if (typeof mq === "object" && mq && "error" in mq) return NextResponse.json({ error: mq.error }, { status: 400 });
       if (typeof mq === "number") data.max_order_quantity = mq;
+    }
+    const packageFields = parseProductPackageFieldsIn(body as Record<string, unknown>);
+    if (packageFields && "error" in packageFields) {
+      return NextResponse.json({ error: packageFields.error }, { status: 400 });
+    }
+    if (packageFields) {
+      if (packageFields.weight_g !== undefined) data.weight_g = packageFields.weight_g;
     }
   
     let updatedId = id;

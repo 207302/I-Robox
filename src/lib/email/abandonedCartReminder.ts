@@ -9,6 +9,7 @@ type ImageRow = { url: string; sort_order: number };
 
 /** Prisma select fragment for cart lines in the abandoned-cart cron. */
 export const abandonedCartItemSelect = {
+  product_id: true,
   quantity: true,
   product_variant_id: true,
   products: {
@@ -43,6 +44,7 @@ export const abandonedCartItemSelect = {
 } as const;
 
 export type AbandonedCartItemRow = {
+  product_id: string;
   quantity: number;
   product_variant_id: string | null;
   products: {

@@ -109,15 +109,25 @@ export function orderUpdateCustomerEmailHtml(input: {
   orderId: string;
   orderUrl: string;
   blocksHtml: string[];
+  /** Direct ShipMozo AWB tracking URL (same as customer order detail page). */
+  trackUrl?: string | null;
 }) {
   const safeOrder = escapeHtmlAttr(input.orderId);
   const safeUrl = escapeHtmlAttr(input.orderUrl);
+  const safeTrackUrl = input.trackUrl?.trim() ? escapeHtmlAttr(input.trackUrl.trim()) : "";
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">Order update</h2>
     <p style="margin:0 0 1em">Your order <strong>${safeOrder}</strong> has an update.</p>
     ${input.blocksHtml.join("\n")}
-    <p style="margin:1.5em 0 0">
+    ${
+      safeTrackUrl
+        ? `<p style="margin:1.5em 0 0">
+      <a href="${safeTrackUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#E63946;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">Track on ShipMozo</a>
+    </p>`
+        : ""
+    }
+    <p style="margin:${safeTrackUrl ? "0.75em" : "1.5em"} 0 0">
       <a href="${safeUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">View order</a>
     </p>
   </div>`;

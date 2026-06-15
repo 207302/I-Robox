@@ -426,6 +426,8 @@ model products {
   sku                    String?                  @db.VarChar(100)
   /// GST HSN for shipping / invoicing (digits; optional comma for multiple codes on one SKU)
   hsn_code               String?                  @db.VarChar(32)
+  /// Packed weight in grams (product + retail box) for courier / ShipMozo.
+  weight_g               Int?
   diecast_scale_id       String?                  @db.Uuid
   category_id            String?                  @db.Uuid
   type_id                String?                  @db.Uuid

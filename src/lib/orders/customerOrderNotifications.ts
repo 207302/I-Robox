@@ -9,6 +9,7 @@ import {
   shipmozoTrackingBarEmailHtml,
   shipmozoTrackingBarEmailText,
 } from "@/lib/email/shipmozoTrackingBarEmail";
+import { shipmozoPublicTrackUrl } from "@/lib/shipping/shipmozoPublicTrackUrl";
 
 export type ShipmentSnapshot = {
   status: string;
@@ -84,6 +85,9 @@ export async function notifyCustomerOrderOrShipmentUpdate(input: {
     },
   });
   const orderRef = orderRow ? formatOrderReference(orderRow) : input.orderId;
+  const awb =
+    (input.nextShipment?.tracking_number ?? orderRow?.awb_number ?? "").trim() || null;
+  const trackUrl = awb ? shipmozoPublicTrackUrl(awb) : null;
 
   const base = getSiteBaseUrl();
   const orderUrl = `${base}/orders/${input.orderId}`;
@@ -128,10 +132,21 @@ export async function notifyCustomerOrderOrShipmentUpdate(input: {
       blocks.push(
         `<p style="margin:0.35em 0"><strong>Tracking number:</strong> ${safeSpan(input.nextShipment.tracking_number)}</p>`
       );
+      if (trackUrl) {
+        const safeTrackUrl = trackUrl.replace(/"/g, "&quot;").replace(/</g, "&lt;");
+        blocks.push(
+          `<p style="margin:0.35em 0"><a href="${safeTrackUrl}" target="_blank" rel="noopener noreferrer" style="color:#E63946;font-size:13px;font-weight:600;text-decoration:none;">Track on ShipMozo &rarr;</a></p>`
+        );
+      }
     }
   }
 
-  const html = orderUpdateCustomerEmailHtml({ orderId: orderRef, orderUrl, blocksHtml: blocks });
+  const html = orderUpdateCustomerEmailHtml({
+    orderId: orderRef,
+    orderUrl,
+    blocksHtml: blocks,
+    trackUrl,
+  });
   const textLines: string[] = [`Order ${orderRef} was updated.`];
   if (statusChanged) textLines.push(`Status: ${input.previousOrderStatus} → ${input.nextOrderStatus}`);
   if (trackingStepChanged) {
@@ -146,6 +161,7 @@ export async function notifyCustomerOrderOrShipmentUpdate(input: {
     if (input.nextShipment.tracking_number) textLines.push(`Tracking: ${input.nextShipment.tracking_number}`);
     if (showTrackingBar) textLines.push(shipmozoTrackingBarEmailText(trackingStatus));
   }
+  if (trackUrl) textLines.push(`Track on ShipMozo: ${trackUrl}`);
   textLines.push(`View order: ${orderUrl}`);
 
   const subjectHint =

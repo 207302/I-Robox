@@ -131,6 +131,10 @@ export default function AdminCsvPage() {
           Shipmozo / GST. Omit the column to leave existing product HSN unchanged on update.
         </p>
         <p className="text-xs text-meta-4">
+          <b className="text-dark">weight_g</b> optional — packed weight in grams (product + box) for ShipMozo. Omit the
+          column to leave existing value unchanged on update.
+        </p>
+        <p className="text-xs text-meta-4">
           <b className="text-dark">diecast_scale</b> optional — denominator (<b className="text-dark">64</b>) or ratio (
           <b className="text-dark">1:64</b>); matches the scale catalog (new values are added automatically on import).
           Omit the column to keep existing assignment on update.

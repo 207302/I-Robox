@@ -8,6 +8,7 @@ import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
+import { parseProductPackageFieldsIn } from "@/lib/admin/productPackageFields";
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -133,6 +134,10 @@ export async function POST(req: NextRequest) {
     if (typeof maxOrderQtyParsed === "object") {
       return NextResponse.json({ error: maxOrderQtyParsed.error }, { status: 400 });
     }
+    const packageFields = parseProductPackageFieldsIn(body as Record<string, unknown>);
+    if (packageFields && "error" in packageFields) {
+      return NextResponse.json({ error: packageFields.error }, { status: 400 });
+    }
     const variantsParsed = parseVariantsIn(body as Record<string, unknown>);
     if (typeof variantsParsed === "object" && "error" in variantsParsed) {
       return NextResponse.json({ error: variantsParsed.error }, { status: 400 });
@@ -179,6 +184,7 @@ export async function POST(req: NextRequest) {
             max_order_quantity: maxOrderQtyParsed,
             sku,
             hsn_code,
+            weight_g: packageFields?.weight_g ?? null,
             diecast_scale_id,
             description,
             short_description,

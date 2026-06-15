@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     const header = lines.length > 0 ? lines[0].split(",").map((h) => h.trim()) : [];
     const hasDiecastCol = header.includes("diecast_scale");
     const hasHsnCol = header.includes("hsn_code");
+    const hasWeightCol = header.includes("weight_g");
     const hasShippingCol = header.includes("shipping_per_unit");
     const hasMaxOrderQtyCol = header.includes("max_order_quantity");
   
@@ -104,6 +105,19 @@ export async function POST(req: NextRequest) {
           max_order_quantity = n;
         }
       }
+      const parseOptionalInt = (raw: string, max: number): number | null | undefined => {
+        const t = String(raw ?? "").trim();
+        if (t === "") return null;
+        const n = Number(t);
+        if (!Number.isInteger(n) || n < 1 || n > max) return undefined;
+        return n;
+      };
+      let weight_g: number | null | undefined = undefined;
+      if (hasWeightCol) {
+        const parsed = parseOptionalInt(String(r.weight_g ?? ""), 30_000);
+        if (parsed === undefined) continue;
+        weight_g = parsed;
+      }
       if (!name || !slug || !Number.isFinite(base_price)) continue;
   
       const available_quantity = parseNonNegInt(r.available_quantity, 0);
@@ -125,6 +139,7 @@ export async function POST(req: NextRequest) {
         is_active,
         ...(hasDiecastCol ? { diecast_scale_id: diecast_scale_id ?? null } : {}),
         ...(hasHsnCol ? { hsn_code: hsn_code ?? null } : {}),
+        ...(hasWeightCol ? { weight_g: weight_g ?? null } : {}),
         ...(hasShippingCol && shipping_per_unit !== undefined ? { shipping_per_unit } : {}),
         ...(hasMaxOrderQtyCol && max_order_quantity !== undefined ? { max_order_quantity } : {}),
       };
@@ -137,6 +152,7 @@ export async function POST(req: NextRequest) {
         is_active,
         diecast_scale_id: hasDiecastCol ? diecast_scale_id ?? null : null,
         ...(hasHsnCol ? { hsn_code: hsn_code ?? null } : {}),
+        ...(hasWeightCol ? { weight_g: weight_g ?? null } : {}),
         ...(hasShippingCol && shipping_per_unit !== undefined ? { shipping_per_unit } : {}),
         ...(hasMaxOrderQtyCol && max_order_quantity !== undefined ? { max_order_quantity } : {}),
       };

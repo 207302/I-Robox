@@ -20,6 +20,7 @@ import {
   collectOrderNotificationEmails,
   sendEmailToRecipients,
 } from "@/lib/orders/orderNotificationEmails";
+import { clearCustomerServerCart } from "@/lib/cart/clearCustomerServerCart";
 
 export type PostOrderFulfillmentInput = {
   orderId: string;
@@ -46,6 +47,14 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
     newAccountPasswordSetup,
     audit,
   } = input;
+
+  if (audit?.customerId) {
+    try {
+      await clearCustomerServerCart(audit.customerId);
+    } catch (err) {
+      console.error("[postOrderFulfillment] clear server cart failed", err);
+    }
+  }
 
   try {
     await ensureOrderShipmentCreated(orderId);

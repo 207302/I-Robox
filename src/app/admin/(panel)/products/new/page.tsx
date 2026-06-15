@@ -39,6 +39,7 @@ export default function NewProductPage() {
     discounted_price: "",
     sku: "",
     hsn_code: "",
+    weight_g: "",
     description: "",
     short_description: "",
     is_active: true,
@@ -313,6 +314,20 @@ export default function NewProductPage() {
             />
             <span className="mt-1 block text-xs text-meta-4">
               Digits (comma-separated if needed). Sent to Shipmozo / GST when shipping this product.
+            </span>
+          </label>
+
+          <label className="block max-w-xs">
+            <span className="mb-1 block text-sm font-medium text-dark">Packed weight (g)</span>
+            <input
+              value={form.weight_g}
+              onChange={(e) => setForm((f) => ({ ...f, weight_g: e.target.value }))}
+              inputMode="numeric"
+              placeholder="e.g. 350"
+              className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+            />
+            <span className="mt-1 block text-xs text-meta-4">
+              Product + retail box weight. Order total is summed per line (qty × weight) when sent to ShipMozo.
             </span>
           </label>
 

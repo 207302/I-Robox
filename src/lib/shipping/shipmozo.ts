@@ -1,8 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
+import { computeOrderPackageDetails } from "@/lib/shipping/orderPackageDetails";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
+
+/** ShipMozo requires L×W×H; box size is not stored per product. */
+const SHIPMOZO_DEFAULT_LENGTH_CM = 10;
+const SHIPMOZO_DEFAULT_WIDTH_CM = 10;
+const SHIPMOZO_DEFAULT_HEIGHT_CM = 10;
 
 /** Shipmozo rejects ref / order_id longer than this (e.g. auto-assign, schedule pickup). */
 const SHIPMOZO_ORDER_ID_MAX_LEN = 30;
@@ -175,7 +181,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
           product_name: true,
           quantity: true,
           unit_price: true,
-          products: { select: { hsn_code: true } },
+          products: { select: { hsn_code: true, weight_g: true } },
         },
       },
     },
@@ -208,10 +214,12 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     return;
   }
 
-  const defaultWeightG = Math.max(1, Math.min(30_000, Number(process.env.SHIPMOZO_DEFAULT_WEIGHT_G ?? "500") || 500));
-  const length = Number(process.env.SHIPMOZO_DEFAULT_LENGTH_CM ?? "10") || 10;
-  const width = Number(process.env.SHIPMOZO_DEFAULT_WIDTH_CM ?? "10") || 10;
-  const height = Number(process.env.SHIPMOZO_DEFAULT_HEIGHT_CM ?? "10") || 10;
+  const packageDetails = computeOrderPackageDetails(
+    (order.order_items ?? []).map((it) => ({
+      quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
+      weightG: it.products?.weight_g ?? null,
+    }))
+  );
 
   const total = Number(order.total_amount);
   const totalAmount = Number.isFinite(total) ? Number(total.toFixed(2)) : 0;
@@ -239,10 +247,10 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     product_detail: lineItems,
     payment_type: "PREPAID",
     cod_amount: "",
-    weight: defaultWeightG,
-    length,
-    width,
-    height,
+    weight: packageDetails.weightG,
+    length: SHIPMOZO_DEFAULT_LENGTH_CM,
+    width: SHIPMOZO_DEFAULT_WIDTH_CM,
+    height: SHIPMOZO_DEFAULT_HEIGHT_CM,
     warehouse_id: warehouseId,
     gst_ewaybill_number: "",
     gstin_number: (process.env.SELLER_GSTIN ?? process.env.SHIPMOZO_GSTIN ?? "").trim(),
@@ -327,6 +335,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     awb_number: awb || null,
     courier: courier || "Shipmozo",
     reference_id: createdOrderId,
+    package: packageDetails,
   });
 }
 

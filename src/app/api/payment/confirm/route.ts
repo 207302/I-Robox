@@ -14,6 +14,7 @@ import { bookShipmentForOrder } from "@/lib/shipping";
 import { ensureOrderShipmentCreated } from "@/lib/orders/ensureOrderShipment";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { clearCustomerServerCart } from "@/lib/cart/clearCustomerServerCart";
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     let result: {
       id: string;
       already: boolean;
+      customerId: string | null;
       previousStatus?: string;
       previousShipment?: { status: string; carrier: string | null; tracking_number: string | null } | null;
       nextShipment?: { status: string; carrier: string | null; tracking_number: string | null };
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
           Boolean(accessToken) && verifyOrderAccessToken(accessToken, orderId);
         if (!isOwner && !hasCheckoutAccess) throw new Error("FORBIDDEN");
         if (order.payment_status === "SUCCEEDED") {
-          return { id: order.id, already: true };
+          return { id: order.id, already: true, customerId: order.customer_id };
         }
   
         const previousStatus = String(order.status);
@@ -119,6 +121,7 @@ export async function POST(req: NextRequest) {
         return {
           id: orderId,
           already: false,
+          customerId: order.customer_id,
           previousStatus,
           previousShipment,
         };
@@ -138,6 +141,14 @@ export async function POST(req: NextRequest) {
   
     after(async () => {
       if (!shouldNotify) return;
+
+      if (result.customerId) {
+        try {
+          await clearCustomerServerCart(result.customerId);
+        } catch (err) {
+          console.error("[payment/confirm] clear server cart failed", err);
+        }
+      }
   
       try {
         await ensureOrderShipmentCreated(orderId);

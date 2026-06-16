@@ -23,7 +23,7 @@ async function runWithLock() {
     try {
       const result = await runShipmozoTrackingSync();
       console.info(
-        `[shipmozo-tracking-scheduler] scanned=${result.scanned} synced=${result.synced} skipped=${result.skipped} failed=${result.failed}`
+        `[shipmozo-tracking-scheduler] awb_scanned=${result.awbScanned} awb_discovered=${result.awbDiscovered} scanned=${result.scanned} synced=${result.synced} skipped=${result.skipped} failed=${result.failed}`
       );
     } finally {
       await prisma.$queryRaw`SELECT pg_advisory_unlock(${ADVISORY_LOCK_ID})`;

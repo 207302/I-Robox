@@ -78,6 +78,54 @@ export type ShipmozoTrackOrderResult = {
   error?: string;
 };
 
+export type ShipmozoOrderDetailResult = {
+  ok: boolean;
+  awb_number?: string;
+  courier?: string;
+  status?: string;
+  shipmozo_order_id?: string;
+  error?: string;
+};
+
+function parseShipmozoOrderDetailData(data: unknown): Omit<ShipmozoOrderDetailResult, "ok"> | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  const awb = String(d.awb_number ?? d.awb ?? "").trim();
+  if (!awb) return null;
+  const courier =
+    String(d.courier_company ?? d.courier ?? "").trim() || undefined;
+  const status =
+    String(d.current_status ?? d.order_status ?? d.status ?? "PICKUP_GENERATED").trim() ||
+    "PICKUP_GENERATED";
+  const shipmozo_order_id = String(d.order_id ?? "").trim() || undefined;
+  return { awb_number: awb, courier, status, shipmozo_order_id };
+}
+
+/** Fetch ShipMozo order by panel/API order id (e.g. IRx10001) — used when AWB is assigned manually. */
+export async function fetchShipmozoOrderDetail(
+  shipmozoOrderId: string
+): Promise<ShipmozoOrderDetailResult> {
+  const id = normalizeShipmozoOrderIdRef(shipmozoOrderId);
+  if (!id) return { ok: false, error: "missing_order_id" };
+  if (!isShipmozoConfigured()) return { ok: false, error: "shipmozo_not_configured" };
+
+  const res = await callShipmozo(`/get-order-detail/${encodeURIComponent(id)}`, "GET");
+  if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
+    return { ok: false, error: "get_order_detail_failed" };
+  }
+
+  const parsed = parseShipmozoOrderDetailData((res.parsed as ShipmozoResponse).data);
+  if (!parsed) {
+    return { ok: false, error: "no_awb_on_shipmozo_order" };
+  }
+
+  return { ok: true, ...parsed };
+}
+
+export function isShipmozoIntegrationConfigured(): boolean {
+  return isShipmozoConfigured();
+}
+
 export async function fetchShipmozoTrackOrder(awb: string): Promise<ShipmozoTrackOrderResult> {
   const awbNumber = awb.trim();
   if (!awbNumber) return { ok: false, error: "missing_awb" };
@@ -132,7 +180,7 @@ async function resolveWarehouseId(): Promise<string | null> {
   return match ? String(match.id) : null;
 }
 
-async function appendShipmozoMetadata(orderId: string, patch: Record<string, unknown>) {
+export async function appendShipmozoMetadata(orderId: string, patch: Record<string, unknown>) {
   const row = await prisma.shipments.findUnique({ where: { order_id: orderId }, select: { metadata: true } });
   const prev = (row?.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
   await prisma.shipments.updateMany({
@@ -266,43 +314,54 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
       : String(pushPayload.order_id)
   );
 
-  const autoAssign = await callShipmozo("/auto-assign-order", "POST", { order_id: createdOrderId });
-  await appendShipmozoMetadata(orderId, { autoAssign: { ok: autoAssign.ok, status: autoAssign.status, response: autoAssign.parsed } });
+  await appendShipmozoMetadata(orderId, {
+    reference_id: createdOrderId,
+    status: "awaiting_shipment",
+  });
 
-  let awb =
-    typeof autoAssign.parsed === "object" && autoAssign.parsed && "data" in autoAssign.parsed
-      ? String((autoAssign.parsed as ShipmozoResponse).data?.awb_number ?? "")
-      : "";
-  let courier =
-    typeof autoAssign.parsed === "object" && autoAssign.parsed && "data" in autoAssign.parsed
-      ? String(
-          (autoAssign.parsed as ShipmozoResponse).data?.courier_company ??
-            (autoAssign.parsed as ShipmozoResponse).data?.courier ??
-            "Shipmozo"
-        )
-      : "Shipmozo";
+  let awb = "";
+  let courier = "Shipmozo";
 
-  if (!awb && (process.env.SHIPMOZO_AUTO_SCHEDULE_PICKUP ?? "1") === "1") {
-    const schedule = await callShipmozo("/schedule-pickup", "POST", { order_id: createdOrderId });
+  const autoAssignEnabled = process.env.SHIPMOZO_AUTO_ASSIGN_ENABLED === "1";
+  if (autoAssignEnabled) {
+    const autoAssign = await callShipmozo("/auto-assign-order", "POST", { order_id: createdOrderId });
     await appendShipmozoMetadata(orderId, {
-      schedulePickup: { ok: schedule.ok, status: schedule.status, response: schedule.parsed },
+      autoAssign: { ok: autoAssign.ok, status: autoAssign.status, response: autoAssign.parsed },
     });
-    if (schedule.ok && typeof schedule.parsed === "object" && schedule.parsed && "data" in schedule.parsed) {
-      awb = String((schedule.parsed as ShipmozoResponse).data?.awb_number ?? awb);
-      courier = String((schedule.parsed as ShipmozoResponse).data?.courier ?? courier);
+
+    awb =
+      typeof autoAssign.parsed === "object" && autoAssign.parsed && "data" in autoAssign.parsed
+        ? String((autoAssign.parsed as ShipmozoResponse).data?.awb_number ?? "")
+        : "";
+    courier =
+      typeof autoAssign.parsed === "object" && autoAssign.parsed && "data" in autoAssign.parsed
+        ? String(
+            (autoAssign.parsed as ShipmozoResponse).data?.courier_company ??
+              (autoAssign.parsed as ShipmozoResponse).data?.courier ??
+              "Shipmozo"
+          )
+        : "Shipmozo";
+
+    if (!awb && (process.env.SHIPMOZO_AUTO_SCHEDULE_PICKUP ?? "1") === "1") {
+      const schedule = await callShipmozo("/schedule-pickup", "POST", { order_id: createdOrderId });
+      await appendShipmozoMetadata(orderId, {
+        schedulePickup: { ok: schedule.ok, status: schedule.status, response: schedule.parsed },
+      });
+      if (schedule.ok && typeof schedule.parsed === "object" && schedule.parsed && "data" in schedule.parsed) {
+        awb = String((schedule.parsed as ShipmozoResponse).data?.awb_number ?? awb);
+        courier = String((schedule.parsed as ShipmozoResponse).data?.courier ?? courier);
+      }
     }
   }
 
   if (!awb) {
-    const detail = await callShipmozo(`/get-order-detail/${encodeURIComponent(createdOrderId)}`, "GET");
-    await appendShipmozoMetadata(orderId, { orderDetail: { ok: detail.ok, status: detail.status, response: detail.parsed } });
-    if (detail.ok && typeof detail.parsed === "object" && detail.parsed && "data" in detail.parsed) {
-      awb = String((detail.parsed as ShipmozoResponse).data?.awb_number ?? awb);
-      courier = String(
-        (detail.parsed as ShipmozoResponse).data?.courier_company ??
-          (detail.parsed as ShipmozoResponse).data?.courier ??
-          courier
-      );
+    const detail = await fetchShipmozoOrderDetail(createdOrderId);
+    await appendShipmozoMetadata(orderId, {
+      orderDetail: { ok: detail.ok, awb: detail.awb_number ?? null, error: detail.error ?? null },
+    });
+    if (detail.ok && detail.awb_number) {
+      awb = detail.awb_number;
+      courier = detail.courier ?? courier;
     }
   }
 

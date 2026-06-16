@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { isUuid } from "@/lib/validation/input";
-import { fetchShipmozoTrackOrder } from "@/lib/shipping/shipmozo";
+import { fetchShipmozoTrackOrder, fetchShipmozoOrderDetail, appendShipmozoMetadata } from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
   notifyCustomerAfterShipmozoUpdate,
@@ -364,6 +364,143 @@ function shipmentSnapshotChanged(
 }
 
 const DEFAULT_SYNC_MIN_AGE_MS = 10 * 60 * 1000;
+const DEFAULT_AWB_DISCOVERY_MIN_AGE_MS = 2 * 60 * 1000;
+
+function shipmozoMetaFromShipment(metadata: unknown): Record<string, unknown> {
+  if (!metadata || typeof metadata !== "object") return {};
+  const root = metadata as Record<string, unknown>;
+  const shipmozo = root.shipmozo;
+  return typeof shipmozo === "object" && shipmozo ? (shipmozo as Record<string, unknown>) : {};
+}
+
+async function resolveShipmozoReferenceId(orderId: string): Promise<string | null> {
+  const order = await prisma.orders.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      order_number: true,
+      shipments: { select: { metadata: true } },
+    },
+  });
+  if (!order) return null;
+  const meta = shipmozoMetaFromShipment(order.shipments?.metadata);
+  const stored = String(meta.reference_id ?? "").trim();
+  if (stored) return stored;
+  return shipmozoOrderRef(order);
+}
+
+/**
+ * Poll ShipMozo for AWB when shipment is created manually in the panel.
+ * Matches orders by stored reference_id or customer order ref (e.g. IRx10001).
+ */
+export async function syncShipmozoAwbForOrder(
+  orderId: string,
+  options?: { force?: boolean }
+) {
+  try {
+    const order = await prisma.orders.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        order_number: true,
+        payment_status: true,
+        awb_number: true,
+        shipments: { select: { tracking_number: true, metadata: true } },
+      },
+    });
+    if (!order) return { ok: false as const, error: "Order not found" };
+
+    const existingAwb = (order.awb_number ?? order.shipments?.tracking_number ?? "").trim();
+    if (existingAwb) {
+      return { ok: true as const, skipped: true as const, reason: "has_awb" as const };
+    }
+    if (order.payment_status !== "SUCCEEDED") {
+      return { ok: true as const, skipped: true as const, reason: "not_paid" as const };
+    }
+
+    const meta = shipmozoMetaFromShipment(order.shipments?.metadata);
+    const minAgeMs = Number(process.env.SHIPMOZO_AWB_DISCOVERY_MIN_AGE_MS ?? DEFAULT_AWB_DISCOVERY_MIN_AGE_MS);
+    const lastCheck = meta.lastAwbDiscoveryAt ? new Date(String(meta.lastAwbDiscoveryAt)).getTime() : 0;
+    if (!options?.force && lastCheck && Date.now() - lastCheck < minAgeMs) {
+      return { ok: true as const, skipped: true as const, reason: "recently_checked" as const };
+    }
+
+    const shipmozoRef = await resolveShipmozoReferenceId(orderId);
+    if (!shipmozoRef) {
+      return { ok: true as const, skipped: true as const, reason: "no_shipmozo_ref" as const };
+    }
+
+    const detail = await fetchShipmozoOrderDetail(shipmozoRef);
+    await appendShipmozoMetadata(orderId, {
+      lastAwbDiscoveryAt: new Date().toISOString(),
+      lastAwbDiscovery: { ok: detail.ok, awb: detail.awb_number ?? null, error: detail.error ?? null },
+      ...(detail.shipmozo_order_id ? { reference_id: detail.shipmozo_order_id } : {}),
+    });
+
+    if (!detail.ok || !detail.awb_number) {
+      return {
+        ok: true as const,
+        skipped: true as const,
+        reason: "no_awb_yet" as const,
+        error: detail.error,
+      };
+    }
+
+    const result = await applyShipmozoWebhookUpdate({
+      awb: detail.awb_number,
+      order_id: orderId,
+      status: detail.status ?? "PICKUP_GENERATED",
+      carrier: detail.courier,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!result.ok) return result;
+
+    return {
+      ok: true as const,
+      orderId,
+      awb: detail.awb_number,
+      mappedStatus: result.mappedStatus,
+    };
+  } catch (err) {
+    console.error("[shipmozo-awb-discovery] unhandled error", { orderId, err });
+    return { ok: false as const, error: "awb_discovery_failed" };
+  }
+}
+
+export async function runShipmozoAwbDiscoverySync() {
+  const lookbackDays = Math.max(1, Number(process.env.SHIPMOZO_TRACKING_LOOKBACK_DAYS ?? 45) || 45);
+  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  const batchSize = Math.max(
+    1,
+    Math.min(100, Number(process.env.SHIPMOZO_AWB_DISCOVERY_BATCH_SIZE ?? 30) || 30)
+  );
+
+  const orders = await prisma.orders.findMany({
+    where: {
+      payment_status: "SUCCEEDED",
+      awb_number: null,
+      shipment_status: { not: "DELIVERED" },
+      created_at: { gte: since },
+    },
+    orderBy: [{ shipment_updated_at: "asc" }, { created_at: "desc" }],
+    take: batchSize,
+    select: { id: true },
+  });
+
+  let discovered = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of orders) {
+    const result = await syncShipmozoAwbForOrder(row.id);
+    if (!result.ok) failed += 1;
+    else if ("skipped" in result && result.skipped) skipped += 1;
+    else discovered += 1;
+  }
+
+  return { scanned: orders.length, discovered, skipped, failed };
+}
 
 export async function syncShipmozoTrackingForOrder(
   orderId: string,
@@ -427,6 +564,8 @@ export async function syncShipmozoTrackingForOrder(
 }
 
 export async function runShipmozoTrackingSync() {
+  const awb = await runShipmozoAwbDiscoverySync();
+
   const lookbackDays = Math.max(1, Number(process.env.SHIPMOZO_TRACKING_LOOKBACK_DAYS ?? 45) || 45);
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
   const batchSize = Math.max(1, Math.min(100, Number(process.env.SHIPMOZO_TRACKING_BATCH_SIZE ?? 40) || 40));
@@ -453,5 +592,14 @@ export async function runShipmozoTrackingSync() {
     else synced += 1;
   }
 
-  return { scanned: orders.length, synced, skipped, failed };
+  return {
+    awbScanned: awb.scanned,
+    awbDiscovered: awb.discovered,
+    awbSkipped: awb.skipped,
+    awbFailed: awb.failed,
+    scanned: orders.length,
+    synced,
+    skipped,
+    failed,
+  };
 }

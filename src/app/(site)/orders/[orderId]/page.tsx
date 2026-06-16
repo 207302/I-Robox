@@ -6,7 +6,7 @@ import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { formatPrice } from "@/utils/formatePrice";
 import { formatOrderReference } from "@/utils/orderNumber";
 import OrderTracking from "@/components/OrderTracking";
-import { resolveOrderTrackingStatus, syncShipmozoTrackingForOrder } from "@/lib/shipping/shipmozoTracking";
+import { resolveOrderTrackingStatus, syncShipmozoTrackingForOrder, syncShipmozoAwbForOrder } from "@/lib/shipping/shipmozoTracking";
 
 type Props = {
   params: Promise<{ orderId: string }>;
@@ -76,7 +76,8 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
     );
   }
 
-  await syncShipmozoTrackingForOrder(orderId);
+  await syncShipmozoAwbForOrder(orderId, { force: true });
+  await syncShipmozoTrackingForOrder(orderId, { force: true });
 
   const refreshed = await prisma.orders.findUnique({
     where: { id: orderId },

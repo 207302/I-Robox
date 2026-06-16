@@ -16,7 +16,6 @@ import {
   cleanText,
   hasSuspiciousInput,
   isAllowedOrderStatus,
-  isAllowedShipmentStatus,
   isUuid,
   readJsonBody,
 } from "@/lib/validation/input";
@@ -25,6 +24,14 @@ import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { compactOrderId } from "@/lib/orders/orderNumber";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
+import {
+  applyShipmozoWebhookUpdate,
+  mapTrackingStatusToShipmentEnum,
+  resolveOrderTrackingStatus,
+  syncShipmozoAwbForOrder,
+  syncShipmozoTrackingForOrder,
+} from "@/lib/shipping/shipmozoTracking";
+import { isShipmozoTrackingStatus } from "@/lib/shipping/shipmozoTrackingConstants";
 
 function formatPaymentMethod(provider: string | null, paymentStatus: string): string {
   const p = (provider ?? "").trim().toLowerCase();
@@ -43,11 +50,19 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await syncShipmozoAwbForOrder(id, { force: true });
+    await syncShipmozoTrackingForOrder(id, { force: true });
+
     const order = await prisma.orders.findUnique({
       where: { id },
       select: {
         id: true,
         order_number: true,
+        awb_number: true,
+        carrier: true,
+        shipment_status: true,
+        shipment_updated_at: true,
         status: true,
         payment_status: true,
         payment_provider: true,
@@ -104,6 +119,16 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       const s = (m as Record<string, unknown>).shipmozo;
       return s && typeof s === "object" ? s : null;
     })();
+
+    const trackingStatus = resolveOrderTrackingStatus({
+      shipment_status: order.shipment_status,
+      awb_number: order.awb_number,
+      legacy_shipment_status: order.shipments?.status ? String(order.shipments.status) : null,
+      legacy_tracking_number: order.shipments?.tracking_number ?? null,
+    });
+    const trackingNumber =
+      order.awb_number?.trim() || order.shipments?.tracking_number?.trim() || "";
+    const trackingCarrier = order.carrier?.trim() || order.shipments?.carrier?.trim() || "";
   
     return NextResponse.json(
       {
@@ -137,12 +162,20 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         shipment: order.shipments
           ? {
               id: order.shipments.id,
-              carrier: order.shipments.carrier ?? "",
-              tracking_number: order.shipments.tracking_number ?? "",
-              status: String(order.shipments.status),
+              carrier: trackingCarrier,
+              tracking_number: trackingNumber,
+              trackingStatus,
+              shipment_updated_at: order.shipment_updated_at?.toISOString() ?? null,
               shipmozo: shipmozoFromMeta,
             }
-          : { id: null, carrier: "", tracking_number: "", status: "PENDING", shipmozo: null },
+          : {
+              id: null,
+              carrier: trackingCarrier,
+              tracking_number: trackingNumber,
+              trackingStatus,
+              shipment_updated_at: order.shipment_updated_at?.toISOString() ?? null,
+              shipmozo: null,
+            },
         items: order.order_items.map((it) => ({
           id: it.id,
           product_id: it.product_id,
@@ -247,42 +280,97 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   
     let nextShip = prevShip;
+    let skipShipmentNotify = false;
     const shipment = body.shipment;
     if (shipment && typeof shipment === "object" && !Array.isArray(shipment)) {
       const s = shipment as Record<string, unknown>;
       const carrierRaw = typeof s.carrier === "string" ? s.carrier : null;
       const trackingRaw = typeof s.tracking_number === "string" ? s.tracking_number : null;
-      const shipmentStatusRaw = typeof s.status === "string" ? cleanText(s.status, 40) : null;
+      const trackingStatusRaw =
+        typeof s.trackingStatus === "string"
+          ? cleanText(s.trackingStatus, 40)
+          : typeof s.tracking_status === "string"
+            ? cleanText(s.tracking_status, 40)
+            : null;
       const carrier = carrierRaw !== null ? cleanText(carrierRaw, 120) : null;
       const tracking_number = trackingRaw !== null ? cleanText(trackingRaw, 255) : null;
-      if (shipmentStatusRaw && !isAllowedShipmentStatus(shipmentStatusRaw)) {
+      if (trackingStatusRaw && !isShipmozoTrackingStatus(trackingStatusRaw)) {
         return NextResponse.json({ error: "Invalid shipment status" }, { status: 400 });
       }
       if ((carrier && hasSuspiciousInput(carrier)) || (tracking_number && hasSuspiciousInput(tracking_number))) {
         return NextResponse.json({ error: "Invalid shipment fields" }, { status: 400 });
       }
-  
-      const createStatus = (shipmentStatusRaw ?? "PENDING") as any;
-      const updated = await prisma.shipments.upsert({
-        where: { order_id: id },
-        update: {
-          carrier,
-          tracking_number,
-          ...(shipmentStatusRaw ? { status: shipmentStatusRaw as any } : {}),
-        },
-        create: {
+
+      if (trackingStatusRaw) {
+        const trackingUpdate = await applyShipmozoWebhookUpdate({
           order_id: id,
-          status: createStatus,
-          carrier,
-          tracking_number,
-        },
+          status: trackingStatusRaw,
+          awb: tracking_number ?? undefined,
+          carrier: carrier ?? undefined,
+        });
+        if (!trackingUpdate.ok) {
+          return NextResponse.json(
+            { error: trackingUpdate.error },
+            { status: trackingUpdate.status ?? 400 }
+          );
+        }
+        skipShipmentNotify = true;
+      } else if (carrier !== null || tracking_number !== null) {
+        const orderRow = await prisma.orders.findUnique({
+          where: { id },
+          select: {
+            shipment_status: true,
+            awb_number: true,
+            shipments: { select: { status: true, tracking_number: true } },
+          },
+        });
+        const trackingStep = resolveOrderTrackingStatus({
+          shipment_status: orderRow?.shipment_status,
+          awb_number: orderRow?.awb_number,
+          legacy_shipment_status: orderRow?.shipments?.status
+            ? String(orderRow.shipments.status)
+            : null,
+          legacy_tracking_number: orderRow?.shipments?.tracking_number,
+        });
+        const legacyStatus = mapTrackingStatusToShipmentEnum(trackingStep);
+
+        await prisma.$transaction(async (tx) => {
+          await tx.shipments.upsert({
+            where: { order_id: id },
+            update: {
+              ...(carrier !== null ? { carrier } : {}),
+              ...(tracking_number !== null ? { tracking_number } : {}),
+            },
+            create: {
+              order_id: id,
+              status: legacyStatus as any,
+              carrier,
+              tracking_number,
+            },
+          });
+          if (tracking_number !== null || carrier !== null) {
+            await tx.orders.update({
+              where: { id },
+              data: {
+                ...(tracking_number !== null ? { awb_number: tracking_number } : {}),
+                ...(carrier !== null ? { carrier } : {}),
+              },
+            });
+          }
+        });
+      }
+
+      const updated = await prisma.shipments.findUnique({
+        where: { order_id: id },
         select: { status: true, carrier: true, tracking_number: true },
       });
-      nextShip = {
-        status: String(updated.status),
-        carrier: updated.carrier,
-        tracking_number: updated.tracking_number,
-      };
+      nextShip = updated
+        ? {
+            status: String(updated.status),
+            carrier: updated.carrier,
+            tracking_number: updated.tracking_number,
+          }
+        : null;
     } else {
       const srow = await prisma.shipments.findUnique({
         where: { order_id: id },
@@ -298,7 +386,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   
     const emailTo = before.customers?.email ?? null;
-    if (emailTo && !isSyntheticPhoneSignupEmail(emailTo)) {
+    if (emailTo && !isSyntheticPhoneSignupEmail(emailTo) && !skipShipmentNotify) {
       try {
         await notifyCustomerOrderOrShipmentUpdate({
           to: emailTo,

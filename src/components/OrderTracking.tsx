@@ -4,18 +4,11 @@ import { useEffect, useState } from "react";
 import {
   SHIPMOZO_TRACKING_STEPS,
   type ShipmozoTrackingStatus,
+  SHIPMOZO_TRACKING_STEP_LABELS,
 } from "@/lib/shipping/shipmozoTrackingConstants";
 import { shipmozoPublicTrackUrl } from "@/lib/shipping/shipmozoPublicTrackUrl";
 
 const BRAND_RED = "#E63946";
-
-const STEP_LABELS: Record<ShipmozoTrackingStatus, string> = {
-  ORDER_PLACED: "Order Placed",
-  PICKUP_GENERATED: "Pickup Generated",
-  IN_TRANSIT: "In Transit",
-  OUT_FOR_DELIVERY: "Out for Delivery",
-  DELIVERED: "Delivered",
-};
 
 type Props = {
   status: ShipmozoTrackingStatus;
@@ -111,7 +104,7 @@ export default function OrderTracking({
                     current ? "font-semibold text-dark" : "text-meta-3"
                   }`}
                 >
-                  {STEP_LABELS[step]}
+                  {SHIPMOZO_TRACKING_STEP_LABELS[step]}
                 </span>
               </div>
             );

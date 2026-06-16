@@ -7,6 +7,11 @@ import toast from "react-hot-toast";
 import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
 import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
 import { formatPrice } from "@/utils/formatePrice";
+import {
+  SHIPMOZO_TRACKING_STEPS,
+  SHIPMOZO_TRACKING_STEP_LABELS,
+  type ShipmozoTrackingStatus,
+} from "@/lib/shipping/shipmozoTrackingConstants";
 
 function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
   const d = shipment?.shipmozo;
@@ -75,13 +80,45 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   const [data, setData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [syncingShipment, setSyncingShipment] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const res = await fetch(`/api/admin/orders/${id}`);
-      const json = await res.json().catch(() => null);
-      setData(json);
-    })();
+    let cancelled = false;
+
+    async function loadOrder(options?: { silent?: boolean }) {
+      if (!options?.silent) setSyncingShipment(true);
+      try {
+        const res = await fetch(`/api/admin/orders/${id}`);
+        const json = await res.json().catch(() => null);
+        if (cancelled || !res.ok || !json) return;
+        setData((prev: any) => {
+          if (!prev || !options?.silent) return json;
+          return {
+            ...prev,
+            shipment: {
+              ...prev.shipment,
+              trackingStatus: json.shipment?.trackingStatus ?? prev.shipment?.trackingStatus,
+              carrier: json.shipment?.carrier ?? prev.shipment?.carrier,
+              tracking_number: json.shipment?.tracking_number ?? prev.shipment?.tracking_number,
+              shipment_updated_at:
+                json.shipment?.shipment_updated_at ?? prev.shipment?.shipment_updated_at,
+              shipmozo: json.shipment?.shipmozo ?? prev.shipment?.shipmozo,
+            },
+          };
+        });
+      } finally {
+        if (!cancelled && !options?.silent) setSyncingShipment(false);
+      }
+    }
+
+    void loadOrder();
+    const timer = window.setInterval(() => {
+      void loadOrder({ silent: true });
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [id]);
 
   const statusOptions = useMemo(
@@ -101,9 +138,15 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   );
 
   const shipmentStatusOptions = useMemo(
-    () => ["PENDING", "CREATED", "IN_TRANSIT", "DELIVERED", "DELAYED", "RETURNED"],
+    () => SHIPMOZO_TRACKING_STEPS as readonly ShipmozoTrackingStatus[],
     []
   );
+
+  const currentTrackingStatus: ShipmozoTrackingStatus =
+    data?.shipment?.trackingStatus &&
+    SHIPMOZO_TRACKING_STEPS.includes(data.shipment.trackingStatus as ShipmozoTrackingStatus)
+      ? (data.shipment.trackingStatus as ShipmozoTrackingStatus)
+      : "ORDER_PLACED";
 
   async function save() {
     setSaving(true);
@@ -113,7 +156,10 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           status: data.status,
-          shipment: data.shipment,
+          shipment: {
+            ...data.shipment,
+            trackingStatus: data.shipment?.trackingStatus,
+          },
         }),
       });
       const out = await res.json().catch(() => ({}));
@@ -280,22 +326,42 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
       </div>
 
       <div className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-dark">Shipment</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-dark">Shipment</h2>
+          {syncingShipment ? (
+            <span className="text-xs text-meta-3">Syncing from ShipMozo…</span>
+          ) : data.shipment?.shipment_updated_at ? (
+            <span className="text-xs text-meta-3">
+              Last updated{" "}
+              {new Date(data.shipment.shipment_updated_at).toLocaleString("en-IN", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+          ) : null}
+        </div>
         <label className="block max-w-md">
           <span className="mb-1 block text-sm font-medium text-dark">Shipment status</span>
           <select
-            value={data.shipment?.status ?? "PENDING"}
+            value={currentTrackingStatus}
             onChange={(e) =>
-              setData((d: any) => ({ ...d, shipment: { ...d.shipment, status: e.target.value } }))
+              setData((d: any) => ({
+                ...d,
+                shipment: { ...d.shipment, trackingStatus: e.target.value },
+              }))
             }
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           >
             {shipmentStatusOptions.map((s) => (
               <option key={s} value={s}>
-                {s.replace(/_/g, " ")}
+                {SHIPMOZO_TRACKING_STEP_LABELS[s]}
               </option>
             ))}
           </select>
+          <p className="mt-1.5 text-xs text-meta-3">
+            Matches the customer tracking timeline. Refreshes from ShipMozo when you open this page
+            and every minute while it stays open.
+          </p>
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">

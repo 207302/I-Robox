@@ -11,6 +11,7 @@ import type { PublicMarketingPayload } from "@/lib/marketing/publicMarketingType
 import dynamic from "next/dynamic";
 
 import PopupWrapper from "@/components/Marketing/PopupWrapper";
+import LaunchNotifyPopupDeferred from "@/components/Marketing/LaunchNotifyPopupDeferred";
 
 const QuickViewModal = dynamic(() => import("@/components/Common/QuickViewModal"), { ssr: false });
 const CartSidebarModal = dynamic(() => import("@/components/Common/CartSidebarModal"), {
@@ -36,6 +37,7 @@ const Providers = ({ children, initialMarketing }: ProvidersProps) => {
             <ModalProvider>
               <PreviewSliderProvider>
                 <PopupWrapper />
+                <LaunchNotifyPopupDeferred />
                 {children}
                 <QuickViewModal />
                 <CartSidebarModal />

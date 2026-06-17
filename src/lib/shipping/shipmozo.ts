@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import { computeOrderPackageDetails } from "@/lib/shipping/orderPackageDetails";
-import { taxableUnitPrice } from "@/lib/tax/productTaxFields";
+import { splitInclusiveGstAmount } from "@/lib/tax/productTaxFields";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
 
@@ -402,17 +402,31 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
   const lineItems = (order.order_items ?? []).map((it) => {
     const gstPercent = it.products?.gst_percent ?? 0;
     const inclusiveUnit = Number(it.unit_price ?? 0);
+    const quantity = Number.isFinite(it.quantity) ? it.quantity : 1;
+    const lineInclusive = inclusiveUnit * quantity;
+    const lineSplit = splitInclusiveGstAmount(lineInclusive, gstPercent);
+    const unitSplit = splitInclusiveGstAmount(inclusiveUnit, gstPercent);
     return {
       name: String(it.product_name ?? "Item").slice(0, 200),
       sku_number: "",
-      quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
+      quantity,
       discount: "",
       hsn: String(it.products?.hsn_code ?? ""),
       gst: gstPercent,
-      unit_price: taxableUnitPrice(inclusiveUnit, gstPercent),
+      unit_price: unitSplit.taxable,
+      taxable_amount: lineSplit.taxable,
+      gst_amount: lineSplit.gst,
       product_category: "Other",
     };
   });
+
+  const productTaxTotals = lineItems.reduce(
+    (acc, line) => ({
+      taxable: Number((acc.taxable + Number(line.taxable_amount ?? 0)).toFixed(2)),
+      gst: Number((acc.gst + Number(line.gst_amount ?? 0)).toFixed(2)),
+    }),
+    { taxable: 0, gst: 0 }
+  );
 
   const missingTax = (order.order_items ?? []).filter((it) => {
     const hsn = String(it.products?.hsn_code ?? "").trim();
@@ -443,6 +457,8 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     product_detail: lineItems,
     payment_type: "PREPAID",
     cod_amount: "",
+    taxable_amount: productTaxTotals.taxable,
+    total_gst: productTaxTotals.gst,
     weight: packageDetails.weightG,
     length: SHIPMOZO_DEFAULT_LENGTH_CM,
     width: SHIPMOZO_DEFAULT_WIDTH_CM,

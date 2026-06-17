@@ -32,10 +32,21 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
       "lastRequestAt" in ((d as Record<string, unknown>).diagnostics as Record<string, unknown>)
         ? String(((d as Record<string, unknown>).diagnostics as Record<string, unknown>).lastRequestAt ?? "")
         : "";
+    const lastDiscovery =
+      d.lastAwbDiscovery && typeof d.lastAwbDiscovery === "object"
+        ? (d.lastAwbDiscovery as Record<string, unknown>)
+        : null;
+    const discoveryError = lastDiscovery ? String(lastDiscovery.error ?? "") : "";
+    const triedIds =
+      lastDiscovery && Array.isArray(lastDiscovery.triedIds)
+        ? lastDiscovery.triedIds.map((id) => String(id)).join(", ")
+        : "";
     const parts = [
       status && `Status: ${status}`,
       reason && `Reason: ${reason}`,
       message && message,
+      discoveryError && `AWB sync: ${discoveryError}`,
+      triedIds && `Tried ShipMozo ids: ${triedIds}`,
       rmk && `Shipmozo: ${rmk}`,
       lastRequestAt && `Last request: ${lastRequestAt}`,
     ].filter(Boolean);

@@ -84,42 +84,166 @@ export type ShipmozoOrderDetailResult = {
   courier?: string;
   status?: string;
   shipmozo_order_id?: string;
+  lookup_id?: string;
   error?: string;
 };
 
-function parseShipmozoOrderDetailData(data: unknown): Omit<ShipmozoOrderDetailResult, "ok"> | null {
-  if (!data || typeof data !== "object") return null;
+const AWB_FIELD_KEYS = [
+  "awb_number",
+  "awb",
+  "AWB",
+  "awb_no",
+  "tracking_number",
+  "lr_number",
+] as const;
+
+const STATUS_FIELD_KEYS = [
+  "current_status",
+  "order_status",
+  "status",
+  "shipment_status",
+] as const;
+
+const COURIER_FIELD_KEYS = ["courier_company", "courier", "courier_name"] as const;
+
+function readStringField(obj: Record<string, unknown>, keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function looksLikeAwb(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 20;
+}
+
+function parseShipmozoOrderDetailData(data: unknown): Omit<ShipmozoOrderDetailResult, "ok" | "lookup_id"> | null {
+  if (data == null) return null;
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const parsed = parseShipmozoOrderDetailData(item);
+      if (parsed) return parsed;
+    }
+    return null;
+  }
+
+  if (typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
-  const awb = String(d.awb_number ?? d.awb ?? "").trim();
-  if (!awb) return null;
-  const courier =
-    String(d.courier_company ?? d.courier ?? "").trim() || undefined;
-  const status =
-    String(d.current_status ?? d.order_status ?? d.status ?? "PICKUP_GENERATED").trim() ||
-    "PICKUP_GENERATED";
-  const shipmozo_order_id = String(d.order_id ?? "").trim() || undefined;
-  return { awb_number: awb, courier, status, shipmozo_order_id };
+
+  const awb = readStringField(d, AWB_FIELD_KEYS);
+  const courier = readStringField(d, COURIER_FIELD_KEYS) || undefined;
+  const status = readStringField(d, STATUS_FIELD_KEYS) || "PICKUP_GENERATED";
+  const shipmozo_order_id = readStringField(d, ["order_id", "id"]) || undefined;
+  const reference_id = readStringField(d, ["reference_id"]) || undefined;
+
+  if (awb && looksLikeAwb(awb)) {
+    return { awb_number: awb, courier, status, shipmozo_order_id: shipmozo_order_id || reference_id };
+  }
+
+  for (const value of Object.values(d)) {
+    if (value && typeof value === "object") {
+      const nested = parseShipmozoOrderDetailData(value);
+      if (nested) {
+        return {
+          ...nested,
+          shipmozo_order_id: nested.shipmozo_order_id ?? shipmozo_order_id ?? reference_id,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function shipmozoResponseData(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== "object") return null;
+  return (parsed as ShipmozoResponse).data ?? null;
+}
+
+/** Collect every ShipMozo order id we might look up (reference + panel ids, case variants). */
+export function collectShipmozoLookupIds(input: {
+  customerRef: string;
+  metadata?: Record<string, unknown>;
+}): string[] {
+  const ids = new Set<string>();
+  const add = (value: unknown) => {
+    const normalized = normalizeShipmozoOrderIdRef(String(value ?? ""));
+    if (!normalized) return;
+    ids.add(normalized);
+    ids.add(normalized.toUpperCase());
+    ids.add(normalized.toLowerCase());
+  };
+
+  add(input.customerRef);
+  if (input.metadata) {
+    add(input.metadata.reference_id);
+    add(input.metadata.shipmozo_order_id);
+
+    const pushOrder = input.metadata.pushOrder;
+    if (pushOrder && typeof pushOrder === "object") {
+      const response = (pushOrder as Record<string, unknown>).response;
+      if (response && typeof response === "object") {
+        const data = (response as Record<string, unknown>).data;
+        if (data && typeof data === "object") {
+          if (Array.isArray(data)) {
+            for (const row of data) {
+              if (row && typeof row === "object") {
+                add((row as Record<string, unknown>).order_id);
+                add((row as Record<string, unknown>).reference_id);
+              }
+            }
+          } else {
+            add((data as Record<string, unknown>).order_id);
+            add((data as Record<string, unknown>).reference_id);
+          }
+        }
+      }
+    }
+  }
+
+  return [...ids];
+}
+
+/** Fetch ShipMozo order detail, trying multiple order ids until AWB is found. */
+export async function fetchShipmozoOrderDetailWithCandidates(
+  lookupIds: string[]
+): Promise<ShipmozoOrderDetailResult> {
+  const unique = [...new Set(lookupIds.map((id) => normalizeShipmozoOrderIdRef(id)).filter(Boolean))];
+
+  if (unique.length === 0) return { ok: false, error: "missing_order_id" };
+  if (!isShipmozoConfigured()) return { ok: false, error: "shipmozo_not_configured" };
+
+  let lastError = "get_order_detail_failed";
+
+  for (const id of unique) {
+    const res = await callShipmozo(`/get-order-detail/${encodeURIComponent(id)}`, "GET");
+    if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
+      lastError = "get_order_detail_failed";
+      continue;
+    }
+
+    const parsed = parseShipmozoOrderDetailData(shipmozoResponseData(res.parsed));
+    if (!parsed?.awb_number) {
+      lastError = "no_awb_on_shipmozo_order";
+      continue;
+    }
+
+    return { ok: true, ...parsed, lookup_id: id };
+  }
+
+  return { ok: false, error: lastError };
 }
 
 /** Fetch ShipMozo order by panel/API order id (e.g. IRx10001) — used when AWB is assigned manually. */
 export async function fetchShipmozoOrderDetail(
   shipmozoOrderId: string
 ): Promise<ShipmozoOrderDetailResult> {
-  const id = normalizeShipmozoOrderIdRef(shipmozoOrderId);
-  if (!id) return { ok: false, error: "missing_order_id" };
-  if (!isShipmozoConfigured()) return { ok: false, error: "shipmozo_not_configured" };
-
-  const res = await callShipmozo(`/get-order-detail/${encodeURIComponent(id)}`, "GET");
-  if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
-    return { ok: false, error: "get_order_detail_failed" };
-  }
-
-  const parsed = parseShipmozoOrderDetailData((res.parsed as ShipmozoResponse).data);
-  if (!parsed) {
-    return { ok: false, error: "no_awb_on_shipmozo_order" };
-  }
-
-  return { ok: true, ...parsed };
+  return fetchShipmozoOrderDetailWithCandidates([shipmozoOrderId]);
 }
 
 export function isShipmozoIntegrationConfigured(): boolean {
@@ -181,6 +305,9 @@ async function resolveWarehouseId(): Promise<string | null> {
 }
 
 export async function appendShipmozoMetadata(orderId: string, patch: Record<string, unknown>) {
+  const { ensureOrderShipmentCreated } = await import("@/lib/orders/ensureOrderShipment");
+  await ensureOrderShipmentCreated(orderId);
+
   const row = await prisma.shipments.findUnique({ where: { order_id: orderId }, select: { metadata: true } });
   const prev = (row?.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
   await prisma.shipments.updateMany({
@@ -308,6 +435,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
   await appendShipmozoMetadata(orderId, { pushOrder: { ok: push.ok, status: push.status, response: push.parsed } });
   if (!push.ok) return;
 
+  const customerRef = normalizeShipmozoOrderIdRef(shipmozoOrderRef(order));
   const createdOrderId = normalizeShipmozoOrderIdRef(
     typeof push.parsed === "object" && push.parsed && "data" in push.parsed
       ? String((push.parsed as ShipmozoResponse).data?.order_id ?? pushPayload.order_id)
@@ -315,7 +443,8 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
   );
 
   await appendShipmozoMetadata(orderId, {
-    reference_id: createdOrderId,
+    reference_id: customerRef,
+    ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
     status: "awaiting_shipment",
   });
 
@@ -355,7 +484,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
   }
 
   if (!awb) {
-    const detail = await fetchShipmozoOrderDetail(createdOrderId);
+    const detail = await fetchShipmozoOrderDetailWithCandidates([createdOrderId, customerRef]);
     await appendShipmozoMetadata(orderId, {
       orderDetail: { ok: detail.ok, awb: detail.awb_number ?? null, error: detail.error ?? null },
     });
@@ -393,7 +522,8 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     status: awb ? "booked" : "pending",
     awb_number: awb || null,
     courier: courier || "Shipmozo",
-    reference_id: createdOrderId,
+    reference_id: customerRef,
+    ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
     package: packageDetails,
   });
 }

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { isUuid } from "@/lib/validation/input";
-import { fetchShipmozoTrackOrder, fetchShipmozoOrderDetail, appendShipmozoMetadata } from "@/lib/shipping/shipmozo";
+import { fetchShipmozoTrackOrder, fetchShipmozoOrderDetailWithCandidates, collectShipmozoLookupIds, appendShipmozoMetadata } from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
   notifyCustomerAfterShipmozoUpdate,
@@ -373,7 +373,7 @@ function shipmozoMetaFromShipment(metadata: unknown): Record<string, unknown> {
   return typeof shipmozo === "object" && shipmozo ? (shipmozo as Record<string, unknown>) : {};
 }
 
-async function resolveShipmozoReferenceId(orderId: string): Promise<string | null> {
+async function resolveShipmozoLookupIds(orderId: string): Promise<string[]> {
   const order = await prisma.orders.findUnique({
     where: { id: orderId },
     select: {
@@ -382,11 +382,12 @@ async function resolveShipmozoReferenceId(orderId: string): Promise<string | nul
       shipments: { select: { metadata: true } },
     },
   });
-  if (!order) return null;
+  if (!order) return [];
   const meta = shipmozoMetaFromShipment(order.shipments?.metadata);
-  const stored = String(meta.reference_id ?? "").trim();
-  if (stored) return stored;
-  return shipmozoOrderRef(order);
+  return collectShipmozoLookupIds({
+    customerRef: shipmozoOrderRef(order),
+    metadata: meta,
+  });
 }
 
 /**
@@ -425,16 +426,22 @@ export async function syncShipmozoAwbForOrder(
       return { ok: true as const, skipped: true as const, reason: "recently_checked" as const };
     }
 
-    const shipmozoRef = await resolveShipmozoReferenceId(orderId);
-    if (!shipmozoRef) {
+    const lookupIds = await resolveShipmozoLookupIds(orderId);
+    if (lookupIds.length === 0) {
       return { ok: true as const, skipped: true as const, reason: "no_shipmozo_ref" as const };
     }
 
-    const detail = await fetchShipmozoOrderDetail(shipmozoRef);
+    const detail = await fetchShipmozoOrderDetailWithCandidates(lookupIds);
     await appendShipmozoMetadata(orderId, {
       lastAwbDiscoveryAt: new Date().toISOString(),
-      lastAwbDiscovery: { ok: detail.ok, awb: detail.awb_number ?? null, error: detail.error ?? null },
-      ...(detail.shipmozo_order_id ? { reference_id: detail.shipmozo_order_id } : {}),
+      lastAwbDiscovery: {
+        ok: detail.ok,
+        awb: detail.awb_number ?? null,
+        error: detail.error ?? null,
+        triedIds: lookupIds,
+        lookup_id: detail.lookup_id ?? null,
+      },
+      ...(detail.shipmozo_order_id ? { shipmozo_order_id: detail.shipmozo_order_id } : {}),
     });
 
     if (!detail.ok || !detail.awb_number) {

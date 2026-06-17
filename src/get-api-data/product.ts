@@ -21,6 +21,7 @@ const getInventoryQuantity = (inventory: { available_quantity: number }[] = []) 
 export const getNewArrivalsProduct = unstable_cache(
   onCacheMiss("new-arrivals-products", async () => {
     const products = await prisma.products.findMany({
+      where: { is_active: true },
       orderBy: { updated_at: "desc" },
       select: {
         id: true,
@@ -84,7 +85,7 @@ export const getNewArrivalsProduct = unstable_cache(
       reviews: 0,
     }));
   }),
-  ["new-arrivals-products"],
+  ["new-arrivals-products", "v2"],
   { revalidate: 300, tags: [PRODUCT_CATALOG_TAG] }
 );
 

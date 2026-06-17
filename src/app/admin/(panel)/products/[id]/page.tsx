@@ -580,19 +580,45 @@ export default function EditProductPage() {
           />
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-dark">HSN (GST)</span>
-          <input
-            value={form.hsn_code ?? ""}
-            onChange={(e) => setForm((f: any) => ({ ...f, hsn_code: e.target.value }))}
-            placeholder="e.g. 95030010"
-            inputMode="numeric"
-            className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
-          />
-          <span className="mt-1 block text-xs text-meta-4">
-            Digits only (comma-separated if multiple codes on this SKU). Used for Shipmozo / invoicing.
-          </span>
-        </label>
+        <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
+          <h2 className="text-base font-semibold text-dark">Tax &amp; invoicing</h2>
+          <p className="text-xs text-meta-4">
+            Admin only — used on invoices and ShipMozo. Not shown on the storefront. List price is GST-inclusive.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-dark">
+                HSN code <span className="text-red-500">*</span>
+              </span>
+              <input
+                required
+                value={form.hsn_code ?? ""}
+                onChange={(e) => setForm((f: any) => ({ ...f, hsn_code: e.target.value }))}
+                placeholder="e.g. 95030010"
+                inputMode="numeric"
+                className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-dark">
+                GST % <span className="text-red-500">*</span>
+              </span>
+              <select
+                required
+                value={form.gst_percent == null || form.gst_percent === "" ? "" : String(form.gst_percent)}
+                onChange={(e) => setForm((f: any) => ({ ...f, gst_percent: e.target.value }))}
+                className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+              >
+                <option value="">Select rate</option>
+                <option value="0">0%</option>
+                <option value="5">5%</option>
+                <option value="12">12%</option>
+                <option value="18">18%</option>
+                <option value="28">28%</option>
+              </select>
+            </label>
+          </div>
+        </section>
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-dark">Short description</span>

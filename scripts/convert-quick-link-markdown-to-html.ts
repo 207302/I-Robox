@@ -13,6 +13,7 @@ import { SITE_MARKETING_SETTINGS_ID } from "../src/lib/marketing/siteSettingsId"
 const prisma = new PrismaClient();
 
 const FIELDS = [
+  "about_page_content",
   "privacy_page_content",
   "terms_page_content",
   "returns_page_content",
@@ -78,6 +79,7 @@ async function main() {
   const row = await prisma.site_marketing_settings.findUnique({
     where: { id: SITE_MARKETING_SETTINGS_ID },
     select: {
+      about_page_content: true,
       privacy_page_content: true,
       terms_page_content: true,
       returns_page_content: true,

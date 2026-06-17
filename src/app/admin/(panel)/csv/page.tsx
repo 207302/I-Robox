@@ -128,7 +128,13 @@ export default function AdminCsvPage() {
         </p>
         <p className="text-xs text-meta-4">
           <b className="text-dark">hsn_code</b> optional — digits (and commas if multiple codes on one SKU). Used for
-          Shipmozo / GST. Omit the column to leave existing product HSN unchanged on update.
+          invoices and ShipMozo. Omit the column to leave existing product HSN unchanged on update.
+        </p>
+        <p className="text-xs text-meta-4">
+          <b className="text-dark">gst_percent</b> optional — GST rate on the SKU: <b className="text-dark">0</b>,{" "}
+          <b className="text-dark">5</b>, <b className="text-dark">12</b>, <b className="text-dark">18</b>, or{" "}
+          <b className="text-dark">28</b>. List price is GST-inclusive; invoices split taxable vs GST. Omit the column
+          to leave existing value unchanged on update.
         </p>
         <p className="text-xs text-meta-4">
           <b className="text-dark">weight_g</b> optional — packed weight in grams (product + box) for ShipMozo. Omit the

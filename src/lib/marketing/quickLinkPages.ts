@@ -2,7 +2,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 
-export type QuickLinkPageKey = "privacy" | "terms" | "returns" | "faq" | "contact";
+export type QuickLinkPageKey = "about" | "privacy" | "terms" | "returns" | "faq" | "contact";
 
 export type QuickLinkPageContent = {
   title: string;
@@ -11,6 +11,12 @@ export type QuickLinkPageContent = {
 };
 
 const DEFAULT_PAGES: Record<QuickLinkPageKey, QuickLinkPageContent> = {
+  about: {
+    title: "About Us",
+    subtitle: "India's destination for RC toys, diecast models, and collectibles.",
+    content:
+      "i-Robox is an online store focused on RC vehicles, diecast models, and collector-grade toys for enthusiasts across India.\n\nWe source quality products, ship nationwide, and stand behind every order with responsive customer support.\n\nWhether you are building a shelf display or chasing your next track-day RC build, we are here to help you find the right pick.",
+  },
   privacy: {
     title: "Privacy Policy",
     subtitle: "How i-Robox collects, uses, and protects your personal information.",
@@ -52,6 +58,9 @@ const getQuickLinkPagesInternal = cache(async function getQuickLinkPagesInternal
     .findUnique({
       where: { id: SITE_MARKETING_SETTINGS_ID },
       select: {
+        about_page_title: true,
+        about_page_subtitle: true,
+        about_page_content: true,
         privacy_page_title: true,
         privacy_page_subtitle: true,
         privacy_page_content: true,
@@ -74,6 +83,11 @@ const getQuickLinkPagesInternal = cache(async function getQuickLinkPagesInternal
   if (!row) return DEFAULT_PAGES;
 
   return {
+    about: {
+      title: valueOrDefault(row.about_page_title, DEFAULT_PAGES.about.title),
+      subtitle: valueOrDefault(row.about_page_subtitle, DEFAULT_PAGES.about.subtitle),
+      content: valueOrDefault(row.about_page_content, DEFAULT_PAGES.about.content),
+    },
     privacy: {
       title: valueOrDefault(row.privacy_page_title, DEFAULT_PAGES.privacy.title),
       subtitle: valueOrDefault(row.privacy_page_subtitle, DEFAULT_PAGES.privacy.subtitle),

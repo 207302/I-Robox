@@ -10,6 +10,7 @@ import { upsertProductLevelInventory } from "@/lib/inventory/productLevelInvento
 import { ensureDiecastScaleId, ratioFromImportText } from "@/lib/products/ensureDiecastScale";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
+import { parseGstPercent, parseHsnCode } from "@/lib/tax/productTaxFields";
 
 function parseNonNegInt(value: unknown, defaultVal: number): number {
   if (value === undefined || value === null) return defaultVal;
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
     const header = lines.length > 0 ? lines[0].split(",").map((h) => h.trim()) : [];
     const hasDiecastCol = header.includes("diecast_scale");
     const hasHsnCol = header.includes("hsn_code");
+    const hasGstCol = header.includes("gst_percent");
     const hasWeightCol = header.includes("weight_g");
     const hasShippingCol = header.includes("shipping_per_unit");
     const hasMaxOrderQtyCol = header.includes("max_order_quantity");
@@ -81,8 +83,16 @@ export async function POST(req: NextRequest) {
       const hsnRaw = hasHsnCol ? String(r.hsn_code ?? "").trim() : "";
       let hsn_code: string | null | undefined = undefined;
       if (hasHsnCol) {
-        if (hsnRaw === "") hsn_code = null;
-        else hsn_code = hsnRaw.replace(/\s/g, "").replace(/[^0-9,]/g, "").slice(0, 32) || null;
+        const parsed = parseHsnCode(hsnRaw === "" ? null : hsnRaw);
+        if (typeof parsed === "object" && parsed && "error" in parsed) continue;
+        hsn_code = parsed as string | null;
+      }
+      const gstRaw = hasGstCol ? String(r.gst_percent ?? "").trim() : "";
+      let gst_percent: number | null | undefined = undefined;
+      if (hasGstCol) {
+        const parsed = parseGstPercent(gstRaw === "" ? null : gstRaw);
+        if (typeof parsed === "object" && parsed && "error" in parsed) continue;
+        gst_percent = parsed as number | null;
       }
       const is_active = String(r.is_active ?? "true").toLowerCase() !== "false";
       let shipping_per_unit: number | undefined = undefined;
@@ -139,6 +149,7 @@ export async function POST(req: NextRequest) {
         is_active,
         ...(hasDiecastCol ? { diecast_scale_id: diecast_scale_id ?? null } : {}),
         ...(hasHsnCol ? { hsn_code: hsn_code ?? null } : {}),
+        ...(hasGstCol ? { gst_percent: gst_percent ?? null } : {}),
         ...(hasWeightCol ? { weight_g: weight_g ?? null } : {}),
         ...(hasShippingCol && shipping_per_unit !== undefined ? { shipping_per_unit } : {}),
         ...(hasMaxOrderQtyCol && max_order_quantity !== undefined ? { max_order_quantity } : {}),
@@ -152,6 +163,7 @@ export async function POST(req: NextRequest) {
         is_active,
         diecast_scale_id: hasDiecastCol ? diecast_scale_id ?? null : null,
         ...(hasHsnCol ? { hsn_code: hsn_code ?? null } : {}),
+        ...(hasGstCol ? { gst_percent: gst_percent ?? null } : {}),
         ...(hasWeightCol ? { weight_g: weight_g ?? null } : {}),
         ...(hasShippingCol && shipping_per_unit !== undefined ? { shipping_per_unit } : {}),
         ...(hasMaxOrderQtyCol && max_order_quantity !== undefined ? { max_order_quantity } : {}),

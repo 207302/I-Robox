@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import { computeOrderPackageDetails } from "@/lib/shipping/orderPackageDetails";
+import { taxableUnitPrice } from "@/lib/tax/productTaxFields";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
 
@@ -356,7 +357,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
           product_name: true,
           quantity: true,
           unit_price: true,
-          products: { select: { hsn_code: true, weight_g: true } },
+          products: { select: { hsn_code: true, gst_percent: true, weight_g: true } },
         },
       },
     },
@@ -398,15 +399,35 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
 
   const total = Number(order.total_amount);
   const totalAmount = Number.isFinite(total) ? Number(total.toFixed(2)) : 0;
-  const lineItems = (order.order_items ?? []).map((it) => ({
-    name: String(it.product_name ?? "Item").slice(0, 200),
-    sku_number: "",
-    quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
-    discount: "",
-    hsn: String(it.products?.hsn_code ?? ""),
-    unit_price: Number(it.unit_price ?? 0),
-    product_category: "Other",
-  }));
+  const lineItems = (order.order_items ?? []).map((it) => {
+    const gstPercent = it.products?.gst_percent ?? 0;
+    const inclusiveUnit = Number(it.unit_price ?? 0);
+    return {
+      name: String(it.product_name ?? "Item").slice(0, 200),
+      sku_number: "",
+      quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
+      discount: "",
+      hsn: String(it.products?.hsn_code ?? ""),
+      gst: gstPercent,
+      unit_price: taxableUnitPrice(inclusiveUnit, gstPercent),
+      product_category: "Other",
+    };
+  });
+
+  const missingTax = (order.order_items ?? []).filter((it) => {
+    const hsn = String(it.products?.hsn_code ?? "").trim();
+    const gst = it.products?.gst_percent;
+    return !hsn || gst == null;
+  });
+  if (missingTax.length > 0) {
+    const names = missingTax.map((it) => String(it.product_name ?? "Item").slice(0, 80));
+    await appendShipmozoMetadata(orderId, {
+      status: "skipped",
+      reason: "missing_product_hsn_or_gst",
+      products: names,
+    });
+    return;
+  }
 
   const pushPayload: Record<string, unknown> = {
     order_id: shipmozoOrderRef(order),

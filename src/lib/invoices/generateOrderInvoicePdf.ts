@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
-import { embedInvoiceBrandLogo } from "@/lib/invoices/invoiceBrandLogo";
+import { splitInclusiveGstAmount, taxableUnitPrice } from "@/lib/tax/productTaxFields";
 
 const SELLER_NAME = "I-Robox";
 const SELLER_EMAIL = "info@i-robox.com";
@@ -152,13 +152,17 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
   if (!order) return null;
 
   const hsnByProductId = new Map<string, string>();
+  const gstByProductId = new Map<string, number>();
   const productIds = Array.from(new Set(order.order_items.map((i) => i.product_id)));
   if (productIds.length > 0) {
     const productRows = await prisma.products.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, hsn_code: true },
+      select: { id: true, hsn_code: true, gst_percent: true },
     });
-    for (const row of productRows) hsnByProductId.set(row.id, row.hsn_code ?? "--");
+    for (const row of productRows) {
+      hsnByProductId.set(row.id, row.hsn_code ?? "--");
+      gstByProductId.set(row.id, row.gst_percent ?? 0);
+    }
   }
 
   const billing = order.addresses_orders_billing_address_idToaddresses;
@@ -324,18 +328,20 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
   const cols = {
     sr: 40,
     item: 68,
-    hsn: 300,
-    qty: 350,
-    unitHeader: 385,
-    unitValue: 390,
-    discountHeader: 450,
-    discountValue: 460,
-    taxableHeader: 505,
-    taxableValue: 535,
+    hsn: 268,
+    gst: 308,
+    qty: 338,
+    unitHeader: 368,
+    unitValue: 372,
+    discountHeader: 428,
+    discountValue: 438,
+    taxableHeader: 478,
+    taxableValue: 508,
   };
   drawText("SR", cols.sr, y, { bold: true, size: 9 });
   drawText("ITEM DESCRIPTION", cols.item, y, { bold: true, size: 9 });
   drawText("HSN", cols.hsn, y, { bold: true, size: 9 });
+  drawText("GST%", cols.gst, y, { bold: true, size: 9 });
   drawText("QTY.", cols.qty, y, { bold: true, size: 9 });
   drawText("UNIT PRICE", cols.unitHeader, y, { bold: true, size: 9 });
   drawText("DISCOUNT", cols.discountHeader, y, { bold: true, size: 9 });
@@ -344,11 +350,15 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
   drawLine(page, 40, y, width - 40, y);
   y -= 14;
 
-  let grandTotal = 0;
+  let grandTaxable = 0;
+  let grandGst = 0;
   for (let i = 0; i < order.order_items.length; i += 1) {
     const it = order.order_items[i];
-    const subtotal = money(Number(it.subtotal_amount));
-    grandTotal += subtotal;
+    const lineTotal = money(Number(it.subtotal_amount));
+    const gstRate = gstByProductId.get(it.product_id) ?? 0;
+    const split = splitInclusiveGstAmount(lineTotal, gstRate);
+    grandTaxable += split.taxable;
+    grandGst += split.gst;
     const nameLines = wrapText(it.product_name, font, 9, cols.hsn - cols.item - 8);
     const rowHeight = Math.max(14, nameLines.length * 11 + 2);
     drawText(`${i + 1}.`, cols.sr, y, { size: 9 });
@@ -356,19 +366,27 @@ export async function generateOrderInvoicePdf(orderId: string): Promise<OrderInv
       drawText(nameLines[j], cols.item, y - j * 11, { size: 9 });
     }
     drawText(hsnByProductId.get(it.product_id) || "--", cols.hsn, y, { size: 9 });
+    drawText(gstRate > 0 ? `${gstRate}%` : "--", cols.gst, y, { size: 9 });
     drawText(String(it.quantity), cols.qty, y, { size: 9 });
     drawText(String(money(Number(it.unit_price))), cols.unitValue, y, { size: 9 });
     drawText("0", cols.discountValue, y, { size: 9 });
-    drawText(String(subtotal), cols.taxableValue, y, { size: 9 });
+    drawText(String(split.taxable), cols.taxableValue, y, { size: 9 });
     y -= rowHeight;
   }
 
   y -= 4;
   drawLine(page, 40, y, width - 40, y);
   y -= 16;
-  drawText(`Grand Total ${money(Number(order.total_amount || grandTotal))}`, 40, y, { bold: true, size: 11 });
+  drawText(`Taxable Value ${money(grandTaxable)}`, 40, y, { bold: true, size: 10 });
+  y -= 14;
+  drawText(`GST ${money(grandGst)}`, 40, y, { bold: true, size: 10 });
+  y -= 14;
+  drawText(`Grand Total ${money(Number(order.total_amount || grandTaxable + grandGst))}`, 40, y, {
+    bold: true,
+    size: 11,
+  });
   y -= 18;
-  drawText(`IN WORDS ${numberToWordsInr(money(Number(order.total_amount || grandTotal)))}`, 40, y, {
+  drawText(`IN WORDS ${numberToWordsInr(money(Number(order.total_amount || grandTaxable + grandGst)))}`, 40, y, {
     bold: true,
     size: 10,
   });

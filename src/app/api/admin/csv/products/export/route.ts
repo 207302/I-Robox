@@ -39,6 +39,7 @@ export async function GET() {
         String(p.max_order_quantity ?? 99),
         p.sku ? escapeCsvField(p.sku) : "",
         p.hsn_code ? escapeCsvField(p.hsn_code) : "",
+        p.gst_percent != null ? String(p.gst_percent) : "",
         p.weight_g != null ? String(p.weight_g) : "",
         p.diecast_scales?.ratio ? escapeCsvField(p.diecast_scales.ratio) : "",
         p.is_active ? "true" : "false",

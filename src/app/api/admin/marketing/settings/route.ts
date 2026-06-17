@@ -176,6 +176,14 @@ export async function PATCH(req: NextRequest) {
     if (body.highlights_section_heading !== undefined) {
       data.highlights_section_heading = cleanOptionalText(body.highlights_section_heading, 255);
     }
+    if (body.about_page_title !== undefined) data.about_page_title = cleanOptionalText(body.about_page_title, 255);
+    if (body.about_page_subtitle !== undefined) data.about_page_subtitle = cleanOptionalText(body.about_page_subtitle, 500);
+    if (body.about_page_content !== undefined) {
+      data.about_page_content =
+        body.about_page_content === null || body.about_page_content === ""
+          ? null
+          : cleanText(body.about_page_content, 50_000);
+    }
     if (body.privacy_page_title !== undefined) data.privacy_page_title = cleanOptionalText(body.privacy_page_title, 255);
     if (body.privacy_page_subtitle !== undefined) data.privacy_page_subtitle = cleanOptionalText(body.privacy_page_subtitle, 500);
     if (body.privacy_page_content !== undefined) {
@@ -322,6 +330,9 @@ export async function PATCH(req: NextRequest) {
       abandoned_cart_idle_minutes: resolveAbandonedCartIdleMinutes(undefined),
       highlights_section_eyebrow: null,
       highlights_section_heading: null,
+      about_page_title: null,
+      about_page_subtitle: null,
+      about_page_content: null,
       privacy_page_title: null,
       privacy_page_subtitle: null,
       privacy_page_content: null,

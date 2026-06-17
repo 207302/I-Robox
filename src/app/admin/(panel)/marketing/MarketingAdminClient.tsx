@@ -61,6 +61,9 @@ type SiteSettingsRow = {
   privacy_page_title?: string | null;
   privacy_page_subtitle?: string | null;
   privacy_page_content?: string | null;
+  about_page_title?: string | null;
+  about_page_subtitle?: string | null;
+  about_page_content?: string | null;
   terms_page_title?: string | null;
   terms_page_subtitle?: string | null;
   terms_page_content?: string | null;
@@ -93,7 +96,7 @@ type SiteSettingsRow = {
   footer_link_color?: string | null;
 };
 
-type QuickLinkPageAdminKey = "privacy" | "terms" | "returns" | "faq" | "contact";
+type QuickLinkPageAdminKey = "about" | "privacy" | "terms" | "returns" | "faq" | "contact";
 
 type Initial = {
   slides: unknown[];
@@ -296,6 +299,11 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [quickLinkPages, setQuickLinkPages] = useState<
     Record<QuickLinkPageAdminKey, { title: string; subtitle: string; content: string }>
   >({
+    about: {
+      title: st0?.about_page_title ?? "",
+      subtitle: st0?.about_page_subtitle ?? "",
+      content: st0?.about_page_content ?? "",
+    },
     privacy: {
       title: st0?.privacy_page_title ?? "",
       subtitle: st0?.privacy_page_subtitle ?? "",
@@ -371,6 +379,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     QuickLinkPageAdminKey,
     { title: keyof SiteSettingsRow; subtitle: keyof SiteSettingsRow; content: keyof SiteSettingsRow; label: string }
   > = {
+    about: {
+      title: "about_page_title",
+      subtitle: "about_page_subtitle",
+      content: "about_page_content",
+      label: "About Us",
+    },
     privacy: {
       title: "privacy_page_title",
       subtitle: "privacy_page_subtitle",
@@ -2566,7 +2580,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             <h2 className="text-lg font-semibold">Quick Links pages content</h2>
             <p className="text-sm text-meta-3">
               Edit the title, subtitle, and page body (rich text). Content is stored as HTML and shown
-              formatted on Privacy Policy, Terms &amp; Conditions, Return &amp; Cancellation, FAQ, and
+              formatted on About Us, Privacy Policy, Terms &amp; Conditions, Return &amp; Cancellation, FAQ, and
               Contact pages.
             </p>
 
@@ -2583,6 +2597,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 }}
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               >
+                <option value="about">About Us</option>
                 <option value="privacy">Privacy Policy</option>
                 <option value="terms">Terms &amp; Conditions</option>
                 <option value="returns">Return &amp; Cancellation</option>

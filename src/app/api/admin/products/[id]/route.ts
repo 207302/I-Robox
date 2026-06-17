@@ -12,6 +12,7 @@ import { deleteProductById, destroyCloudinaryImages } from "@/lib/admin/deletePr
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 import { parseProductPackageFieldsIn } from "@/lib/admin/productPackageFields";
+import { parseGstPercent, parseHsnCode } from "@/lib/tax/productTaxFields";
 
 function parseShippingPerUnitIn(body: Record<string, unknown>): number | { error: string } | undefined {
   if (body.shipping_per_unit === undefined) return undefined;
@@ -53,6 +54,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         max_order_quantity: true,
         sku: true,
         hsn_code: true,
+        gst_percent: true,
         weight_g: true,
         description: true,
         short_description: true,
@@ -155,13 +157,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       data.sku = sku;
     }
     if (body.hsn_code !== undefined) {
-      if (body.hsn_code !== null && typeof body.hsn_code !== "string") return bad();
-      if (body.hsn_code === null || body.hsn_code === "") {
-        data.hsn_code = null;
-      } else {
-        const h = String(body.hsn_code).replace(/\s/g, "").replace(/[^0-9,]/g, "").slice(0, 32);
-        data.hsn_code = h || null;
+      const parsed = parseHsnCode(body.hsn_code, { required: true });
+      if (typeof parsed === "object" && parsed && "error" in parsed) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
       }
+      data.hsn_code = parsed as string;
+    }
+    if (body.gst_percent !== undefined) {
+      const parsed = parseGstPercent(body.gst_percent, { required: true });
+      if (typeof parsed === "object" && parsed && "error" in parsed) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      data.gst_percent = parsed as number;
     }
     if (body.description !== undefined) {
       if (body.description !== null && typeof body.description !== "string") return bad();

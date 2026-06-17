@@ -426,6 +426,8 @@ model products {
   sku                    String?                  @db.VarChar(100)
   /// GST HSN for shipping / invoicing (digits; optional comma for multiple codes on one SKU)
   hsn_code               String?                  @db.VarChar(32)
+  /// GST rate % on list price (inclusive). Admin / invoice / ShipMozo only — not shown on storefront.
+  gst_percent            Int?                     @db.SmallInt
   /// Packed weight in grams (product + retail box) for courier / ShipMozo.
   weight_g               Int?
   diecast_scale_id       String?                  @db.Uuid
@@ -899,6 +901,10 @@ model site_marketing_settings {
   highlights_section_eyebrow  String? @db.VarChar(120)
   /// Homepage highlights block — main heading under the label.
   highlights_section_heading  String? @db.VarChar(255)
+  /// Quick Links CMS: About Us page.
+  about_page_title        String?  @db.VarChar(255)
+  about_page_subtitle     String?  @db.VarChar(500)
+  about_page_content      String?
   /// Quick Links CMS: Privacy Policy page.
   privacy_page_title      String?  @db.VarChar(255)
   privacy_page_subtitle   String?  @db.VarChar(500)

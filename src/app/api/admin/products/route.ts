@@ -9,6 +9,7 @@ import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
 import { parseProductPackageFieldsIn } from "@/lib/admin/productPackageFields";
+import { parseGstPercent, parseHsnCode } from "@/lib/tax/productTaxFields";
 
 function isAllowed(roles: string[]) {
   return roles.includes("SUPER_ADMIN") || roles.includes("MANAGER") || roles.includes("STAFF");
@@ -116,14 +117,17 @@ export async function POST(req: NextRequest) {
     const brand_id = cleanOptionalText(body.brand_id, 64);
     const subtype_id_in = cleanOptionalText(body.subtype_id, 64);
     const collection_id_in = cleanOptionalText(body.collection_id, 64);
-    let hsn_code: string | null = null;
-    if (body.hsn_code !== undefined && body.hsn_code !== null && body.hsn_code !== "") {
-      if (typeof body.hsn_code !== "string") {
-        return NextResponse.json({ error: "Invalid hsn_code" }, { status: 400 });
-      }
-      const h = body.hsn_code.replace(/\s/g, "").replace(/[^0-9,]/g, "").slice(0, 32);
-      hsn_code = h || null;
+    const hsnParsed = parseHsnCode(body.hsn_code, { required: true });
+    if (typeof hsnParsed === "object" && hsnParsed && "error" in hsnParsed) {
+      return NextResponse.json({ error: hsnParsed.error }, { status: 400 });
     }
+    const hsn_code = hsnParsed as string;
+
+    const gstParsed = parseGstPercent(body.gst_percent, { required: true });
+    if (typeof gstParsed === "object" && gstParsed && "error" in gstParsed) {
+      return NextResponse.json({ error: gstParsed.error }, { status: 400 });
+    }
+    const gst_percent = gstParsed as number;
     const available_quantity = body.available_quantity !== undefined ? Math.max(0, Number(body.available_quantity)) : 0;
     const low_stock_threshold = body.low_stock_threshold !== undefined ? Math.max(0, Number(body.low_stock_threshold)) : 5;
     const shippingParsed = parseShippingPerUnitIn(body as Record<string, unknown>);
@@ -184,6 +188,7 @@ export async function POST(req: NextRequest) {
             max_order_quantity: maxOrderQtyParsed,
             sku,
             hsn_code,
+            gst_percent,
             weight_g: packageFields?.weight_g ?? null,
             diecast_scale_id,
             description,

@@ -5,31 +5,36 @@ import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 const quickLinks = [
   {
     id: 1,
+    label: "About Us",
+    href: "/about-us",
+  },
+  {
+    id: 2,
     label: "Privacy Policy",
     href: "/privacy-policy",
   },
   {
-    id: 2,
+    id: 3,
     label: "Terms & Conditions",
     href: "/terms-conditions",
   },
   {
-    id: 3,
+    id: 4,
     label: "Return & Cancellation",
     href: "/return-cancellation",
   },
   {
-    id: 4,
+    id: 5,
     label: "FAQ",
     href: "/faq",
   },
   {
-    id: 5,
+    id: 6,
     label: "Contact",
     href: "/contact",
   },
   {
-    id: 6,
+    id: 7,
     label: "Sitemap",
     href: "/sitemap.xml",
   },

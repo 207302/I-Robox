@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { SEO_SITE_URL } from "@/lib/seo/constants";
+import { collectProductSitemapImages } from "@/lib/seo/sitemapProductImages";
 
 /** Regenerate periodically so new products appear without redeploying. */
 export const revalidate = 3600;
@@ -74,7 +75,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const [products, categories] = await Promise.all([
       prisma.products.findMany({
         where: { is_active: true },
-        select: { slug: true, updated_at: true },
+        select: {
+          slug: true,
+          name: true,
+          updated_at: true,
+          product_images: {
+            select: { url: true, sort_order: true, alt_text: true },
+            orderBy: { sort_order: "asc" },
+          },
+          product_variants: {
+            select: {
+              product_images: {
+                select: { url: true, sort_order: true, alt_text: true },
+                orderBy: { sort_order: "asc" },
+              },
+            },
+          },
+        },
         orderBy: { updated_at: "desc" },
       }),
       prisma.categories.findMany({
@@ -83,12 +100,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }),
     ]);
 
-    productEntries = products.map((p) => ({
-      url: `${BASE}/shop/${p.slug}`,
-      lastModified: p.updated_at,
-      changeFrequency: "weekly" as const,
-      priority: 0.8,
-    }));
+    productEntries = products.map((p) => {
+      const images = collectProductSitemapImages(p);
+      return {
+        url: `${BASE}/shop/${p.slug}`,
+        lastModified: p.updated_at,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+        ...(images.length > 0 ? { images } : {}),
+      };
+    });
 
     categoryEntries = categories.map((c) => ({
       url: `${BASE}/shop?category=${encodeURIComponent(c.slug)}`,

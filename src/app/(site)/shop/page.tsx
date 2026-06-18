@@ -9,6 +9,7 @@ import { getShopListingLcpImageUrl } from "@/lib/shop/productCardImage";
 import type { Metadata } from "next";
 import { JsonLdScript } from "@/lib/seo/jsonLd";
 import { absoluteSeoUrl, buildSocialMetadata, truncateMetaDescription } from "@/lib/seo/metadata";
+import { categoryListingMetaDescription } from "@/lib/seo/categoryMetadata";
 
 /** ISR — default listing is server-rendered; filters refetch via /api/products. */
 export const revalidate = 300;
@@ -37,10 +38,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     const match = categories.find((c) => c.slug === categorySlugs[0]);
     if (match) {
       title = `Shop ${match.name} | i-robox`;
-      description = truncateMetaDescription(
-        `Explore ${match.name} — RC toys, diecast models, and collectibles at i-robox with fast delivery across India.`,
-        155
-      );
+      description = categoryListingMetaDescription(match);
     }
   } else if (categorySlugs.length > 1) {
     description = truncateMetaDescription(

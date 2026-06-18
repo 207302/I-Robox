@@ -42,7 +42,10 @@ export default async function SiteLayout({
           <SiteTopLoaderDeferred />
           <Suspense
             fallback={
-              <header className="h-[120px] border-b border-gray-3 bg-white" aria-hidden />
+              <header
+                className="min-h-[172px] border-b border-gray-3 bg-white"
+                aria-hidden
+              />
             }
           >
             <MainHeader

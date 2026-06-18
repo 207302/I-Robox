@@ -26,10 +26,15 @@ type SocialMetadataInput = {
   image?: string | null;
 };
 
-export function buildSocialMetadata(input: SocialMetadataInput): Pick<Metadata, "openGraph" | "twitter"> {
+export function buildSocialMetadata(
+  input: SocialMetadataInput
+): Pick<Metadata, "alternates" | "openGraph" | "twitter"> {
   const url = absoluteSeoUrl(input.path ?? "/");
   const image = input.image ? absoluteSeoUrl(input.image) : DEFAULT_OG_IMAGE;
   return {
+    alternates: {
+      canonical: url,
+    },
     openGraph: {
       type: "website",
       locale: "en_IN",

@@ -1,10 +1,13 @@
 import { HERO_IMAGE_SIZES, heroLcpPreloadHref } from "@/lib/images/heroLcpImage";
 import { resolvePublicImageUrl } from "@/lib/lcp/resolveImageUrl";
+import { productGalleryLcpPreloadHref } from "@/lib/shop/productGalleryLcp";
 import { getImageProps } from "next/image";
 
 type Props = {
   /** Raw or absolute image URL (pre-transform Cloudinary URL preferred). */
   imageUrl: string;
+  /** Hero banners vs product gallery — Cloudinary preload transform differs. */
+  variant?: "hero" | "product";
   /** Fallback when URL is local — must match `next/image` on the page. */
   sizes?: string;
   width?: number;
@@ -18,12 +21,16 @@ type Props = {
  */
 export default function LcpImagePrelink({
   imageUrl,
+  variant = "hero",
   sizes = HERO_IMAGE_SIZES,
   width = 1920,
   height = 711,
   quality = 90,
 }: Props) {
-  const cloudinaryHref = heroLcpPreloadHref(imageUrl);
+  const cloudinaryHref =
+    variant === "product"
+      ? productGalleryLcpPreloadHref(imageUrl)
+      : heroLcpPreloadHref(imageUrl);
   if (cloudinaryHref) {
     return (
       <link

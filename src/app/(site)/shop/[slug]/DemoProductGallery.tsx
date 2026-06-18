@@ -167,7 +167,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
       }}
     >
       <div
-        className="relative w-full aspect-[4/3] overflow-hidden rounded-2xl border border-gray-3 bg-white touch-pan-y sm:aspect-square"
+        className="relative w-full aspect-square overflow-hidden rounded-2xl border border-gray-3 bg-gray-1 touch-pan-y"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -278,7 +278,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
       </div>
 
       {images.length > 1 ? (
-        <div className="flex items-center gap-2">
+        <div className="flex min-h-[4.5rem] items-center gap-2 sm:min-h-24">
           <button
             type="button"
             onClick={() => scrollThumbnails("left")}

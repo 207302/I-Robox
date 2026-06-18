@@ -1,10 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import Breadcrumb from "@/components/Common/Breadcrumb";
 
-const Breadcrumb = dynamic(() => import("@/components/Common/Breadcrumb"));
-
-/** Breadcrumb is null on `/` — split chunk avoids loading it on the homepage. */
+/** Breadcrumb is null on `/` — static import keeps SSR markup for stable layout (CLS). */
 export default function BreadcrumbDeferred() {
   return <Breadcrumb />;
 }

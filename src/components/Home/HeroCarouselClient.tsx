@@ -65,10 +65,16 @@ export default function HeroCarouselClient({
 
   useEffect(() => {
     if (slideCount <= 1) return undefined;
-    const timer = window.setInterval(() => {
-      goToNext();
-    }, autoRotateIntervalMs);
-    return () => window.clearInterval(timer);
+    let intervalId: number | undefined;
+    const delayId = window.setTimeout(() => {
+      intervalId = window.setInterval(() => {
+        goToNext();
+      }, autoRotateIntervalMs);
+    }, 6000);
+    return () => {
+      window.clearTimeout(delayId);
+      if (intervalId != null) window.clearInterval(intervalId);
+    };
   }, [goToNext, slideCount, autoRotateIntervalMs]);
 
   useEffect(() => {

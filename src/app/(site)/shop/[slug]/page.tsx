@@ -112,10 +112,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
     <>
       <JsonLdScript id="product-jsonld" data={productJsonLd} />
       <LcpImagePrelink
+        variant="product"
         imageUrl={galleryImagesSafe[0]}
         sizes="(max-width: 1024px) 100vw, 50vw"
-        width={1200}
-        height={1200}
+        width={828}
+        height={828}
       />
     <section className="overflow-x-hidden overflow-y-visible py-6 pb-14 sm:py-10 sm:pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">

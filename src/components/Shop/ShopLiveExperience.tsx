@@ -5,6 +5,7 @@ import ProductItem from "@/components/Common/ProductItem";
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
 import { ChevronDown } from "@/components/Header/icons";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
+import { shopPageHeading } from "@/lib/seo/categoryMetadata";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import {
   SHOP_LISTING_FACETS_PARAM,
@@ -78,6 +79,7 @@ type CategoryRow = {
   slug: string;
   name?: string;
   title?: string;
+  description?: string | null;
 };
 
 type BrandRow = {
@@ -325,6 +327,14 @@ export default function ShopLiveExperience({
 
   const query = parseShopQueryString(queryString);
   const activeFilterCount = useMemo(() => countActiveShopFilters(query), [query]);
+  const pageHeading = useMemo(
+    () => shopPageHeading(query.categorySlugs, allCategories),
+    [query.categorySlugs, allCategories]
+  );
+  const activeCategory =
+    query.categorySlugs.length === 1
+      ? allCategories.find((c) => c.slug === query.categorySlugs[0])
+      : undefined;
 
   useEffect(() => {
     clientQueryRef.current = queryString;
@@ -767,7 +777,7 @@ export default function ShopLiveExperience({
           }}
           key={item.id}
           cardImageSizes={SHOP_GRID_CARD_SIZES}
-          shopListingImage={index === 0 ? "lcp" : "lazy"}
+          shopListingImage={index === 0 ? "lcp" : index === 1 ? "eager" : "lazy"}
         />
       )),
     [products]
@@ -870,6 +880,7 @@ export default function ShopLiveExperience({
 
     return (
     <div className="rounded-xl border border-gray-3 bg-white p-5">
+      <h2 className="sr-only">Filter products</h2>
       <form id={formId} className="mb-5 space-y-3" onSubmit={(e) => e.preventDefault()}>
         <div className="grid grid-cols-2 gap-2">
           <input
@@ -1133,7 +1144,14 @@ export default function ShopLiveExperience({
     <section className="overflow-hidden py-10 pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-dark">Shop</h1>
+          <div>
+            <h1 className="text-2xl font-semibold text-dark">{pageHeading}</h1>
+            {activeCategory?.description?.trim() ? (
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-meta-3">
+                {activeCategory.description.trim()}
+              </p>
+            ) : null}
+          </div>
           {gridResultsLoading ? (
             <span className="text-xs font-medium text-meta-3 animate-pulse">Updating results…</span>
           ) : null}
@@ -1242,6 +1260,7 @@ export default function ShopLiveExperience({
                   gridResultsLoading ? "shop-search-results-grid-dim transition-opacity duration-200" : ""
                 }
               >
+              <h2 className="sr-only">Products</h2>
               {products.length > 0 ? (
                 <div className="relative overflow-hidden">
                   <AnimatePresence mode="wait" initial={false}>

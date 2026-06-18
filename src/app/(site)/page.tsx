@@ -18,6 +18,7 @@ import type { Metadata } from "next";
 import { JsonLdScript } from "@/lib/seo/jsonLd";
 import { SEO_SITE_URL } from "@/lib/seo/constants";
 import { buildSocialMetadata } from "@/lib/seo/metadata";
+import HomeHeroLcpPreload from "@/components/Home/HomeHeroLcpPreload";
 
 /** ISR: keep in sync with `HOME_PAGE_REVALIDATE_SECONDS` in homePageCache.ts */
 export const revalidate = 300;
@@ -205,6 +206,7 @@ export default async function HomePage() {
   return (
     <>
       <JsonLdScript id="website-jsonld" data={websiteJsonLd} />
+      <HomeHeroLcpPreload imageUrl={heroSlides[0]?.image_url} />
       <Home
         heroSlides={heroSlides}
         heroOverlay={heroOverlay}

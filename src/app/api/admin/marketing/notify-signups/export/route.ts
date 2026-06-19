@@ -42,7 +42,7 @@ export async function GET() {
     const XLSX = await import("xlsx");
     const worksheet = XLSX.utils.json_to_sheet(sheetRows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Launch alerts");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Shop popup");
 
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
     const date = new Date().toISOString().slice(0, 10);
@@ -51,7 +51,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="launch-alerts-signups-${date}.xlsx"`,
+        "Content-Disposition": `attachment; filename="shop-popup-signups-${date}.xlsx"`,
         "Cache-Control": "no-store",
       },
     });

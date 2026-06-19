@@ -17,51 +17,11 @@ import {
   MIN_ABANDONED_CART_IDLE_HOURS,
 } from "@/lib/marketing/abandonedCart";
 import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
+import ShopPopupSignupsPanel from "@/components/admin/ShopPopupSignupsPanel";
+import type { MarketingTab } from "@/lib/admin/marketingTab";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
 
-type NotifySignupRow = {
-  id: string;
-  full_name: string;
-  phone: string;
-  email: string;
-  created_at: string;
-  updated_at: string;
-};
-
-async function downloadAdminFile(url: string, fallbackFilename: string) {
-  const res = await fetch(url, { credentials: "include", cache: "no-store" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { error?: string }).error || "Download failed");
-  }
-  const cd = res.headers.get("Content-Disposition");
-  const m =
-    cd?.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i) ?? cd?.match(/filename="([^"]+)"/);
-  const filename = m?.[1]?.trim() || fallbackFilename;
-  const blob = await res.blob();
-  const href = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(href);
-}
-
-function formatSignupDate(value: string) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-GB", {
-    timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+type MarketingTabState = MarketingTab;
 
 type HeroSlideRow = {
   id: string;
@@ -159,6 +119,7 @@ type Initial = {
     discounted_price: number | string | null;
   }[];
   brands: { id: string; name: string; slug: string }[];
+  initialTab?: MarketingTabState;
 };
 
 async function j<T>(res: Response): Promise<T> {
@@ -241,17 +202,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     flashSales: deferredFlashSales,
     coupons: deferredCoupons,
   } = useMarketingAdminDeferred();
-  const [tab, setTab] = useState<
-    | "hero"
-    | "highlights"
-    | "brandRail"
-    | "categoryGrid"
-    | "announcements"
-    | "popups"
-    | "flash"
-    | "launchLeads"
-    | "settings"
-  >("hero");
+  const [tab, setTab] = useState<MarketingTabState>(initial.initialTab ?? "hero");
   const bulk = useBulkSelection();
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [slides, setSlides] = useState(() =>
@@ -263,9 +214,6 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [announcements, setAnnouncements] = useState(initial.announcements);
   const [popups, setPopups] = useState<unknown[]>([]);
   const [flashSales, setFlashSales] = useState<unknown[]>([]);
-  const [launchLeads, setLaunchLeads] = useState<NotifySignupRow[]>([]);
-  const [launchLeadsLoading, setLaunchLeadsLoading] = useState(false);
-  const [launchLeadsExporting, setLaunchLeadsExporting] = useState(false);
 
   useEffect(() => {
     setPopups(deferredPopups);
@@ -275,29 +223,6 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     setFlashSales(deferredFlashSales);
   }, [deferredFlashSales]);
 
-  useEffect(() => {
-    if (tab !== "launchLeads") return;
-    let cancelled = false;
-    (async () => {
-      setLaunchLeadsLoading(true);
-      try {
-        const data = await j<{ items: NotifySignupRow[] }>(
-          await fetchAdminWithRetry("/api/admin/marketing/notify-signups", { cache: "no-store" })
-        );
-        if (!cancelled) setLaunchLeads(data.items ?? []);
-      } catch (err: unknown) {
-        if (!cancelled) {
-          toast.error(err instanceof Error ? err.message : "Failed to load signups");
-          setLaunchLeads([]);
-        }
-      } finally {
-        if (!cancelled) setLaunchLeadsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [tab]);
   const [firstVisit, setFirstVisit] = useState(initial.settings?.first_visit_coupon_code ?? "");
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(() => {
     const raw = initial.settings?.free_shipping_threshold_inr;
@@ -778,7 +703,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             ["announcements", "Announcements"],
             ["popups", "Popups"],
             ["flash", "Flash sales"],
-            ["launchLeads", "Launch alerts"],
+            ["launchLeads", "Shop popup"],
             ["settings", "Settings"],
           ] as const
         ).map(([k, label]) => (
@@ -2367,105 +2292,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
       ) : null}
 
       {tab === "launchLeads" ? (
-        <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-dark">Launch alert signups</h2>
-              <p className="mt-1 text-sm text-meta-3">
-                Leads from the bottom-right &quot;Notify me&quot; popup on the storefront. Re-signups
-                with the same email update name and mobile.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={launchLeadsLoading}
-                className="rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-dark hover:bg-gray-1 disabled:opacity-60"
-                onClick={async () => {
-                  setLaunchLeadsLoading(true);
-                  try {
-                    const data = await j<{ items: NotifySignupRow[] }>(
-                      await fetchAdminWithRetry("/api/admin/marketing/notify-signups", {
-                        cache: "no-store",
-                      })
-                    );
-                    setLaunchLeads(data.items ?? []);
-                    toast.success("List refreshed");
-                  } catch (err: unknown) {
-                    toast.error(err instanceof Error ? err.message : "Refresh failed");
-                  } finally {
-                    setLaunchLeadsLoading(false);
-                  }
-                }}
-              >
-                {launchLeadsLoading ? "Loading…" : "Refresh"}
-              </button>
-              <button
-                type="button"
-                disabled={launchLeadsExporting || launchLeads.length === 0}
-                className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark disabled:opacity-60"
-                onClick={async () => {
-                  setLaunchLeadsExporting(true);
-                  try {
-                    const date = new Date().toISOString().slice(0, 10);
-                    await downloadAdminFile(
-                      "/api/admin/marketing/notify-signups/export",
-                      `launch-alerts-signups-${date}.xlsx`
-                    );
-                    toast.success("Excel download started");
-                  } catch (err: unknown) {
-                    toast.error(err instanceof Error ? err.message : "Export failed");
-                  } finally {
-                    setLaunchLeadsExporting(false);
-                  }
-                }}
-              >
-                {launchLeadsExporting ? "Exporting…" : "Download Excel"}
-              </button>
-            </div>
-          </div>
-
-          <p className="text-sm text-meta-3">
-            <span className="font-semibold text-dark">{launchLeads.length}</span> signup
-            {launchLeads.length === 1 ? "" : "s"}
-          </p>
-
-          {launchLeadsLoading && launchLeads.length === 0 ? (
-            <p className="text-sm text-meta-3">Loading signups…</p>
-          ) : launchLeads.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-gray-3 bg-gray-1/40 px-4 py-8 text-center text-sm text-meta-3">
-              No signups yet. They will appear here when visitors submit the launch alerts popup.
-            </p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-gray-3">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-1 text-left text-meta-3">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Mobile</th>
-                    <th className="px-4 py-3 font-medium">Email</th>
-                    <th className="px-4 py-3 font-medium">Signed up</th>
-                    <th className="px-4 py-3 font-medium">Updated</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-3">
-                  {launchLeads.map((row) => (
-                    <tr key={row.id} className="text-dark">
-                      <td className="px-4 py-3 font-medium">{row.full_name}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{row.phone}</td>
-                      <td className="px-4 py-3">{row.email}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-meta-3">
-                        {formatSignupDate(row.created_at)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-meta-3">
-                        {formatSignupDate(row.updated_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <section className="rounded-2xl border border-gray-3 bg-white p-6">
+          <ShopPopupSignupsPanel compact />
         </section>
       ) : null}
 

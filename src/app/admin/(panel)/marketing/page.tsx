@@ -9,8 +9,15 @@ import {
 import { MarketingAdminDeferredProvider } from "./MarketingAdminContext";
 import MarketingAdminClient from "./MarketingAdminClient";
 import MarketingDeferredSeeds from "./MarketingDeferredSeeds";
+import { resolveMarketingTab } from "@/lib/admin/marketingTab";
 
-export default async function MarketingAdminPage() {
+type PageProps = {
+  searchParams: Promise<{ tab?: string }>;
+};
+
+export default async function MarketingAdminPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const initialTab = resolveMarketingTab(sp.tab);
   const auth = await requireAdminWrite();
   if (!auth.ok) redirect("/admin/login");
 
@@ -43,6 +50,7 @@ export default async function MarketingAdminPage() {
           freeShippingExcludedBrandIds,
           products: productsPlain,
           brands,
+          initialTab,
         }}
       />
       <Suspense fallback={null}>

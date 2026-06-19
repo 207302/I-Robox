@@ -1,3 +1,5 @@
+import { sanitizeIndianPhoneInput } from "@/lib/auth/indianMobile";
+
 export type SavedAddressRecord = {
   id: string;
   full_name: string;
@@ -61,7 +63,7 @@ export function savedAddressToCheckoutFields(
   return {
     full_name: addr.full_name,
     email,
-    phone: addr.phone,
+    phone: sanitizeIndianPhoneInput(addr.phone),
     line1: addr.line1,
     line2: addr.line2 ?? "",
     city: addr.city,

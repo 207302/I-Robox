@@ -15,6 +15,10 @@ import {
   savedAddressToCheckoutFields,
   type SavedAddressRecord,
 } from "@/lib/account/savedAddress";
+import {
+  indianMobileErrorMessage,
+  sanitizeIndianPhoneInput,
+} from "@/lib/auth/indianMobile";
 
 declare global {
   interface Window {
@@ -412,7 +416,7 @@ export default function CheckoutPage() {
                         setAddress((a) => ({
                           full_name: "",
                           email: a.email,
-                          phone: user?.phone?.trim() ?? "",
+                          phone: sanitizeIndianPhoneInput(user?.phone?.trim() ?? ""),
                           line1: "",
                           line2: "",
                           city: "",
@@ -454,9 +458,25 @@ export default function CheckoutPage() {
                   <label key={key} className={key === "line1" || key === "line2" ? "sm:col-span-2" : ""}>
                     <span className="mb-1 block text-sm font-medium text-dark">{label}</span>
                     <input
+                      type={key === "phone" ? "tel" : key === "email" ? "email" : "text"}
+                      inputMode={key === "phone" ? "numeric" : undefined}
+                      autoComplete={
+                        key === "phone"
+                          ? "tel"
+                          : key === "email"
+                            ? "email"
+                            : key === "full_name"
+                              ? "name"
+                              : undefined
+                      }
+                      pattern={key === "phone" ? "[6-9][0-9]{9}" : undefined}
+                      title={key === "phone" ? indianMobileErrorMessage() : undefined}
+                      maxLength={key === "phone" ? 10 : undefined}
                       value={(address as any)[key]}
                       onChange={(e) => {
-                        setAddress((a) => ({ ...a, [key]: e.target.value }));
+                        const raw = e.target.value;
+                        const next = key === "phone" ? sanitizeIndianPhoneInput(raw) : raw;
+                        setAddress((a) => ({ ...a, [key]: next }));
                         // Email is checkout-only (not stored on saved addresses); keep selection.
                         if (key !== "email" && selectedAddressId !== "new") {
                           setSelectedAddressId("new");

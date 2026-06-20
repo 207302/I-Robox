@@ -111,7 +111,7 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={`font-semibold text-dark ${compact ? "text-base" : "text-lg"}`}>
-            Shop popup — latest drops signups
+            Latest drop signups
           </h2>
           <p className="mt-1 text-sm text-meta-3">
             Enquiries from the &quot;Notify me&quot; popup on{" "}
@@ -137,7 +137,7 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                 const date = new Date().toISOString().slice(0, 10);
                 await downloadAdminFile(
                   "/api/admin/marketing/notify-signups/export",
-                  `shop-popup-signups-${date}.xlsx`
+                  `latest-drop-signups-${date}.xlsx`
                 );
                 toast.success("Excel download started");
               } catch (err: unknown) {

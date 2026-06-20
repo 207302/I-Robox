@@ -25,7 +25,13 @@ const MARKETING_TABS = new Set<string>([
 export function resolveMarketingTab(raw?: string | null): MarketingTab | undefined {
   const key = raw?.trim();
   if (!key) return undefined;
-  if (key === "shopPopup" || key === "shop-signups" || key === "launchLeads") {
+  if (
+    key === "shopPopup" ||
+    key === "shop-signups" ||
+    key === "latestDrops" ||
+    key === "latest-drop-signups" ||
+    key === "launchLeads"
+  ) {
     return "launchLeads";
   }
   if (MARKETING_TABS.has(key)) return key as MarketingTab;

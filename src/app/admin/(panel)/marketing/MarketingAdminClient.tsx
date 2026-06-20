@@ -703,7 +703,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             ["announcements", "Announcements"],
             ["popups", "Popups"],
             ["flash", "Flash sales"],
-            ["launchLeads", "Shop popup"],
+            ["launchLeads", "Latest drop signups"],
             ["settings", "Settings"],
           ] as const
         ).map(([k, label]) => (

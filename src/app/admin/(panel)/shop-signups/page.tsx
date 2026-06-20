@@ -3,7 +3,7 @@ import { requireAdminWrite } from "@/lib/admin/rbac";
 import ShopPopupSignupsPanel from "@/components/admin/ShopPopupSignupsPanel";
 
 export const metadata = {
-  title: "Shop popup signups | Admin",
+  title: "Latest drop signups | Admin",
 };
 
 export default async function ShopSignupsAdminPage() {
@@ -12,7 +12,7 @@ export default async function ShopSignupsAdminPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-dark">Shop popup signups</h1>
+      <h1 className="text-2xl font-semibold text-dark">Latest drop signups</h1>
       <section className="rounded-2xl border border-gray-3 bg-white p-6">
         <ShopPopupSignupsPanel />
       </section>

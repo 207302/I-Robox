@@ -80,7 +80,11 @@ const PreviewSliderModal = () => {
   return (
     <FullscreenOverlay closePreviewModal={closePreviewModal}>
       <button
-        onClick={() => closePreviewModal()}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          closePreviewModal();
+        }}
         aria-label="Close image viewer"
         className="absolute top-3 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:text-meta-5 sm:top-6 sm:right-6"
       >
@@ -108,7 +112,10 @@ const PreviewSliderModal = () => {
             type="button"
             aria-label="Previous image"
             className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full p-2 text-white transition hover:bg-white/10 sm:left-6 sm:p-3"
-            onClick={handlePrev}
+            onClick={(event) => {
+              event.stopPropagation();
+              handlePrev();
+            }}
           >
             <svg
               className="rotate-180"
@@ -132,7 +139,10 @@ const PreviewSliderModal = () => {
             type="button"
             aria-label="Next image"
             className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full p-2 text-white transition hover:bg-white/10 sm:right-6 sm:p-3"
-            onClick={handleNext}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleNext();
+            }}
           >
             <svg
               width="36"

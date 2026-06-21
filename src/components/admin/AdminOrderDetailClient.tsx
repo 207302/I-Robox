@@ -44,6 +44,12 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
     const pushOrder =
       d.pushOrder && typeof d.pushOrder === "object" ? (d.pushOrder as Record<string, unknown>) : null;
     const pushMessage = pushOrder?.message ? String(pushOrder.message) : "";
+    const pushResponse =
+      pushOrder?.response && typeof pushOrder.response === "object"
+        ? JSON.stringify(pushOrder.response)
+        : pushOrder?.response
+          ? String(pushOrder.response)
+          : "";
     const pushOk = pushOrder?.ok;
     const parts = [
       status && `Status: ${status}`,
@@ -54,6 +60,7 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
       pushOk === false && reason === "warehouse_not_resolved" &&
         "ShipMozo warehouse not found — set SHIPMOZO_WAREHOUSE_ID or SHIPMOZO_WAREHOUSE_TITLE",
       pushOk === false && pushMessage && `Push failed: ${pushMessage}`,
+      pushOk === false && pushResponse && `ShipMozo response: ${pushResponse}`,
       pushOk === false && !pushMessage && !reason && "Push failed: check ShipMozo API keys and warehouse env vars",
       discoveryError && `AWB sync: ${discoveryError}`,
       triedIds && `Tried ShipMozo ids: ${triedIds}`,

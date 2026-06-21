@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import { computeOrderPackageDetails } from "@/lib/shipping/orderPackageDetails";
-import { splitInclusiveGstAmount } from "@/lib/tax/productTaxFields";
 
 const SHIPMOZO_BASE_DEFAULT = "https://shipping-api.com/app/api/v1";
 
@@ -14,9 +13,8 @@ const SHIPMOZO_DEFAULT_HEIGHT_CM = 10;
 /** Shipmozo rejects ref / order_id longer than this (e.g. auto-assign, schedule pickup). */
 const SHIPMOZO_ORDER_ID_MAX_LEN = 30;
 
-/** Fallback when product admin fields are empty — toys / games (RC, diecast). */
+/** Fallback when product admin HSN is empty — toys / games (RC, diecast). */
 const SHIPMOZO_DEFAULT_HSN = (process.env.SHIPMOZO_DEFAULT_HSN ?? "95030090").trim();
-const SHIPMOZO_DEFAULT_GST_PERCENT = Number(process.env.SHIPMOZO_DEFAULT_GST_PERCENT ?? 18);
 
 export type ShipmozoBookingResult = {
   ok: boolean;
@@ -25,24 +23,28 @@ export type ShipmozoBookingResult = {
   skipped?: boolean;
 };
 
-function resolveShipmozoProductTax(product: { hsn_code?: string | null; gst_percent?: number | null }) {
+function resolveShipmozoHsn(product: { hsn_code?: string | null }) {
   const hsnRaw = String(product.hsn_code ?? "").trim();
-  const hsn = hsnRaw || SHIPMOZO_DEFAULT_HSN;
-  const gst =
-    product.gst_percent != null && Number.isFinite(product.gst_percent)
-      ? product.gst_percent
-      : SHIPMOZO_DEFAULT_GST_PERCENT;
-  return {
-    hsn,
-    gst,
-    usedDefaults: !hsnRaw || product.gst_percent == null,
-  };
+  return { hsn: hsnRaw || SHIPMOZO_DEFAULT_HSN, usedDefault: !hsnRaw };
 }
 
 function shipmozoPushErrorMessage(parsed: unknown, raw?: string): string {
   if (parsed && typeof parsed === "object") {
-    const p = parsed as ShipmozoResponse;
+    const p = parsed as ShipmozoResponse & { data?: unknown };
     const msg = String(p.message ?? "").trim();
+    if (msg && msg.toLowerCase() !== "error") return msg;
+    if (p.data && typeof p.data === "object") {
+      const data = p.data as Record<string, unknown>;
+      for (const key of ["error", "errors", "message", "detail"]) {
+        const value = data[key];
+        if (typeof value === "string" && value.trim()) return value.trim();
+        if (Array.isArray(value) && value.length > 0) {
+          return value.map((v) => String(v)).join("; ");
+        }
+      }
+      const nested = JSON.stringify(p.data);
+      if (nested && nested !== "{}") return nested.slice(0, 500);
+    }
     if (msg) return msg;
   }
   const rawText = String(raw ?? "").trim();
@@ -540,38 +542,22 @@ export async function bookShipmozoShipmentForOrder(
     }))
   );
 
-  const taxDefaultProducts: string[] = [];
+  const hsnDefaultProducts: string[] = [];
   const lineItems = (order.order_items ?? []).map((it) => {
-    const tax = resolveShipmozoProductTax(it.products ?? {});
-    if (tax.usedDefaults) {
-      taxDefaultProducts.push(String(it.product_name ?? "Item").slice(0, 80));
+    const { hsn, usedDefault } = resolveShipmozoHsn(it.products ?? {});
+    if (usedDefault) {
+      hsnDefaultProducts.push(String(it.product_name ?? "Item").slice(0, 80));
     }
-    const inclusiveUnit = Number(it.unit_price ?? 0);
-    const quantity = Number.isFinite(it.quantity) ? it.quantity : 1;
-    const lineInclusive = inclusiveUnit * quantity;
-    const lineSplit = splitInclusiveGstAmount(lineInclusive, tax.gst);
-    const unitSplit = splitInclusiveGstAmount(inclusiveUnit, tax.gst);
     return {
       name: String(it.product_name ?? "Item").slice(0, 200),
       sku_number: "",
-      quantity,
+      quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
       discount: "",
-      hsn: tax.hsn,
-      gst: tax.gst,
-      unit_price: unitSplit.taxable,
-      taxable_amount: lineSplit.taxable,
-      gst_amount: lineSplit.gst,
+      hsn,
+      unit_price: Number(it.unit_price ?? 0),
       product_category: "Other",
     };
   });
-
-  const productTaxTotals = lineItems.reduce(
-    (acc, line) => ({
-      taxable: Number((acc.taxable + Number(line.taxable_amount ?? 0)).toFixed(2)),
-      gst: Number((acc.gst + Number(line.gst_amount ?? 0)).toFixed(2)),
-    }),
-    { taxable: 0, gst: 0 }
-  );
 
   const customerRef = normalizeShipmozoOrderIdRef(shipmozoOrderRef(order));
   const priorMeta =
@@ -588,10 +574,10 @@ export async function bookShipmozoShipmentForOrder(
   }
 
   if (!alreadyPushed) {
-    if (taxDefaultProducts.length > 0) {
+    if (hsnDefaultProducts.length > 0) {
       await appendShipmozoMetadata(orderId, {
-        taxDefaultsUsed: taxDefaultProducts,
-        taxDefaultsNote: `Used default HSN ${SHIPMOZO_DEFAULT_HSN} / GST ${SHIPMOZO_DEFAULT_GST_PERCENT}% for products missing admin tax fields.`,
+        hsnDefaultsUsed: hsnDefaultProducts,
+        hsnDefaultsNote: `Used default HSN ${SHIPMOZO_DEFAULT_HSN} for products missing admin HSN.`,
       });
     }
 
@@ -600,7 +586,7 @@ export async function bookShipmozoShipmentForOrder(
       order_date: new Date().toISOString().slice(0, 10),
       consignee_name: String(addr.full_name ?? "Customer").slice(0, 120),
       consignee_phone: Number(phone),
-      consignee_email: String(order.customers?.email ?? "").trim().slice(0, 200),
+      consignee_email: "",
       consignee_address_line_one: String(addr.line1 ?? "").slice(0, 240),
       consignee_address_line_two: String(addr.line2 ?? "").slice(0, 240),
       consignee_pin_code: Number(pin),
@@ -609,8 +595,6 @@ export async function bookShipmozoShipmentForOrder(
       product_detail: lineItems,
       payment_type: "PREPAID",
       cod_amount: "",
-      taxable_amount: productTaxTotals.taxable,
-      total_gst: productTaxTotals.gst,
       weight: packageDetails.weightG,
       length: SHIPMOZO_DEFAULT_LENGTH_CM,
       width: SHIPMOZO_DEFAULT_WIDTH_CM,

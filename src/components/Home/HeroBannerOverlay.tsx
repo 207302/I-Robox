@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { heroOverlayTextStyle } from "@/lib/marketing/heroOverlayColors";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
-import { resolveHomeHeroHeading } from "@/lib/seo/constants";
 
 export type HeroOverlayProps = {
   eyebrow?: string;
@@ -23,11 +22,10 @@ export default function HeroBannerOverlay({ overlay }: { overlay?: HeroOverlayPr
     ctaLabel: overlay?.ctaLabel?.trim() ?? "",
     ctaHref: overlay?.ctaHref?.trim() ?? "",
   };
-  const displayHeading = resolveHomeHeroHeading(overlayCopy.heading);
   const hasOverlayCopy =
     Boolean(overlayCopy.eyebrow) ||
-    Boolean(overlayCopy.subheading) ||
-    Boolean(displayHeading);
+    Boolean(overlayCopy.heading) ||
+    Boolean(overlayCopy.subheading);
   const showCta = Boolean(overlayCopy.ctaLabel && overlayCopy.ctaHref);
   if (!hasOverlayCopy && !showCta) return null;
 
@@ -50,12 +48,14 @@ export default function HeroBannerOverlay({ overlay }: { overlay?: HeroOverlayPr
                 {overlayCopy.eyebrow}
               </p>
             ) : null}
-            <h1
-              style={headingStyle}
-              className={`text-2xl font-semibold leading-[1.08] drop-shadow-[0_1px_4px_rgba(0,0,0,0.25)] sm:text-4xl sm:font-extrabold sm:drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] lg:text-6xl ${headingStyle ? "" : "text-white/95"}`}
-            >
-              {displayHeading}
-            </h1>
+            {overlayCopy.heading ? (
+              <h1
+                style={headingStyle}
+                className={`text-2xl font-semibold leading-[1.08] drop-shadow-[0_1px_4px_rgba(0,0,0,0.25)] sm:text-4xl sm:font-extrabold sm:drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] lg:text-6xl ${headingStyle ? "" : "text-white/95"}`}
+              >
+                {overlayCopy.heading}
+              </h1>
+            ) : null}
             {overlayCopy.subheading ? (
               <p
                 style={subheadingStyle}

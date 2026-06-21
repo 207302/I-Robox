@@ -151,6 +151,34 @@ function normalizeHexForPicker(value: string) {
   return "#ffffff";
 }
 
+function OverlayTextFieldHeader({
+  label,
+  value,
+  onClear,
+  clearing,
+}: {
+  label: string;
+  value: string;
+  onClear: () => void;
+  clearing: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-sm font-medium">{label}</span>
+      {value.trim() ? (
+        <button
+          type="button"
+          disabled={clearing}
+          onClick={onClear}
+          className="text-xs font-medium text-meta-3 hover:text-dark disabled:opacity-60"
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function HexColorField({
   label,
   value,
@@ -526,6 +554,46 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     setFlashSales(await r.json());
   }
 
+  function syncHeroOverlayFromRow(row: SiteSettingsRow) {
+    setHeroOverlayEyebrow(row.hero_overlay_eyebrow ?? "");
+    setHeroOverlayHeading(row.hero_overlay_heading ?? "");
+    setHeroOverlaySubheading(row.hero_overlay_subheading ?? "");
+    setHeroOverlayCtaLabel(row.hero_overlay_cta_label ?? "");
+    setHeroOverlayCtaHref(row.hero_overlay_cta_href ?? "");
+    setHeroOverlayEyebrowColor(row.hero_overlay_eyebrow_color ?? "");
+    setHeroOverlayHeadingColor(row.hero_overlay_heading_color ?? "");
+    setHeroOverlaySubheadingColor(row.hero_overlay_subheading_color ?? "");
+    setHeroOverlayCtaLabelColor(row.hero_overlay_cta_label_color ?? "");
+  }
+
+  async function clearHeroOverlayField(
+    field:
+      | "hero_overlay_eyebrow"
+      | "hero_overlay_heading"
+      | "hero_overlay_subheading"
+      | "hero_overlay_cta_label"
+      | "hero_overlay_cta_href",
+    label: string
+  ) {
+    try {
+      setHeroOverlaySaving(true);
+      const row = await j<SiteSettingsRow>(
+        await fetch("/api/admin/marketing/settings", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ [field]: null }),
+        })
+      );
+      syncHeroOverlayFromRow(row);
+      toast.success(`${label} cleared`);
+      router.refresh();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setHeroOverlaySaving(false);
+    }
+  }
+
   useEffect(() => {
     bulk.clearSelection();
   }, [tab, bulk.clearSelection]);
@@ -780,7 +848,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               This text stays over the moving hero images. Leave text empty to hide it; leave color empty for default white.
             </p>
             <label className="block">
-              <span className="text-sm font-medium">Eyebrow</span>
+              <OverlayTextFieldHeader
+                label="Eyebrow"
+                value={heroOverlayEyebrow}
+                clearing={heroOverlaySaving}
+                onClear={() => void clearHeroOverlayField("hero_overlay_eyebrow", "Eyebrow")}
+              />
               <input
                 value={heroOverlayEyebrow}
                 onChange={(e) => setHeroOverlayEyebrow(e.target.value)}
@@ -795,7 +868,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               </div>
             </label>
             <label className="block">
-              <span className="text-sm font-medium">Main heading</span>
+              <OverlayTextFieldHeader
+                label="Main heading"
+                value={heroOverlayHeading}
+                clearing={heroOverlaySaving}
+                onClear={() => void clearHeroOverlayField("hero_overlay_heading", "Main heading")}
+              />
               <input
                 value={heroOverlayHeading}
                 onChange={(e) => setHeroOverlayHeading(e.target.value)}
@@ -810,7 +888,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               </div>
             </label>
             <label className="block">
-              <span className="text-sm font-medium">Subheading</span>
+              <OverlayTextFieldHeader
+                label="Subheading"
+                value={heroOverlaySubheading}
+                clearing={heroOverlaySaving}
+                onClear={() => void clearHeroOverlayField("hero_overlay_subheading", "Subheading")}
+              />
               <textarea
                 value={heroOverlaySubheading}
                 onChange={(e) => setHeroOverlaySubheading(e.target.value)}
@@ -827,7 +910,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-medium">CTA label</span>
+                <OverlayTextFieldHeader
+                  label="CTA label"
+                  value={heroOverlayCtaLabel}
+                  clearing={heroOverlaySaving}
+                  onClear={() => void clearHeroOverlayField("hero_overlay_cta_label", "CTA label")}
+                />
                 <input
                   value={heroOverlayCtaLabel}
                   onChange={(e) => setHeroOverlayCtaLabel(e.target.value)}
@@ -842,7 +930,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 </div>
               </label>
               <label className="block">
-                <span className="text-sm font-medium">CTA link</span>
+                <OverlayTextFieldHeader
+                  label="CTA link"
+                  value={heroOverlayCtaHref}
+                  clearing={heroOverlaySaving}
+                  onClear={() => void clearHeroOverlayField("hero_overlay_cta_href", "CTA link")}
+                />
                 <input
                   value={heroOverlayCtaHref}
                   onChange={(e) => setHeroOverlayCtaHref(e.target.value)}
@@ -874,15 +967,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                       }),
                     })
                   );
-                  setHeroOverlayEyebrow(row.hero_overlay_eyebrow ?? "");
-                  setHeroOverlayHeading(row.hero_overlay_heading ?? "");
-                  setHeroOverlaySubheading(row.hero_overlay_subheading ?? "");
-                  setHeroOverlayCtaLabel(row.hero_overlay_cta_label ?? "");
-                  setHeroOverlayCtaHref(row.hero_overlay_cta_href ?? "");
-                  setHeroOverlayEyebrowColor(row.hero_overlay_eyebrow_color ?? "");
-                  setHeroOverlayHeadingColor(row.hero_overlay_heading_color ?? "");
-                  setHeroOverlaySubheadingColor(row.hero_overlay_subheading_color ?? "");
-                  setHeroOverlayCtaLabelColor(row.hero_overlay_cta_label_color ?? "");
+                  syncHeroOverlayFromRow(row);
                   toast.success("Hero overlay text saved");
                   router.refresh();
                 } catch (err: unknown) {

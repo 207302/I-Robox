@@ -2,7 +2,6 @@ import HeroBannerLcp from "./HeroBannerLcp";
 import HeroBannerMulti from "./HeroBannerMulti";
 import type { HeroSlide } from "./heroTypes";
 import type { HeroOverlayProps } from "./HeroBannerOverlay";
-import { HOME_HERO_H1_FALLBACK } from "@/lib/seo/constants";
 
 type Props = {
   slides?: HeroSlide[];
@@ -19,7 +18,6 @@ export default function HeroBannerSection({
   if (slides.length === 0) {
     return (
       <div className="relative w-full bg-gray-1">
-        <h1 className="sr-only">{HOME_HERO_H1_FALLBACK}</h1>
         <div
           className="relative flex w-full aspect-[7/5] lg:aspect-[2.7/1] items-center justify-center bg-gray-1 border-b border-gray-3"
           aria-label="Hero banner area"

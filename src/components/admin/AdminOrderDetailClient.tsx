@@ -49,8 +49,12 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
       status && `Status: ${status}`,
       reason && `Reason: ${reason}`,
       message && message,
+      pushOk === false && reason === "shipmozo_not_configured" &&
+        "ShipMozo env vars missing on server (Hostinger → Environment)",
+      pushOk === false && reason === "warehouse_not_resolved" &&
+        "ShipMozo warehouse not found — set SHIPMOZO_WAREHOUSE_ID or SHIPMOZO_WAREHOUSE_TITLE",
       pushOk === false && pushMessage && `Push failed: ${pushMessage}`,
-      pushOk === false && !pushMessage && "Push failed: check ShipMozo API keys and warehouse env vars",
+      pushOk === false && !pushMessage && !reason && "Push failed: check ShipMozo API keys and warehouse env vars",
       discoveryError && `AWB sync: ${discoveryError}`,
       triedIds && `Tried ShipMozo ids: ${triedIds}`,
       rmk && `Shipmozo: ${rmk}`,

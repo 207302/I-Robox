@@ -60,6 +60,13 @@ export async function register() {
   try {
     const { startShipmozoTrackingScheduler } = await import("./lib/cron/shipmozoTrackingScheduler");
     startShipmozoTrackingScheduler();
+    const { shipmozoConfigDiagnostics } = await import("./lib/shipping/shipmozo");
+    const shipmozo = shipmozoConfigDiagnostics();
+    if (shipmozo.configured) {
+      console.info("[instrumentation] ShipMozo integration configured");
+    } else {
+      console.error("[instrumentation] ShipMozo NOT configured — paid orders will not appear in ShipMozo", shipmozo);
+    }
   } catch (err) {
     console.warn("[instrumentation] ShipMozo tracking scheduler skipped:", err);
   }

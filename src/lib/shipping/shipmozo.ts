@@ -39,10 +39,15 @@ function resolveShipmozoProductTax(product: { hsn_code?: string | null; gst_perc
   };
 }
 
-function shipmozoPushErrorMessage(parsed: unknown): string {
-  if (!parsed || typeof parsed !== "object") return "ShipMozo push-order failed";
-  const p = parsed as ShipmozoResponse;
-  return String(p.message ?? "ShipMozo push-order failed").trim() || "ShipMozo push-order failed";
+function shipmozoPushErrorMessage(parsed: unknown, raw?: string): string {
+  if (parsed && typeof parsed === "object") {
+    const p = parsed as ShipmozoResponse;
+    const msg = String(p.message ?? "").trim();
+    if (msg) return msg;
+  }
+  const rawText = String(raw ?? "").trim();
+  if (rawText && rawText.length <= 500) return rawText;
+  return "ShipMozo rejected the order — check API keys and warehouse env vars on the server";
 }
 
 function priorPushSucceeded(metadata: unknown): boolean {
@@ -291,6 +296,83 @@ export function isShipmozoIntegrationConfigured(): boolean {
   return isShipmozoConfigured();
 }
 
+/** Log which ShipMozo env pieces are missing (safe for production logs). */
+export function shipmozoConfigDiagnostics(): {
+  configured: boolean;
+  hasPublicKey: boolean;
+  hasPrivateKey: boolean;
+  hasWarehouse: boolean;
+} {
+  const hasPublicKey = Boolean((process.env.SHIPMOZO_PUBLIC_KEY ?? "").trim());
+  const hasPrivateKey = Boolean((process.env.SHIPMOZO_PRIVATE_KEY ?? "").trim());
+  const hasWarehouse = Boolean(
+    (process.env.SHIPMOZO_WAREHOUSE_ID ?? "").trim() || (process.env.SHIPMOZO_WAREHOUSE_TITLE ?? "").trim()
+  );
+  return {
+    configured: hasPublicKey && hasPrivateKey && hasWarehouse,
+    hasPublicKey,
+    hasPrivateKey,
+    hasWarehouse,
+  };
+}
+
+export async function runShipmozoPendingOrderPush() {
+  const diag = shipmozoConfigDiagnostics();
+  if (!diag.configured) {
+    console.warn("[shipmozo-push-sync] skipped — missing env", diag);
+    return { scanned: 0, pushed: 0, failed: 0, skipped: 0, notConfigured: true as const };
+  }
+
+  const lookbackDays = Math.max(1, Number(process.env.SHIPMOZO_PUSH_LOOKBACK_DAYS ?? 60) || 60);
+  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  const batchSize = Math.max(
+    1,
+    Math.min(50, Number(process.env.SHIPMOZO_PUSH_BATCH_SIZE ?? 25) || 25)
+  );
+
+  const orders = await prisma.orders.findMany({
+    where: {
+      payment_status: "SUCCEEDED",
+      created_at: { gte: since },
+      OR: [{ awb_number: null }, { awb_number: "" }],
+    },
+    orderBy: { created_at: "asc" },
+    take: batchSize,
+    select: {
+      id: true,
+      shipments: { select: { tracking_number: true, metadata: true } },
+    },
+  });
+
+  let pushed = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const row of orders) {
+    if ((row.shipments?.tracking_number ?? "").trim()) {
+      skipped += 1;
+      continue;
+    }
+    if (priorPushSucceeded(row.shipments?.metadata)) {
+      skipped += 1;
+      continue;
+    }
+
+    const hadPriorAttempt = Boolean(row.shipments?.metadata);
+    const result = await bookShipmozoShipmentForOrder(row.id, { force: hadPriorAttempt });
+    if (result.ok) pushed += 1;
+    else failed += 1;
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  if (pushed > 0 || failed > 0) {
+    console.info(`[shipmozo-push-sync] scanned=${orders.length} pushed=${pushed} failed=${failed} skipped=${skipped}`);
+  }
+
+  return { scanned: orders.length, pushed, failed, skipped, notConfigured: false as const };
+}
+
 export async function fetchShipmozoTrackOrder(awb: string): Promise<ShipmozoTrackOrderResult> {
   const awbNumber = awb.trim();
   if (!awbNumber) return { ok: false, error: "missing_awb" };
@@ -397,6 +479,7 @@ export async function bookShipmozoShipmentForOrder(
       order_number: true,
       total_amount: true,
       payment_status: true,
+      customers: { select: { email: true } },
       addresses_orders_shipping_address_idToaddresses: {
         select: {
           full_name: true,
@@ -517,7 +600,7 @@ export async function bookShipmozoShipmentForOrder(
       order_date: new Date().toISOString().slice(0, 10),
       consignee_name: String(addr.full_name ?? "Customer").slice(0, 120),
       consignee_phone: Number(phone),
-      consignee_email: "",
+      consignee_email: String(order.customers?.email ?? "").trim().slice(0, 200),
       consignee_address_line_one: String(addr.line1 ?? "").slice(0, 240),
       consignee_address_line_two: String(addr.line2 ?? "").slice(0, 240),
       consignee_pin_code: Number(pin),
@@ -538,7 +621,7 @@ export async function bookShipmozoShipmentForOrder(
     };
 
     const push = await callShipmozo("/push-order", "POST", pushPayload);
-    const pushMessage = shipmozoPushErrorMessage(push.parsed);
+    const pushMessage = shipmozoPushErrorMessage(push.parsed, push.raw);
     await appendShipmozoMetadata(orderId, {
       pushOrder: { ok: push.ok, status: push.status, response: push.parsed, message: push.ok ? null : pushMessage },
     });

@@ -67,7 +67,21 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
   });
 
   try {
-    await bookShipmentForOrder(orderId);
+    let bookingResult = await bookShipmentForOrder(orderId);
+    if (!bookingResult.ok && !bookingResult.skipped) {
+      for (let attempt = 1; attempt < 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+        bookingResult = await bookShipmentForOrder(orderId, { force: true });
+        if (bookingResult.ok || bookingResult.skipped) break;
+      }
+    }
+    if (!bookingResult.ok && !bookingResult.skipped) {
+      console.error("[postOrderFulfillment] shipment booking failed", {
+        orderId,
+        reason: bookingResult.reason,
+        error: bookingResult.error,
+      });
+    }
   } catch (err) {
     console.error("[postOrderFulfillment] shipment booking failed", err);
   }

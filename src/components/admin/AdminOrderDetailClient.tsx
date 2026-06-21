@@ -41,10 +41,16 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
       lastDiscovery && Array.isArray(lastDiscovery.triedIds)
         ? lastDiscovery.triedIds.map((id) => String(id)).join(", ")
         : "";
+    const pushOrder =
+      d.pushOrder && typeof d.pushOrder === "object" ? (d.pushOrder as Record<string, unknown>) : null;
+    const pushMessage = pushOrder?.message ? String(pushOrder.message) : "";
+    const pushOk = pushOrder?.ok;
     const parts = [
       status && `Status: ${status}`,
       reason && `Reason: ${reason}`,
       message && message,
+      pushOk === false && pushMessage && `Push failed: ${pushMessage}`,
+      pushOk === false && !pushMessage && "Push failed: check ShipMozo API keys and warehouse env vars",
       discoveryError && `AWB sync: ${discoveryError}`,
       triedIds && `Tried ShipMozo ids: ${triedIds}`,
       rmk && `Shipmozo: ${rmk}`,
@@ -92,6 +98,7 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncingShipment, setSyncingShipment] = useState(false);
+  const [pushingShipmozo, setPushingShipmozo] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +165,24 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
     SHIPMOZO_TRACKING_STEPS.includes(data.shipment.trackingStatus as ShipmozoTrackingStatus)
       ? (data.shipment.trackingStatus as ShipmozoTrackingStatus)
       : "ORDER_PLACED";
+
+  async function pushToShipmozo() {
+    setPushingShipmozo(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/shipmozo-push`, { method: "POST" });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out?.error || "Could not push to ShipMozo");
+      toast.success(out?.message || "Pushed to ShipMozo");
+      const refresh = await fetch(`/api/admin/orders/${id}`);
+      const json = await refresh.json().catch(() => null);
+      if (refresh.ok && json) setData(json);
+      router.refresh();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "ShipMozo push failed");
+    } finally {
+      setPushingShipmozo(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -339,17 +364,27 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
       <div className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-dark">Shipment</h2>
-          {syncingShipment ? (
-            <span className="text-xs text-meta-3">Syncing from ShipMozo…</span>
-          ) : data.shipment?.shipment_updated_at ? (
-            <span className="text-xs text-meta-3">
-              Last updated{" "}
-              {new Date(data.shipment.shipment_updated_at).toLocaleString("en-IN", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </span>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={pushingShipmozo || saving}
+              onClick={() => void pushToShipmozo()}
+              className="rounded-lg border border-blue/30 bg-blue/5 px-3 py-1.5 text-sm font-medium text-blue hover:bg-blue/10 transition disabled:opacity-60"
+            >
+              {pushingShipmozo ? "Pushing…" : "Push to ShipMozo"}
+            </button>
+            {syncingShipment ? (
+              <span className="text-xs text-meta-3">Syncing from ShipMozo…</span>
+            ) : data.shipment?.shipment_updated_at ? (
+              <span className="text-xs text-meta-3">
+                Last updated{" "}
+                {new Date(data.shipment.shipment_updated_at).toLocaleString("en-IN", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </span>
+            ) : null}
+          </div>
         </div>
         <label className="block max-w-md">
           <span className="mb-1 block text-sm font-medium text-dark">Shipment status</span>

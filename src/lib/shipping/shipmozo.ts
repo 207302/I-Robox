@@ -14,6 +14,46 @@ const SHIPMOZO_DEFAULT_HEIGHT_CM = 10;
 /** Shipmozo rejects ref / order_id longer than this (e.g. auto-assign, schedule pickup). */
 const SHIPMOZO_ORDER_ID_MAX_LEN = 30;
 
+/** Fallback when product admin fields are empty — toys / games (RC, diecast). */
+const SHIPMOZO_DEFAULT_HSN = (process.env.SHIPMOZO_DEFAULT_HSN ?? "95030090").trim();
+const SHIPMOZO_DEFAULT_GST_PERCENT = Number(process.env.SHIPMOZO_DEFAULT_GST_PERCENT ?? 18);
+
+export type ShipmozoBookingResult = {
+  ok: boolean;
+  error?: string;
+  reason?: string;
+  skipped?: boolean;
+};
+
+function resolveShipmozoProductTax(product: { hsn_code?: string | null; gst_percent?: number | null }) {
+  const hsnRaw = String(product.hsn_code ?? "").trim();
+  const hsn = hsnRaw || SHIPMOZO_DEFAULT_HSN;
+  const gst =
+    product.gst_percent != null && Number.isFinite(product.gst_percent)
+      ? product.gst_percent
+      : SHIPMOZO_DEFAULT_GST_PERCENT;
+  return {
+    hsn,
+    gst,
+    usedDefaults: !hsnRaw || product.gst_percent == null,
+  };
+}
+
+function shipmozoPushErrorMessage(parsed: unknown): string {
+  if (!parsed || typeof parsed !== "object") return "ShipMozo push-order failed";
+  const p = parsed as ShipmozoResponse;
+  return String(p.message ?? "ShipMozo push-order failed").trim() || "ShipMozo push-order failed";
+}
+
+function priorPushSucceeded(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") return false;
+  const shipmozo = (metadata as Record<string, unknown>).shipmozo;
+  if (!shipmozo || typeof shipmozo !== "object") return false;
+  const pushOrder = (shipmozo as Record<string, unknown>).pushOrder;
+  if (!pushOrder || typeof pushOrder !== "object") return false;
+  return (pushOrder as Record<string, unknown>).ok === true;
+}
+
 function normalizeShipmozoOrderIdRef(value: string): string {
   return String(value).replace(/-/g, "").slice(0, SHIPMOZO_ORDER_ID_MAX_LEN);
 }
@@ -325,14 +365,30 @@ export async function appendShipmozoMetadata(orderId: string, patch: Record<stri
   });
 }
 
-export async function bookShipmozoShipmentForOrder(orderId: string): Promise<void> {
-  if (!isShipmozoConfigured()) return;
+export async function bookShipmozoShipmentForOrder(
+  orderId: string,
+  options?: { force?: boolean }
+): Promise<ShipmozoBookingResult> {
+  if (!isShipmozoConfigured()) {
+    await appendShipmozoMetadata(orderId, {
+      status: "error",
+      reason: "shipmozo_not_configured",
+      message: "Set SHIPMOZO_PUBLIC_KEY, SHIPMOZO_PRIVATE_KEY, and warehouse env vars.",
+    });
+    return {
+      ok: false,
+      reason: "shipmozo_not_configured",
+      error: "ShipMozo is not configured on this server",
+    };
+  }
 
   const existing = await prisma.shipments.findUnique({
     where: { order_id: orderId },
     select: { tracking_number: true, metadata: true },
   });
-  if (existing?.tracking_number) return;
+  if (existing?.tracking_number) {
+    return { ok: true, skipped: true, reason: "already_has_tracking" };
+  }
 
   const order = await prisma.orders.findUnique({
     where: { id: orderId },
@@ -340,6 +396,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
       id: true,
       order_number: true,
       total_amount: true,
+      payment_status: true,
       addresses_orders_shipping_address_idToaddresses: {
         select: {
           full_name: true,
@@ -365,7 +422,10 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
   const addr = order?.addresses_orders_shipping_address_idToaddresses;
   if (!order || !addr) {
     await appendShipmozoMetadata(orderId, { status: "skipped", reason: "missing_shipping_address" });
-    return;
+    return { ok: false, reason: "missing_shipping_address", error: "Shipping address missing" };
+  }
+  if (order.payment_status !== "SUCCEEDED") {
+    return { ok: false, reason: "not_paid", error: "Order is not paid" };
   }
 
   const warehouseId = await resolveWarehouseId();
@@ -375,7 +435,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
       reason: "warehouse_not_resolved",
       message: "Could not resolve Shipmozo warehouse_id from SHIPMOZO_WAREHOUSE_ID/SHIPMOZO_WAREHOUSE_TITLE.",
     });
-    return;
+    return { ok: false, reason: "warehouse_not_resolved", error: "ShipMozo warehouse not configured" };
   }
 
   const phone = normalizeIndiaPhone(addr.phone ?? "");
@@ -387,7 +447,7 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
       phone,
       pin,
     });
-    return;
+    return { ok: false, reason: "invalid_contact_or_pin", error: "Invalid customer phone or PIN code" };
   }
 
   const packageDetails = computeOrderPackageDetails(
@@ -397,22 +457,24 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     }))
   );
 
-  const total = Number(order.total_amount);
-  const totalAmount = Number.isFinite(total) ? Number(total.toFixed(2)) : 0;
+  const taxDefaultProducts: string[] = [];
   const lineItems = (order.order_items ?? []).map((it) => {
-    const gstPercent = it.products?.gst_percent ?? 0;
+    const tax = resolveShipmozoProductTax(it.products ?? {});
+    if (tax.usedDefaults) {
+      taxDefaultProducts.push(String(it.product_name ?? "Item").slice(0, 80));
+    }
     const inclusiveUnit = Number(it.unit_price ?? 0);
     const quantity = Number.isFinite(it.quantity) ? it.quantity : 1;
     const lineInclusive = inclusiveUnit * quantity;
-    const lineSplit = splitInclusiveGstAmount(lineInclusive, gstPercent);
-    const unitSplit = splitInclusiveGstAmount(inclusiveUnit, gstPercent);
+    const lineSplit = splitInclusiveGstAmount(lineInclusive, tax.gst);
+    const unitSplit = splitInclusiveGstAmount(inclusiveUnit, tax.gst);
     return {
       name: String(it.product_name ?? "Item").slice(0, 200),
       sku_number: "",
       quantity,
       discount: "",
-      hsn: String(it.products?.hsn_code ?? ""),
-      gst: gstPercent,
+      hsn: tax.hsn,
+      gst: tax.gst,
       unit_price: unitSplit.taxable,
       taxable_amount: lineSplit.taxable,
       gst_amount: lineSplit.gst,
@@ -428,62 +490,88 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     { taxable: 0, gst: 0 }
   );
 
-  const missingTax = (order.order_items ?? []).filter((it) => {
-    const hsn = String(it.products?.hsn_code ?? "").trim();
-    const gst = it.products?.gst_percent;
-    return !hsn || gst == null;
-  });
-  if (missingTax.length > 0) {
-    const names = missingTax.map((it) => String(it.product_name ?? "Item").slice(0, 80));
-    await appendShipmozoMetadata(orderId, {
-      status: "skipped",
-      reason: "missing_product_hsn_or_gst",
-      products: names,
-    });
-    return;
+  const customerRef = normalizeShipmozoOrderIdRef(shipmozoOrderRef(order));
+  const priorMeta =
+    existing?.metadata && typeof existing.metadata === "object"
+      ? ((existing.metadata as Record<string, unknown>).shipmozo as Record<string, unknown> | undefined)
+      : undefined;
+  const alreadyPushed = !options?.force && priorPushSucceeded(existing?.metadata);
+
+  let createdOrderId = customerRef;
+  if (priorMeta?.shipmozo_order_id) {
+    createdOrderId = normalizeShipmozoOrderIdRef(String(priorMeta.shipmozo_order_id));
+  } else if (priorMeta?.reference_id) {
+    createdOrderId = normalizeShipmozoOrderIdRef(String(priorMeta.reference_id));
   }
 
-  const pushPayload: Record<string, unknown> = {
-    order_id: shipmozoOrderRef(order),
-    order_date: new Date().toISOString().slice(0, 10),
-    consignee_name: String(addr.full_name ?? "Customer").slice(0, 120),
-    consignee_phone: Number(phone),
-    consignee_email: "",
-    consignee_address_line_one: String(addr.line1 ?? "").slice(0, 240),
-    consignee_address_line_two: String(addr.line2 ?? "").slice(0, 240),
-    consignee_pin_code: Number(pin),
-    consignee_city: String(addr.city ?? "").slice(0, 120),
-    consignee_state: String(addr.state ?? "").slice(0, 120),
-    product_detail: lineItems,
-    payment_type: "PREPAID",
-    cod_amount: "",
-    taxable_amount: productTaxTotals.taxable,
-    total_gst: productTaxTotals.gst,
-    weight: packageDetails.weightG,
-    length: SHIPMOZO_DEFAULT_LENGTH_CM,
-    width: SHIPMOZO_DEFAULT_WIDTH_CM,
-    height: SHIPMOZO_DEFAULT_HEIGHT_CM,
-    warehouse_id: warehouseId,
-    gst_ewaybill_number: "",
-    gstin_number: (process.env.SELLER_GSTIN ?? process.env.SHIPMOZO_GSTIN ?? "").trim(),
-  };
+  if (!alreadyPushed) {
+    if (taxDefaultProducts.length > 0) {
+      await appendShipmozoMetadata(orderId, {
+        taxDefaultsUsed: taxDefaultProducts,
+        taxDefaultsNote: `Used default HSN ${SHIPMOZO_DEFAULT_HSN} / GST ${SHIPMOZO_DEFAULT_GST_PERCENT}% for products missing admin tax fields.`,
+      });
+    }
 
-  const push = await callShipmozo("/push-order", "POST", pushPayload);
-  await appendShipmozoMetadata(orderId, { pushOrder: { ok: push.ok, status: push.status, response: push.parsed } });
-  if (!push.ok) return;
+    const pushPayload: Record<string, unknown> = {
+      order_id: shipmozoOrderRef(order),
+      order_date: new Date().toISOString().slice(0, 10),
+      consignee_name: String(addr.full_name ?? "Customer").slice(0, 120),
+      consignee_phone: Number(phone),
+      consignee_email: "",
+      consignee_address_line_one: String(addr.line1 ?? "").slice(0, 240),
+      consignee_address_line_two: String(addr.line2 ?? "").slice(0, 240),
+      consignee_pin_code: Number(pin),
+      consignee_city: String(addr.city ?? "").slice(0, 120),
+      consignee_state: String(addr.state ?? "").slice(0, 120),
+      product_detail: lineItems,
+      payment_type: "PREPAID",
+      cod_amount: "",
+      taxable_amount: productTaxTotals.taxable,
+      total_gst: productTaxTotals.gst,
+      weight: packageDetails.weightG,
+      length: SHIPMOZO_DEFAULT_LENGTH_CM,
+      width: SHIPMOZO_DEFAULT_WIDTH_CM,
+      height: SHIPMOZO_DEFAULT_HEIGHT_CM,
+      warehouse_id: warehouseId,
+      gst_ewaybill_number: "",
+      gstin_number: (process.env.SELLER_GSTIN ?? process.env.SHIPMOZO_GSTIN ?? "").trim(),
+    };
 
-  const customerRef = normalizeShipmozoOrderIdRef(shipmozoOrderRef(order));
-  const createdOrderId = normalizeShipmozoOrderIdRef(
-    typeof push.parsed === "object" && push.parsed && "data" in push.parsed
-      ? String((push.parsed as ShipmozoResponse).data?.order_id ?? pushPayload.order_id)
-      : String(pushPayload.order_id)
-  );
+    const push = await callShipmozo("/push-order", "POST", pushPayload);
+    const pushMessage = shipmozoPushErrorMessage(push.parsed);
+    await appendShipmozoMetadata(orderId, {
+      pushOrder: { ok: push.ok, status: push.status, response: push.parsed, message: push.ok ? null : pushMessage },
+    });
 
-  await appendShipmozoMetadata(orderId, {
-    reference_id: customerRef,
-    ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
-    status: "awaiting_shipment",
-  });
+    if (!push.ok) {
+      const existingInPanel = await fetchShipmozoOrderDetailWithCandidates([customerRef, createdOrderId]);
+      if (existingInPanel.error === "no_awb_on_shipmozo_order") {
+        createdOrderId = normalizeShipmozoOrderIdRef(
+          existingInPanel.shipmozo_order_id ?? existingInPanel.lookup_id ?? customerRef
+        );
+      } else {
+        console.error("[shipmozo-booking] push-order failed", { orderId, message: pushMessage, status: push.status });
+        await appendShipmozoMetadata(orderId, {
+          status: "error",
+          reason: "push_order_failed",
+          message: pushMessage,
+        });
+        return { ok: false, reason: "push_order_failed", error: pushMessage };
+      }
+    } else {
+      createdOrderId = normalizeShipmozoOrderIdRef(
+        typeof push.parsed === "object" && push.parsed && "data" in push.parsed
+          ? String((push.parsed as ShipmozoResponse).data?.order_id ?? pushPayload.order_id)
+          : String(pushPayload.order_id)
+      );
+    }
+
+    await appendShipmozoMetadata(orderId, {
+      reference_id: customerRef,
+      ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
+      status: "awaiting_shipment",
+    });
+  }
 
   let awb = "";
   let courier = "Shipmozo";
@@ -563,5 +651,9 @@ export async function bookShipmozoShipmentForOrder(orderId: string): Promise<voi
     ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
     package: packageDetails,
   });
+
+  return awb
+    ? { ok: true, reason: "booked" }
+    : { ok: true, reason: "pushed_awaiting_awb", error: "Order pushed to ShipMozo — assign courier in the panel" };
 }
 

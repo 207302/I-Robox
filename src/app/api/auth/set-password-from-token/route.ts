@@ -5,6 +5,7 @@ import { hashPasswordSetupToken } from "@/lib/auth/passwordSetupToken";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanText, readJsonBody } from "@/lib/validation/input";
+import { validatePassword } from "@/lib/validation/rules";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const MAX_TOKEN_LEN = 128;
@@ -26,14 +27,15 @@ export async function POST(req: NextRequest) {
     const body = parsed.body;
   
     const token = typeof body.token === "string" ? cleanText(body.token, MAX_TOKEN_LEN) : "";
-    const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
-  
+    const passwordResult = validatePassword(body.newPassword);
+
     if (!token || token.length < 20) {
       return NextResponse.json({ error: "Invalid or missing token" }, { status: 400 });
     }
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    if (!passwordResult.ok) {
+      return NextResponse.json({ error: passwordResult.error }, { status: 400 });
     }
+    const newPassword = passwordResult.value;
   
     const token_hash = hashPasswordSetupToken(token);
   

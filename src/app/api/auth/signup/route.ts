@@ -15,6 +15,7 @@ import {
   hasSuspiciousInput,
 } from "@/lib/validation/input";
 import { syntheticEmailForPhone } from "@/lib/auth/signupIdentifier";
+import { validatePassword } from "@/lib/validation/rules";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -54,9 +55,12 @@ export async function POST(req: NextRequest) {
         : typeof body.email === "string"
         ? cleanText(body.email, 320)
         : "";
-    const password = typeof body.password === "string" ? body.password : "";
-  
-    if (!identifier || !password) {
+    const passwordResult = validatePassword(body.password);
+    if (!passwordResult.ok) {
+      return NextResponse.json({ error: passwordResult.error }, { status: 400 });
+    }
+    const password = passwordResult.value;
+    if (!identifier) {
       return NextResponse.json({ error: "Email or phone and password are required" }, { status: 400 });
     }
     if (hasSuspiciousInput(identifier) || hasSuspiciousInput(name)) {
@@ -98,11 +102,7 @@ export async function POST(req: NextRequest) {
       email = syntheticEmailForPhone(digitsOnly);
       signupWithPhone = true;
     }
-  
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
-    }
-  
+
     const existing = await prisma.customers.findFirst({
       where: signupWithPhone ? { OR: [{ phone: phone! }, { email }] } : { email },
     });

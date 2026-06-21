@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense } from "react";
 import toast from "react-hot-toast";
 import PasswordInput from "@/components/Auth/PasswordInput";
+import { validatePassword } from "@/lib/validation/rules";
 import Link from "next/link";
 
 function SetPasswordForm() {
@@ -21,8 +22,9 @@ function SetPasswordForm() {
       toast.error("Missing link. Open the link from your email.");
       return;
     }
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    const passwordResult = validatePassword(password);
+    if (!passwordResult.ok) {
+      toast.error(passwordResult.error);
       return;
     }
     if (password !== confirm) {

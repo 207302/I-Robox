@@ -95,7 +95,16 @@ export async function POST(req: NextRequest) {
     }
   
     const guestCheckoutRequested = body.guestCheckout === true || body.guestCheckout === "true";
-    const sessionEmailNorm = session?.email ? normalizeEmail(session.email) : "";
+    let sessionEmailNorm = "";
+    if (session?.sub) {
+      const sessionCustomer = await prisma.customers.findUnique({
+        where: { id: session.sub },
+        select: { email: true },
+      });
+      if (sessionCustomer?.email && !isSyntheticPhoneSignupEmail(sessionCustomer.email)) {
+        sessionEmailNorm = normalizeEmail(sessionCustomer.email);
+      }
+    }
     const emailMismatch =
       Boolean(session?.sub) && sessionEmailNorm.length > 0 && sessionEmailNorm !== email;
     const guestCheckout = guestCheckoutRequested || emailMismatch;
@@ -167,7 +176,7 @@ export async function POST(req: NextRequest) {
         where: { id: session.sub },
         select: { email: true },
       });
-      const registeredEmail = registered?.email ?? session.email ?? null;
+      const registeredEmail = registered?.email ?? null;
       if (registeredEmail && !isSyntheticPhoneSignupEmail(registeredEmail)) {
         accountEmail = normalizeEmail(registeredEmail);
       }

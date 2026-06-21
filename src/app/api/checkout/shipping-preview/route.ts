@@ -6,7 +6,10 @@ import {
   getFreeShippingExcludedBrandIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
+import { assertSameOrigin } from "@/lib/security/origin";
+import { rateLimit } from "@/lib/security/rateLimit";
 import { isUuid, readJsonBody } from "@/lib/validation/input";
+import { MAX_CART_PREVIEW_ITEMS } from "@/lib/validation/rules";
 import { normalizeCartItem } from "@/lib/cart/cartLine";
 import type { CartItem } from "@/redux/features/cart-slice";
 
@@ -40,11 +43,24 @@ function previewItemFromBody(row: Record<string, unknown>): PreviewItem | null {
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
+    try {
+      assertSameOrigin(req);
+      await rateLimit(`shipping_preview:${req.ip ?? "unknown"}`, 1);
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === "BAD_ORIGIN") {
+        return NextResponse.json({ error: "Bad origin" }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
     const parsed = await readJsonBody(req);
     if (!parsed.ok) {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
     const rawItems = Array.isArray(parsed.body.items) ? parsed.body.items : [];
+    if (rawItems.length > MAX_CART_PREVIEW_ITEMS) {
+      return NextResponse.json({ error: "Too many items" }, { status: 400 });
+    }
     const items: PreviewItem[] = rawItems
       .map((row: Record<string, unknown>) => previewItemFromBody(row))
       .filter((row): row is PreviewItem => row != null);

@@ -3,6 +3,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import toast from "react-hot-toast";
+import {
+  validateEmailAddress,
+  validateIndianMobileNumber,
+  validateRequiredText,
+} from "@/lib/validation/rules";
 
 /** Permanent — user completed signup. */
 const SUBMITTED_KEY = "irobox_launch_notify_done";
@@ -107,12 +112,31 @@ export default function LaunchNotifyPopup() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    const nameResult = validateRequiredText(name, 150, "Name");
+    const phoneResult = validateIndianMobileNumber(phone);
+    const emailResult = validateEmailAddress(email, { commonProviderOnly: true });
+    if (!nameResult.ok) {
+      toast.error(nameResult.error);
+      return;
+    }
+    if (!phoneResult.ok) {
+      toast.error(phoneResult.error);
+      return;
+    }
+    if (!emailResult.ok) {
+      toast.error(emailResult.error);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/marketing/notify-signup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ full_name: name, phone, email }),
+        body: JSON.stringify({
+          full_name: nameResult.value,
+          phone: phoneResult.value,
+          email: emailResult.value,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not save your details");

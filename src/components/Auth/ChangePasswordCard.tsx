@@ -3,6 +3,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { validateCommonEmailProvider } from "@/lib/validateEmai";
+import { validateOtpCode, validatePassword } from "@/lib/validation/rules";
 import PasswordInput from "./PasswordInput";
 
 type Props = {
@@ -59,12 +60,22 @@ export default function ChangePasswordCard({ userId, needsRecoveryEmail = false 
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
+    const otpResult = validateOtpCode(otp);
+    const passwordResult = validatePassword(newPassword);
+    if (!otpResult.ok) {
+      toast.error(otpResult.error);
+      return;
+    }
+    if (!passwordResult.ok) {
+      toast.error(passwordResult.error);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ otp, newPassword }),
+        body: JSON.stringify({ otp: otpResult.value, newPassword: passwordResult.value }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not change password");

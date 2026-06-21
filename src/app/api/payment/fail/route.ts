@@ -120,7 +120,14 @@ export async function POST(req: NextRequest) {
       });
     }
   
-    let failRecipient = session?.email ?? null;
+    let failRecipient: string | null = null;
+    if (session?.sub) {
+      const customer = await prisma.customers.findUnique({
+        where: { id: session.sub },
+        select: { email: true },
+      });
+      failRecipient = customer?.email ?? null;
+    }
     if (!failRecipient) {
       const row = await prisma.orders.findUnique({
         where: { id: orderId },

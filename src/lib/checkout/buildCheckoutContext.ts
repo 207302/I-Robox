@@ -153,7 +153,7 @@ export async function buildCheckoutContext(input: {
       where: { id: session.sub },
       select: { email: true },
     });
-    const registeredEmail = registered?.email ?? session.email ?? null;
+    const registeredEmail = registered?.email ?? null;
     if (registeredEmail && !isSyntheticPhoneSignupEmail(registeredEmail)) {
       accountEmail = normalizeEmail(registeredEmail);
     }

@@ -2,8 +2,15 @@
 
 import { useState, type FormEvent } from "react";
 import { phoneToWhatsAppHref } from "@/lib/marketing/contactPhoneUtils";
+import {
+  MAX_CONTACT_MESSAGE_LENGTH,
+  validateContactMessage,
+  validateEmailAddress,
+  validateOptionalIndianMobile,
+  validateRequiredText,
+} from "@/lib/validation/rules";
 
-const MAX_MESSAGE = 1800;
+const MAX_MESSAGE = MAX_CONTACT_MESSAGE_LENGTH;
 
 const HELP_TOPICS = [
   "Product inquiries",
@@ -32,24 +39,32 @@ export default function ContactSection({ phone, cmsHtml }: Props) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const n = name.trim();
-    const em = email.trim();
-    const m = message.trim();
-    if (!n) {
-      setError("Please enter your full name.");
+    const nameResult = validateRequiredText(name, 150, "Name");
+    const emailResult = validateEmailAddress(email, { commonProviderOnly: false });
+    const phoneResult = validateOptionalIndianMobile(phoneField);
+    const messageResult = validateContactMessage(message);
+    if (!nameResult.ok) {
+      setError(nameResult.error);
       return;
     }
-    if (!em) {
-      setError("Please enter your email address.");
+    if (!emailResult.ok) {
+      setError(emailResult.error);
       return;
     }
-    if (!m) {
-      setError("Please enter a message.");
+    if (!phoneResult.ok) {
+      setError(phoneResult.error);
       return;
     }
-    const phoneLine = phoneField.trim() ? `Phone: ${phoneField.trim()}\n` : "";
+    if (!messageResult.ok) {
+      setError(messageResult.error);
+      return;
+    }
+    const phoneLine = phoneResult.value ? `Phone: ${phoneResult.value}\n` : "";
     const body =
-      `Hi i-Robox,\n\nName: ${n}\nEmail: ${em}\n${phoneLine}\nMessage:\n${m}`.slice(0, MAX_MESSAGE);
+      `Hi i-Robox,\n\nName: ${nameResult.value}\nEmail: ${emailResult.value}\n${phoneLine}\nMessage:\n${messageResult.value}`.slice(
+        0,
+        MAX_MESSAGE
+      );
     const href = phoneToWhatsAppHref(phone, body);
     window.open(href, "_blank", "noopener,noreferrer");
   }

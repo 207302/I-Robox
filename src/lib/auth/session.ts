@@ -34,6 +34,21 @@ const sessionCookieOptions = (maxAgeSeconds: number) => ({
   maxAge: maxAgeSeconds,
 });
 
+const adminSessionCookieOptions = (maxAgeSeconds: number) => ({
+  name: ADMIN_AUTH_COOKIE_NAME,
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: maxAgeSeconds,
+});
+
+const clearedCookieFields = {
+  value: "",
+  maxAge: 0,
+  expires: new Date(0),
+} as const;
+
 export async function setSessionCookie(token: string, maxAgeSeconds: number) {
   const cookieStore = await cookies();
   cookieStore.set({
@@ -57,39 +72,39 @@ export function setSessionCookieOnResponse(
 export async function setAdminSessionCookie(token: string, maxAgeSeconds: number) {
   const cookieStore = await cookies();
   cookieStore.set({
-    name: ADMIN_AUTH_COOKIE_NAME,
+    ...adminSessionCookieOptions(maxAgeSeconds),
     value: token,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: maxAgeSeconds,
+  });
+}
+
+/** Attach cleared session cookie to a route-handler response (reliable vs cookies().set alone). */
+export function clearSessionCookieOnResponse(response: NextResponse) {
+  response.cookies.set({
+    ...sessionCookieOptions(0),
+    ...clearedCookieFields,
+  });
+}
+
+export function clearAdminSessionCookieOnResponse(response: NextResponse) {
+  response.cookies.set({
+    ...adminSessionCookieOptions(0),
+    ...clearedCookieFields,
   });
 }
 
 export async function clearSessionCookie() {
   const cookieStore = await cookies();
   cookieStore.set({
-    name: AUTH_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
+    ...sessionCookieOptions(0),
+    ...clearedCookieFields,
   });
 }
 
 export async function clearAdminSessionCookie() {
   const cookieStore = await cookies();
   cookieStore.set({
-    name: ADMIN_AUTH_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
+    ...adminSessionCookieOptions(0),
+    ...clearedCookieFields,
   });
 }
 

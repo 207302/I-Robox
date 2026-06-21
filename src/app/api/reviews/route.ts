@@ -5,6 +5,11 @@ import { writeAuditLog } from "@/lib/audit";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
+import {
+  validateReviewComment,
+  validateStarRating,
+  validateUuid,
+} from "@/lib/validation/rules";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 export async function GET(req: NextRequest) {
@@ -44,23 +49,31 @@ export async function POST(req: NextRequest) {
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
   
-    const productId = cleanText(body.productId, 64);
-    const rating = Number(body.rating ?? 0);
+    const productIdResult = validateUuid(body.productId, "product");
+    const ratingResult = validateStarRating(body.rating);
     const title = cleanOptionalText(body.title, 255);
-    const comment = cleanText(body.comment, 2000);
-  
+    const commentResult = validateReviewComment(body.comment);
+
     if (
-      !productId ||
-      !isUuid(productId) ||
-      !Number.isInteger(rating) ||
-      rating < 1 ||
-      rating > 5 ||
-      !comment.trim() ||
-      hasSuspiciousInput(comment) ||
+      !productIdResult.ok ||
+      !ratingResult.ok ||
+      !commentResult.ok ||
       (title ? hasSuspiciousInput(title) : false)
     ) {
-      return NextResponse.json({ error: "Invalid review" }, { status: 400 });
+      const error =
+        productIdResult.ok === false
+          ? productIdResult.error
+          : ratingResult.ok === false
+            ? ratingResult.error
+            : commentResult.ok === false
+              ? commentResult.error
+              : "Invalid review";
+      return NextResponse.json({ error }, { status: 400 });
     }
+
+    const productId = productIdResult.value;
+    const rating = ratingResult.value;
+    const comment = commentResult.value;
   
     // Strict enforcement: one review per purchased order item.
     const unreviewedPurchasedItem = await prisma.order_items.findFirst({

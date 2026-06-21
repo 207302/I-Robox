@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
+import { validateHttpUrl, validateOptionalText } from "@/lib/validation/rules";
 import { v2 as cloudinary } from "cloudinary";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateProductById } from "@/lib/cache/productCache";
@@ -60,7 +61,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
-    if (!body.url) return NextResponse.json({ error: "url required" }, { status: 400 });
+    const urlResult = validateHttpUrl(body.url);
+    if (!urlResult.ok) return NextResponse.json({ error: urlResult.error }, { status: 400 });
+    const altTextResult = validateOptionalText(body.alt_text, 255);
+    if (!altTextResult.ok) return NextResponse.json({ error: altTextResult.error }, { status: 400 });
   
     let productVariantId: string | null = null;
     const rawVariantId = body.product_variant_id;
@@ -87,8 +91,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       data: {
         product_id: id,
         product_variant_id: productVariantId,
-        url: cleanText(body.url, 2000),
-        alt_text: body.alt_text ? cleanText(body.alt_text, 255) : null,
+        url: urlResult.value,
+        alt_text: altTextResult.value,
         sort_order: (maxOrder._max.sort_order ?? -1) + 1,
       },
       select: { id: true, url: true, alt_text: true, sort_order: true, product_variant_id: true },

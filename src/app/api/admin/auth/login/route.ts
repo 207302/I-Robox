@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { signJwt } from "@/lib/auth/jwt";
 import { getAuthSecret, setAdminSessionCookie } from "@/lib/auth/session";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { normalizeEmail, readJsonBody, hasSuspiciousInput } from "@/lib/validation/input";
+import { readJsonBody } from "@/lib/validation/input";
+import { validateEmailAddress, validatePassword } from "@/lib/validation/rules";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const ADMIN_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "STAFF", "SUPPORT"]);
@@ -21,15 +22,16 @@ export async function POST(req: NextRequest) {
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
-    const email = normalizeEmail(body.email);
-    const password = typeof body?.password === "string" ? body.password : "";
-  
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
-    }
-    if (hasSuspiciousInput(email)) {
+    const emailResult = validateEmailAddress(body.email, { commonProviderOnly: false });
+    if (!emailResult.ok) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
+    const passwordResult = validatePassword(body.password);
+    if (!passwordResult.ok) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+    const email = emailResult.value;
+    const password = passwordResult.value;
   
     const admin = await prisma.admin_users.findUnique({
       where: { email },

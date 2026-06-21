@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import PasswordInput from "@/components/Auth/PasswordInput";
+import {
+  validateEmailAddress,
+  validatePassword,
+} from "@/lib/validation/rules";
 
 const ROLES = ["SUPER_ADMIN", "MANAGER", "STAFF", "SUPPORT"] as const;
 type AdminRole = (typeof ROLES)[number];
@@ -44,8 +48,14 @@ export default function AdminUsersPage() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (form.password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    const emailResult = validateEmailAddress(form.email, { commonProviderOnly: false });
+    const passwordResult = validatePassword(form.password);
+    if (!emailResult.ok) {
+      toast.error(emailResult.error);
+      return;
+    }
+    if (!passwordResult.ok) {
+      toast.error(passwordResult.error);
       return;
     }
     setSaving(true);

@@ -4,6 +4,7 @@ import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { validateUuid } from "@/lib/validation/rules";
 import { revalidateProductReviewsByReviewId } from "@/lib/cache/productCache";
 import { redirectUrl } from "@/lib/siteUrl";
 
@@ -22,8 +23,10 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const { id } = await ctx.params;
-    await prisma.reviews.update({ where: { id }, data: { is_approved: true } });
-    await revalidateProductReviewsByReviewId(id);
+    const idResult = validateUuid(id, "review id");
+    if (!idResult.ok) return NextResponse.json({ error: idResult.error }, { status: 400 });
+    await prisma.reviews.update({ where: { id: idResult.value }, data: { is_approved: true } });
+    await revalidateProductReviewsByReviewId(idResult.value);
     return NextResponse.redirect(redirectUrl(_req, "/admin/reviews"));
   
   });}

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { validateIndianMobileNumber, validateOtpCode } from "@/lib/validation/rules";
 
 type Props = {
   initialPhone: string | null;
@@ -33,9 +34,9 @@ export default function AccountPhoneCard({ initialPhone, otpEmail }: Props) {
   }
 
   async function handleSendOtp() {
-    const trimmed = phone.trim();
-    if (!trimmed) {
-      toast.error("Enter a mobile number");
+    const phoneResult = validateIndianMobileNumber(phone);
+    if (!phoneResult.ok) {
+      toast.error(phoneResult.error);
       return;
     }
     if (!otpEmail) {
@@ -48,12 +49,12 @@ export default function AccountPhoneCard({ initialPhone, otpEmail }: Props) {
       const res = await fetch("/api/account/phone/request-otp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone: trimmed }),
+        body: JSON.stringify({ phone: phoneResult.value }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not send OTP");
 
-      setPendingPhone(trimmed);
+      setPendingPhone(phoneResult.value);
       setOtp("");
       setOtpSentTo(typeof data?.sentTo === "string" ? data.sentTo : otpEmail);
       setDevOtpHint(typeof data?.devOtp === "string" ? data.devOtp : null);
@@ -72,16 +73,17 @@ export default function AccountPhoneCard({ initialPhone, otpEmail }: Props) {
 
   async function handleConfirm(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = phone.trim();
-    if (!trimmed) {
-      toast.error("Enter a mobile number");
+    const phoneResult = validateIndianMobileNumber(phone);
+    const otpResult = validateOtpCode(otp);
+    if (!phoneResult.ok) {
+      toast.error(phoneResult.error);
       return;
     }
-    if (!otp.trim()) {
-      toast.error("Enter the OTP sent to your email");
+    if (!otpResult.ok) {
+      toast.error(otpResult.error);
       return;
     }
-    if (!pendingPhone || pendingPhone !== trimmed) {
+    if (!pendingPhone || pendingPhone !== phoneResult.value) {
       toast.error("Send a new OTP after changing the mobile number");
       return;
     }
@@ -91,12 +93,12 @@ export default function AccountPhoneCard({ initialPhone, otpEmail }: Props) {
       const res = await fetch("/api/account/phone", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone: trimmed, otp: otp.trim() }),
+        body: JSON.stringify({ phone: phoneResult.value, otp: otpResult.value }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not update phone");
 
-      const savedPhone = typeof data?.phone === "string" ? data.phone : trimmed;
+      const savedPhone = typeof data?.phone === "string" ? data.phone : phoneResult.value;
       setPhone(savedPhone);
       setEditing(false);
       resetOtpState();

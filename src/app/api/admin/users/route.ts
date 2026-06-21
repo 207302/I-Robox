@@ -3,7 +3,12 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
-import { cleanText, hasSuspiciousInput, isUuid, normalizeEmail, readJsonBody } from "@/lib/validation/input";
+import { isUuid, readJsonBody } from "@/lib/validation/input";
+import {
+  validateEmailAddress,
+  validateOptionalText,
+  validatePassword,
+} from "@/lib/validation/rules";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "MANAGER", "STAFF", "SUPPORT"] as const;
@@ -61,23 +66,25 @@ export async function POST(req: NextRequest) {
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
-    const email = normalizeEmail(body.email);
-    const password = typeof body?.password === "string" ? body.password : "";
+    const emailResult = validateEmailAddress(body.email, { commonProviderOnly: false });
+    if (!emailResult.ok) {
+      return NextResponse.json({ error: emailResult.error }, { status: 400 });
+    }
+    const passwordResult = validatePassword(body.password);
+    if (!passwordResult.ok) {
+      return NextResponse.json({ error: passwordResult.error }, { status: 400 });
+    }
     const rawRole = (body as { role?: unknown }).role;
     const role: AdminRole = ADMIN_ROLES.includes(rawRole as AdminRole)
       ? (rawRole as AdminRole)
       : "STAFF";
-    const name = body?.name ? cleanText(body.name, 150) : null;
-  
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+    const nameResult = validateOptionalText(body.name, 150);
+    if (!nameResult.ok) {
+      return NextResponse.json({ error: nameResult.error }, { status: 400 });
     }
-    if (hasSuspiciousInput(email) || (name ? hasSuspiciousInput(name) : false)) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-    }
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
-    }
+    const email = emailResult.value;
+    const password = passwordResult.value;
+    const name = nameResult.value;
   
     const existing = await prisma.admin_users.findUnique({ where: { email }, select: { id: true } });
     if (existing) {

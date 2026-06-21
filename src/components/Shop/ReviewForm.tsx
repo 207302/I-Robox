@@ -3,6 +3,11 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { EmptyStarIcon, FullStarIcon } from "@/assets/icons";
+import {
+  validateOptionalText,
+  validateReviewComment,
+  validateStarRating,
+} from "@/lib/validation/rules";
 
 export default function ReviewForm({ productId }: { productId: string }) {
   const [rating, setRating] = useState(5);
@@ -13,12 +18,32 @@ export default function ReviewForm({ productId }: { productId: string }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const ratingResult = validateStarRating(rating);
+    const titleResult = validateOptionalText(title, 255);
+    const commentResult = validateReviewComment(comment);
+    if (!ratingResult.ok) {
+      toast.error(ratingResult.error);
+      return;
+    }
+    if (!titleResult.ok) {
+      toast.error(titleResult.error);
+      return;
+    }
+    if (!commentResult.ok) {
+      toast.error(commentResult.error);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ productId, rating, title, comment }),
+        body: JSON.stringify({
+          productId,
+          rating: ratingResult.value,
+          title: titleResult.value,
+          comment: commentResult.value,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to submit review");

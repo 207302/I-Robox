@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { cleanText, readJsonBody } from "@/lib/validation/input";
+import { readJsonBody } from "@/lib/validation/input";
+import { validateOtpCode, validatePassword } from "@/lib/validation/rules";
 import { linkRecoveryEmailAfterOtp } from "@/lib/auth/linkRecoveryEmailAfterOtp";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -26,17 +27,16 @@ export async function POST(req: NextRequest) {
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
-    const otp = cleanText(body.otp, 10);
-    const newPassword = typeof body?.newPassword === "string" ? body.newPassword : "";
-    if (!otp || !newPassword) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const otpResult = validateOtpCode(body.otp);
+    const passwordResult = validatePassword(body.newPassword);
+    if (!otpResult.ok) {
+      return NextResponse.json({ error: otpResult.error }, { status: 400 });
     }
-    if (!/^\d{6}$/.test(otp)) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    if (!passwordResult.ok) {
+      return NextResponse.json({ error: passwordResult.error }, { status: 400 });
     }
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
-    }
+    const otp = otpResult.value;
+    const newPassword = passwordResult.value;
   
     const otpRecord = await prisma.signup_email_otps.findFirst({
       where: { customer_id: session.sub, used_at: null },

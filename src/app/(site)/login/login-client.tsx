@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { validateCommonEmailProvider } from "@/lib/validateEmai";
+import { validatePassword } from "@/lib/validation/rules";
 import PasswordInput from "@/components/Auth/PasswordInput";
 import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
 
@@ -83,6 +84,10 @@ export default function LoginClient() {
         !validateCommonEmailProvider(trimmedId.toLowerCase())
       ) {
         throw new Error("Use a common email provider (Gmail, Yahoo, Outlook, etc.)");
+      }
+      if (mode === "signup") {
+        const passwordResult = validatePassword(password);
+        if (!passwordResult.ok) throw new Error(passwordResult.error);
       }
       const loginOrSignupRoute = mode === "signup" ? "signup" : "login";
       const res = await fetch(`/api/auth/${loginOrSignupRoute}`, {
@@ -188,6 +193,11 @@ export default function LoginClient() {
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     if (!resetUserId) return;
+    const passwordResult = validatePassword(newPassword);
+    if (!passwordResult.ok) {
+      toast.error(passwordResult.error);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/reset-password", {

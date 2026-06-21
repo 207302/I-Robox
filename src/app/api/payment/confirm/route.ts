@@ -136,7 +136,14 @@ export async function POST(req: NextRequest) {
       throw e;
     }
   
-    const recipientHint = session?.email ?? null;
+    let recipientHint: string | null = null;
+    if (session?.sub) {
+      const customer = await prisma.customers.findUnique({
+        where: { id: session.sub },
+        select: { email: true },
+      });
+      recipientHint = customer?.email ?? null;
+    }
     const shouldNotify = !result.already;
   
     after(async () => {

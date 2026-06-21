@@ -7,13 +7,18 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { prismaErrorMessage } from "@/lib/prismaErrors";
 import {
-  cleanOptionalHexColor,
   cleanOptionalText,
   cleanText,
   isUuid,
   normalizeCode,
   readJsonBody,
 } from "@/lib/validation/input";
+import {
+  validateOptionalEmailAddress,
+  validateOptionalHexColor,
+  validateOptionalHref,
+  validateOptionalHttpUrl,
+} from "@/lib/validation/rules";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
 import {
   abandonedCartIdleMinutesFromHours,
@@ -103,19 +108,29 @@ export async function PATCH(req: NextRequest) {
       data.hero_overlay_cta_label = cleanOptionalText(body.hero_overlay_cta_label, 120);
     }
     if (body.hero_overlay_cta_href !== undefined) {
-      data.hero_overlay_cta_href = cleanOptionalText(body.hero_overlay_cta_href, 500);
+      const hrefResult = validateOptionalHref(body.hero_overlay_cta_href);
+      if (!hrefResult.ok) return NextResponse.json({ error: hrefResult.error }, { status: 400 });
+      data.hero_overlay_cta_href = hrefResult.value;
     }
     if (body.hero_overlay_eyebrow_color !== undefined) {
-      data.hero_overlay_eyebrow_color = cleanOptionalHexColor(body.hero_overlay_eyebrow_color);
+      const colorResult = validateOptionalHexColor(body.hero_overlay_eyebrow_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.hero_overlay_eyebrow_color = colorResult.value;
     }
     if (body.hero_overlay_heading_color !== undefined) {
-      data.hero_overlay_heading_color = cleanOptionalHexColor(body.hero_overlay_heading_color);
+      const colorResult = validateOptionalHexColor(body.hero_overlay_heading_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.hero_overlay_heading_color = colorResult.value;
     }
     if (body.hero_overlay_subheading_color !== undefined) {
-      data.hero_overlay_subheading_color = cleanOptionalHexColor(body.hero_overlay_subheading_color);
+      const colorResult = validateOptionalHexColor(body.hero_overlay_subheading_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.hero_overlay_subheading_color = colorResult.value;
     }
     if (body.hero_overlay_cta_label_color !== undefined) {
-      data.hero_overlay_cta_label_color = cleanOptionalHexColor(body.hero_overlay_cta_label_color);
+      const colorResult = validateOptionalHexColor(body.hero_overlay_cta_label_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.hero_overlay_cta_label_color = colorResult.value;
     }
     if (body.hero_carousel_interval_ms !== undefined) {
       if (body.hero_carousel_interval_ms === null || body.hero_carousel_interval_ms === "") {
@@ -240,19 +255,29 @@ export async function PATCH(req: NextRequest) {
       data.contact_phone = cleanOptionalText(body.contact_phone, 80);
     }
     if (body.contact_email !== undefined) {
-      data.contact_email = cleanOptionalText(body.contact_email, 200);
+      const emailResult = validateOptionalEmailAddress(body.contact_email);
+      if (!emailResult.ok) return NextResponse.json({ error: emailResult.error }, { status: 400 });
+      data.contact_email = emailResult.value;
     }
     if (body.social_facebook_url !== undefined) {
-      data.social_facebook_url = cleanOptionalText(body.social_facebook_url, 500);
+      const urlResult = validateOptionalHttpUrl(body.social_facebook_url);
+      if (!urlResult.ok) return NextResponse.json({ error: urlResult.error }, { status: 400 });
+      data.social_facebook_url = urlResult.value;
     }
     if (body.social_twitter_url !== undefined) {
-      data.social_twitter_url = cleanOptionalText(body.social_twitter_url, 500);
+      const urlResult = validateOptionalHttpUrl(body.social_twitter_url);
+      if (!urlResult.ok) return NextResponse.json({ error: urlResult.error }, { status: 400 });
+      data.social_twitter_url = urlResult.value;
     }
     if (body.social_instagram_url !== undefined) {
-      data.social_instagram_url = cleanOptionalText(body.social_instagram_url, 500);
+      const urlResult = validateOptionalHttpUrl(body.social_instagram_url);
+      if (!urlResult.ok) return NextResponse.json({ error: urlResult.error }, { status: 400 });
+      data.social_instagram_url = urlResult.value;
     }
     if (body.social_linkedin_url !== undefined) {
-      data.social_linkedin_url = cleanOptionalText(body.social_linkedin_url, 500);
+      const urlResult = validateOptionalHttpUrl(body.social_linkedin_url);
+      if (!urlResult.ok) return NextResponse.json({ error: urlResult.error }, { status: 400 });
+      data.social_linkedin_url = urlResult.value;
     }
     if (body.footer_business_title !== undefined) {
       data.footer_business_title = cleanOptionalText(body.footer_business_title, 120);
@@ -261,28 +286,42 @@ export async function PATCH(req: NextRequest) {
       data.footer_business_wholesale_label = cleanOptionalText(body.footer_business_wholesale_label, 120);
     }
     if (body.footer_business_wholesale_email !== undefined) {
-      data.footer_business_wholesale_email = cleanOptionalText(body.footer_business_wholesale_email, 200);
+      const emailResult = validateOptionalEmailAddress(body.footer_business_wholesale_email);
+      if (!emailResult.ok) return NextResponse.json({ error: emailResult.error }, { status: 400 });
+      data.footer_business_wholesale_email = emailResult.value;
     }
     if (body.footer_business_retail_label !== undefined) {
       data.footer_business_retail_label = cleanOptionalText(body.footer_business_retail_label, 120);
     }
     if (body.footer_business_retail_email !== undefined) {
-      data.footer_business_retail_email = cleanOptionalText(body.footer_business_retail_email, 200);
+      const emailResult = validateOptionalEmailAddress(body.footer_business_retail_email);
+      if (!emailResult.ok) return NextResponse.json({ error: emailResult.error }, { status: 400 });
+      data.footer_business_retail_email = emailResult.value;
     }
     if (body.utility_bar_bg_color !== undefined) {
-      data.utility_bar_bg_color = cleanOptionalHexColor(body.utility_bar_bg_color);
+      const colorResult = validateOptionalHexColor(body.utility_bar_bg_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.utility_bar_bg_color = colorResult.value;
     }
     if (body.marquee_bar_bg_color !== undefined) {
-      data.marquee_bar_bg_color = cleanOptionalHexColor(body.marquee_bar_bg_color);
+      const colorResult = validateOptionalHexColor(body.marquee_bar_bg_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.marquee_bar_bg_color = colorResult.value;
     }
     if (body.footer_bg_color !== undefined) {
-      data.footer_bg_color = cleanOptionalHexColor(body.footer_bg_color);
+      const colorResult = validateOptionalHexColor(body.footer_bg_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.footer_bg_color = colorResult.value;
     }
     if (body.footer_text_color !== undefined) {
-      data.footer_text_color = cleanOptionalHexColor(body.footer_text_color);
+      const colorResult = validateOptionalHexColor(body.footer_text_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.footer_text_color = colorResult.value;
     }
     if (body.footer_link_color !== undefined) {
-      data.footer_link_color = cleanOptionalHexColor(body.footer_link_color);
+      const colorResult = validateOptionalHexColor(body.footer_link_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.footer_link_color = colorResult.value;
     }
 
     let excludedBrandIds: string[] | undefined;

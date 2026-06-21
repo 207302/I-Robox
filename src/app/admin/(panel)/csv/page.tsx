@@ -146,6 +146,12 @@ export default function AdminCsvPage() {
           Omit the column to keep existing assignment on update.
         </p>
         <p className="text-xs text-meta-4">
+          <b className="text-dark">image_urls</b> optional — full image link(s), starting with{" "}
+          <b className="text-dark">https://</b>. One URL per cell, or several separated by{" "}
+          <b className="text-dark">|</b>. When provided, replaces existing product gallery images. Leave blank to keep
+          current images on update.
+        </p>
+        <p className="text-xs text-meta-4">
           <b className="text-dark">slug</b> optional — leave blank to auto-generate from <b className="text-dark">name</b>{" "}
           (same rules as creating a product in admin). If set, rows upsert by that slug.
         </p>

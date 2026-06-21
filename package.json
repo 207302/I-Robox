@@ -25,6 +25,7 @@
     "quick-links:markdown-to-html": "tsx scripts/convert-quick-link-markdown-to-html.ts"
   },
   "dependencies": {
+    "@google-analytics/data": "^6.1.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.0.6",
     "@prisma/client": "^6.19.2",
@@ -44,6 +45,7 @@
     "cheerio": "^1.0.0-rc.12",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "dayjs": "^1.11.13",
     "defu": "^6.1.5",
     "dotenv": "^17.2.3",
@@ -68,6 +70,7 @@
     "react-paginate": "^8.3.0",
     "react-redux": "^9.1.0",
     "react-tooltip": "^5.28.1",
+    "recharts": "^3.8.1",
     "server-only": "^0.0.1",
     "stripe": "^14.8.0",
     "styled-components": "^6.1.15",

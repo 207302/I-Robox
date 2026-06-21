@@ -10,6 +10,8 @@ import { cleanText, normalizePhone, readJsonBody, hasSuspiciousInput } from "@/l
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+/** Same message for unknown user and wrong password — avoids account enumeration. */
+const LOGIN_FAILED_MESSAGE = "Incorrect email or password.";
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
@@ -68,14 +70,7 @@ export async function POST(req: NextRequest) {
     });
   
     if (!user) {
-      return NextResponse.json(
-        {
-          error: "Account not found. Please create your account.",
-          redirectToSignup: true,
-          suggestedIdentifier: identifier,
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: LOGIN_FAILED_MESSAGE }, { status: 401 });
     }
   
     if (!user.is_active) {
@@ -87,7 +82,7 @@ export async function POST(req: NextRequest) {
   
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return NextResponse.json({ error: LOGIN_FAILED_MESSAGE }, { status: 401 });
     }
   
     const token = signJwt(

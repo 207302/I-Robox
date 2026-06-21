@@ -8,8 +8,9 @@ import { slugFromProductName } from "@/utils/slugGenerate";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { upsertProductLevelInventory } from "@/lib/inventory/productLevelInventory";
 import { ensureDiecastScaleId, ratioFromImportText } from "@/lib/products/ensureDiecastScale";
-import { runApiRoute } from "@/lib/api/runApiRoute";
+import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { revalidateProductCatalog, revalidateSitemap } from "@/lib/cache/revalidate";
+import { parseImageUrlsFromCsvCell, syncProductImagesFromCsv } from "@/lib/admin/csvProductImages";
 import { parseGstPercent, parseHsnCode } from "@/lib/tax/productTaxFields";
 
 function parseNonNegInt(value: unknown, defaultVal: number): number {
@@ -35,8 +36,11 @@ function parseCsv(csv: string) {
   });
 }
 
+const CSV_IMPORT_TIMEOUT_MS = 120_000;
+
 export async function POST(req: NextRequest) {
-  return runApiRoute(async () => {
+  return runAdminApiRoute(
+    async () => {
     try {
       assertSameOrigin(req);
       await rateLimitStrict(`admin_csv_products_post:${req.ip ?? "unknown"}`, 1);
@@ -67,11 +71,13 @@ export async function POST(req: NextRequest) {
     const hasWeightCol = header.includes("weight_g");
     const hasShippingCol = header.includes("shipping_per_unit");
     const hasMaxOrderQtyCol = header.includes("max_order_quantity");
+    const hasImageUrlsCol = header.includes("image_urls") || header.includes("image_url");
   
     const rows = parseCsv(csvText);
     let count = 0;
     const touchedProductIds: string[] = [];
-  
+    const diecastScaleCache = new Map<string, string | null>();
+
     for (const r of rows) {
       const name = String(r.name ?? "").trim();
       let slug = String(r.slug ?? "").trim();
@@ -138,7 +144,16 @@ export async function POST(req: NextRequest) {
         const raw = String(r.diecast_scale ?? "").trim();
         const ratio = ratioFromImportText(raw);
         if (raw !== "" && !ratio) continue;
-        diecast_scale_id = ratio ? await ensureDiecastScaleId(prisma, ratio) : null;
+        if (ratio) {
+          let cached = diecastScaleCache.get(ratio);
+          if (cached === undefined) {
+            cached = await ensureDiecastScaleId(prisma, ratio);
+            diecastScaleCache.set(ratio, cached);
+          }
+          diecast_scale_id = cached;
+        } else {
+          diecast_scale_id = null;
+        }
       }
   
       const updatePayload = {
@@ -179,6 +194,12 @@ export async function POST(req: NextRequest) {
       touchedProductIds.push(created.id);
   
       await upsertProductLevelInventory(created.id, { available_quantity, low_stock_threshold });
+
+      if (hasImageUrlsCol) {
+        const imageRaw = r.image_urls ?? r.image_url ?? "";
+        const imageUrls = parseImageUrlsFromCsvCell(imageRaw);
+        await syncProductImagesFromCsv(prisma, created.id, imageUrls);
+      }
   
       count++;
     }
@@ -191,6 +212,8 @@ export async function POST(req: NextRequest) {
     revalidateSitemap();
   
     return NextResponse.json({ ok: true, count }, { status: 200 });
-  
-  });}
+    },
+    { timeoutMs: CSV_IMPORT_TIMEOUT_MS, name: "POST /api/admin/csv/products" }
+  );
+}
 

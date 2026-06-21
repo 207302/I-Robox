@@ -6,7 +6,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { readJsonBody, sanitizeCsvPayload } from "@/lib/validation/input";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { upsertProductLevelInventory } from "@/lib/inventory/productLevelInventory";
-import { runApiRoute } from "@/lib/api/runApiRoute";
+import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 
 function parseCsv(csv: string) {
   const lines = csv
@@ -23,8 +23,11 @@ function parseCsv(csv: string) {
   });
 }
 
+const CSV_IMPORT_TIMEOUT_MS = 120_000;
+
 export async function POST(req: NextRequest) {
-  return runApiRoute(async () => {
+  return runAdminApiRoute(
+    async () => {
     try {
       assertSameOrigin(req);
       await rateLimitStrict(`admin_csv_inventory_post:${req.ip ?? "unknown"}`, 1);
@@ -70,6 +73,8 @@ export async function POST(req: NextRequest) {
     });
   
     return NextResponse.json({ ok: true, count }, { status: 200 });
-  
-  });}
+    },
+    { timeoutMs: CSV_IMPORT_TIMEOUT_MS, name: "POST /api/admin/csv/inventory" }
+  );
+}
 

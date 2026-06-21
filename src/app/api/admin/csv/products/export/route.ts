@@ -15,6 +15,11 @@ export async function GET() {
       orderBy: { name: "asc" },
       include: {
         diecast_scales: { select: { ratio: true } },
+        product_images: {
+          where: { product_variant_id: null },
+          orderBy: { sort_order: "asc" },
+          select: { url: true },
+        },
         inventory: {
           where: { product_variant_id: null },
           take: 1,
@@ -42,6 +47,9 @@ export async function GET() {
         p.gst_percent != null ? String(p.gst_percent) : "",
         p.weight_g != null ? String(p.weight_g) : "",
         p.diecast_scales?.ratio ? escapeCsvField(p.diecast_scales.ratio) : "",
+        p.product_images.length > 0
+          ? escapeCsvField(p.product_images.map((img) => img.url).join("|"))
+          : "",
         p.is_active ? "true" : "false",
         String(available),
         String(threshold),

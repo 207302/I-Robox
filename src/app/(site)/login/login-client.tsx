@@ -94,12 +94,6 @@ export default function LoginClient() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (mode === "login" && data?.redirectToSignup) {
-          const suggested = typeof data?.suggestedIdentifier === "string" ? data.suggestedIdentifier : identifier;
-          setIdentifier(suggested);
-          setMode("signup");
-          throw new Error("Account not found. Please complete sign up.");
-        }
         throw new Error(data?.error || "Request failed");
       }
       if (mode === "signup") {

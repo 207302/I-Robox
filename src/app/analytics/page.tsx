@@ -2,15 +2,15 @@
 
 import { format, subDays } from "date-fns";
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import DateRangePicker from "@/components/analytics/DateRangePicker";
-import DeviceAnalysis from "@/components/analytics/DeviceAnalysis";
-import EcommercePerformance from "@/components/analytics/EcommercePerformance";
-import ExecutiveSummary from "@/components/analytics/ExecutiveSummary";
-import ExportControls from "@/components/analytics/ExportControls";
-import GeographicAnalysis from "@/components/analytics/GeographicAnalysis";
-import LandingPageAnalysis from "@/components/analytics/LandingPageAnalysis";
-import TrafficAcquisition from "@/components/analytics/TrafficAcquisition";
-import UserBehaviour from "@/components/analytics/UserBehaviour";
+import DateRangePicker from "@/components/Analytics/DateRangePicker";
+import DeviceAnalysis from "@/components/Analytics/DeviceAnalysis";
+import EcommercePerformance from "@/components/Analytics/EcommercePerformance";
+import ExecutiveSummary from "@/components/Analytics/ExecutiveSummary";
+import ExportControls from "@/components/Analytics/ExportControls";
+import GeographicAnalysis from "@/components/Analytics/GeographicAnalysis";
+import LandingPageAnalysis from "@/components/Analytics/LandingPageAnalysis";
+import TrafficAcquisition from "@/components/Analytics/TrafficAcquisition";
+import UserBehaviour from "@/components/Analytics/UserBehaviour";
 import { fetchAnalyticsSection } from "@/lib/ga4/fetchClient";
 import type {
   DashboardExportData,

@@ -74,6 +74,8 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
     const parts = [
       status && `Status: ${status}`,
       reason && `Reason: ${reason}`,
+      reason === "order_already_in_shipmozo_panel" &&
+        "Order is already in ShipMozo — assign a courier in the panel to generate AWB",
       message && message,
       pushOk === false && reason === "shipmozo_not_configured" &&
         "ShipMozo env vars missing on server (Hostinger → Environment)",

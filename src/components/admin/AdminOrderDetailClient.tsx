@@ -44,6 +44,26 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
     const pushOrder =
       d.pushOrder && typeof d.pushOrder === "object" ? (d.pushOrder as Record<string, unknown>) : null;
     const pushMessage = pushOrder?.message ? String(pushOrder.message) : "";
+    const pushRawResponse = pushOrder?.rawResponse ? String(pushOrder.rawResponse) : "";
+    const pushSentPayload =
+      pushOrder?.sentPayload && typeof pushOrder.sentPayload === "object"
+        ? JSON.stringify(pushOrder.sentPayload)
+        : "";
+    const pushPushedAt = pushOrder?.pushedAt ? String(pushOrder.pushedAt) : "";
+    const warehouseValidation =
+      d.warehouseValidation && typeof d.warehouseValidation === "object"
+        ? (d.warehouseValidation as Record<string, unknown>)
+        : null;
+    const warehouseWarn =
+      warehouseValidation?.foundInApi === false && warehouseValidation?.configuredId
+        ? `Warehouse ID ${warehouseValidation.configuredId} not found in ShipMozo API`
+        : "";
+    const validWarehouses =
+      warehouseValidation?.foundInApi === false && Array.isArray(warehouseValidation.validWarehouses)
+        ? (warehouseValidation.validWarehouses as Array<Record<string, unknown>>)
+            .map((w) => `${w.id} (${w.address_title ?? ""})`)
+            .join(", ")
+        : "";
     const pushResponse =
       pushOrder?.response && typeof pushOrder.response === "object"
         ? JSON.stringify(pushOrder.response)
@@ -60,7 +80,12 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
       pushOk === false && reason === "warehouse_not_resolved" &&
         "ShipMozo warehouse not found — set SHIPMOZO_WAREHOUSE_ID or SHIPMOZO_WAREHOUSE_TITLE",
       pushOk === false && pushMessage && `Push failed: ${pushMessage}`,
-      pushOk === false && pushResponse && `ShipMozo response: ${pushResponse}`,
+      pushOk === false && pushRawResponse && `ShipMozo raw response: ${pushRawResponse}`,
+      pushOk === false && pushResponse && !pushRawResponse && `ShipMozo response: ${pushResponse}`,
+      pushOk === false && pushSentPayload && `Sent payload: ${pushSentPayload}`,
+      pushPushedAt && `Last push attempt: ${pushPushedAt}`,
+      warehouseWarn && warehouseWarn,
+      validWarehouses && `Valid ShipMozo warehouses: ${validWarehouses}`,
       pushOk === false && !pushMessage && !reason && "Push failed: check ShipMozo API keys and warehouse env vars",
       discoveryError && `AWB sync: ${discoveryError}`,
       triedIds && `Tried ShipMozo ids: ${triedIds}`,

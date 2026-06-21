@@ -73,7 +73,9 @@ export function startShipmozoTrackingScheduler() {
   }
 
   const ms = minutes * 60 * 1000;
-  // Backfill stuck paid orders soon after deploy/restart, then on every tracking interval.
+  console.info("[ShipMozo] Running immediate backfill on startup");
+  void runPushWithLock();
+  // Backfill stuck paid orders again after warm-up, then on every tracking interval.
   startupTimerId = setTimeout(() => {
     void runPushWithLock();
     void runWithLock();
@@ -83,7 +85,7 @@ export function startShipmozoTrackingScheduler() {
     void runWithLock();
   }, ms);
   console.info(
-    `[shipmozo-tracking-scheduler] active — push+tracking first run in 90s, then every ${minutes} min`
+    `[shipmozo-tracking-scheduler] active — immediate push backfill, then push+tracking in 90s, then every ${minutes} min`
   );
 }
 

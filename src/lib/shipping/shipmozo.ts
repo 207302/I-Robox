@@ -13,8 +13,30 @@ const SHIPMOZO_DEFAULT_HEIGHT_CM = 10;
 /** Shipmozo rejects ref / order_id longer than this (e.g. auto-assign, schedule pickup). */
 const SHIPMOZO_ORDER_ID_MAX_LEN = 30;
 
-/** Fallback when product admin HSN is empty — toys / games (RC, diecast). */
-const SHIPMOZO_DEFAULT_HSN = (process.env.SHIPMOZO_DEFAULT_HSN ?? "95030090").trim();
+const WAREHOUSE_LIST_CACHE_MS = 5 * 60 * 1000;
+
+export type ShipmozoWarehouseSummary = {
+  id: string;
+  address_title: string;
+  status: string;
+  default: boolean;
+};
+
+export type ShipmozoWarehouseValidation = {
+  configuredId: string | null;
+  configuredTitle: string | null;
+  foundInApi: boolean;
+  validWarehouses: ShipmozoWarehouseSummary[];
+  validatedAt: string;
+};
+
+type WarehouseListCache = {
+  fetchedAt: number;
+  apiOk: boolean;
+  warehouses: ShipmozoWarehouseSummary[];
+};
+
+let warehouseListCache: WarehouseListCache | null = null;
 
 export type ShipmozoBookingResult = {
   ok: boolean;
@@ -23,9 +45,61 @@ export type ShipmozoBookingResult = {
   skipped?: boolean;
 };
 
-function resolveShipmozoHsn(product: { hsn_code?: string | null }) {
+function productHsnForShipmozo(product: { hsn_code?: string | null }): string {
   const hsnRaw = String(product.hsn_code ?? "").trim();
-  return { hsn: hsnRaw || SHIPMOZO_DEFAULT_HSN, usedDefault: !hsnRaw };
+  if (hsnRaw) return hsnRaw;
+  return (process.env.SHIPMOZO_DEFAULT_HSN ?? "").trim();
+}
+
+function scrubPushPayloadForMetadata(payload: Record<string, unknown>): Record<string, unknown> {
+  const copy = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+  const phone = copy.consignee_phone;
+  if (phone != null) {
+    const digits = String(phone).replace(/\D/g, "");
+    const last4 = digits.slice(-4);
+    copy.consignee_phone = last4 ? `******${last4}` : "****";
+  }
+  return copy;
+}
+
+function maskShipmozoSecret(value: string): string {
+  const v = value.trim();
+  if (!v) return "";
+  if (v.length <= 4) return "***";
+  return `${v.slice(0, 4)}***`;
+}
+
+function parseWarehouseListFromResponse(parsed: unknown): ShipmozoWarehouseSummary[] {
+  if (!parsed || typeof parsed !== "object") return [];
+  const data = (parsed as ShipmozoResponse).data;
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((row: Record<string, unknown>) => ({
+      id: String(row.id ?? "").trim(),
+      address_title: String(row.address_title ?? row.title ?? "").trim(),
+      status: String(row.status ?? row.warehouse_status ?? "").trim(),
+      default: Boolean(row.default ?? row.is_default ?? row.isDefault),
+    }))
+    .filter((row) => row.id);
+}
+
+export async function fetchShipmozoWarehouseList(options?: { forceRefresh?: boolean }): Promise<WarehouseListCache> {
+  if (
+    !options?.forceRefresh &&
+    warehouseListCache &&
+    Date.now() - warehouseListCache.fetchedAt < WAREHOUSE_LIST_CACHE_MS
+  ) {
+    return warehouseListCache;
+  }
+
+  const res = await callShipmozo("/get-warehouses", "GET");
+  const warehouses = parseWarehouseListFromResponse(res.parsed);
+  warehouseListCache = {
+    fetchedAt: Date.now(),
+    apiOk: res.ok,
+    warehouses,
+  };
+  return warehouseListCache;
 }
 
 function shipmozoPushErrorMessage(parsed: unknown, raw?: string): string {
@@ -417,16 +491,79 @@ function normalizeIndiaPin6(raw: string): string | null {
   return /^\d{6}$/.test(six) ? six : null;
 }
 
-async function resolveWarehouseId(): Promise<string | null> {
+async function resolveWarehouseId(orderId?: string): Promise<string | null> {
   const explicitId = (process.env.SHIPMOZO_WAREHOUSE_ID ?? "").trim();
-  if (explicitId) return explicitId;
   const title = (process.env.SHIPMOZO_WAREHOUSE_TITLE ?? "").trim();
+
+  if (explicitId) {
+    const list = await fetchShipmozoWarehouseList();
+    const found = list.warehouses.some((w) => w.id === explicitId);
+    const validation: ShipmozoWarehouseValidation = {
+      configuredId: explicitId,
+      configuredTitle: title || null,
+      foundInApi: found,
+      validWarehouses: list.warehouses,
+      validatedAt: new Date().toISOString(),
+    };
+
+    if (list.apiOk && !found) {
+      const validList = list.warehouses
+        .map((w) => `${w.id} (${w.address_title || "untitled"})`)
+        .join(", ");
+      console.warn(
+        `[ShipMozo] WARN: SHIPMOZO_WAREHOUSE_ID "${explicitId}" not found in /get-warehouses response` +
+          (validList ? `. Valid warehouses: ${validList}` : ". No warehouses returned.")
+      );
+    }
+
+    if (orderId) {
+      await appendShipmozoMetadata(orderId, { warehouseValidation: validation });
+    }
+
+    return explicitId;
+  }
+
   if (!title) return null;
-  const w = await callShipmozo("/get-warehouses", "GET");
-  if (!w.ok || !w.parsed || typeof w.parsed !== "object") return null;
-  const data = Array.isArray((w.parsed as ShipmozoResponse).data) ? (w.parsed as ShipmozoResponse).data : [];
-  const match = data.find((it: any) => String(it?.address_title ?? "").trim() === title);
-  return match ? String(match.id) : null;
+  const list = await fetchShipmozoWarehouseList();
+  if (!list.apiOk) return null;
+  const match = list.warehouses.find((it) => it.address_title === title);
+  return match?.id ?? null;
+}
+
+export async function runShipmozoConfigCheck() {
+  const publicKey = (process.env.SHIPMOZO_PUBLIC_KEY ?? "").trim();
+  const privateKey = (process.env.SHIPMOZO_PRIVATE_KEY ?? "").trim();
+  const warehouseId = (process.env.SHIPMOZO_WAREHOUSE_ID ?? "").trim();
+  const warehouseTitle = (process.env.SHIPMOZO_WAREHOUSE_TITLE ?? "").trim();
+
+  const infoRes = await callShipmozo("/info", "GET");
+  const warehouseList = await fetchShipmozoWarehouseList({ forceRefresh: true });
+
+  return {
+    keys: {
+      publicKeySet: Boolean(publicKey),
+      publicKeyMasked: maskShipmozoSecret(publicKey),
+      privateKeySet: Boolean(privateKey),
+      privateKeyMasked: maskShipmozoSecret(privateKey),
+    },
+    warehouse: {
+      configuredId: warehouseId || null,
+      configuredTitle: warehouseTitle || null,
+      configuredIdFoundInApi: warehouseId
+        ? warehouseList.warehouses.some((w) => w.id === warehouseId)
+        : null,
+    },
+    info: {
+      ok: infoRes.ok,
+      status: infoRes.status,
+      response: infoRes.parsed,
+      raw: infoRes.raw.slice(0, 500),
+    },
+    warehouses: {
+      ok: warehouseList.apiOk,
+      list: warehouseList.warehouses,
+    },
+  };
 }
 
 export async function appendShipmozoMetadata(orderId: string, patch: Record<string, unknown>) {
@@ -513,7 +650,7 @@ export async function bookShipmozoShipmentForOrder(
     return { ok: false, reason: "not_paid", error: "Order is not paid" };
   }
 
-  const warehouseId = await resolveWarehouseId();
+  const warehouseId = await resolveWarehouseId(orderId);
   if (!warehouseId) {
     await appendShipmozoMetadata(orderId, {
       status: "error",
@@ -542,22 +679,15 @@ export async function bookShipmozoShipmentForOrder(
     }))
   );
 
-  const hsnDefaultProducts: string[] = [];
-  const lineItems = (order.order_items ?? []).map((it) => {
-    const { hsn, usedDefault } = resolveShipmozoHsn(it.products ?? {});
-    if (usedDefault) {
-      hsnDefaultProducts.push(String(it.product_name ?? "Item").slice(0, 80));
-    }
-    return {
-      name: String(it.product_name ?? "Item").slice(0, 200),
-      sku_number: "",
-      quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
-      discount: "",
-      hsn,
-      unit_price: Number(it.unit_price ?? 0),
-      product_category: "Other",
-    };
-  });
+  const lineItems = (order.order_items ?? []).map((it) => ({
+    name: String(it.product_name ?? "Item").slice(0, 200),
+    sku_number: "",
+    quantity: Number.isFinite(it.quantity) ? it.quantity : 1,
+    discount: "",
+    hsn: productHsnForShipmozo(it.products ?? {}),
+    unit_price: Number(it.unit_price ?? 0),
+    product_category: "Other",
+  }));
 
   const customerRef = normalizeShipmozoOrderIdRef(shipmozoOrderRef(order));
   const priorMeta =
@@ -574,13 +704,6 @@ export async function bookShipmozoShipmentForOrder(
   }
 
   if (!alreadyPushed) {
-    if (hsnDefaultProducts.length > 0) {
-      await appendShipmozoMetadata(orderId, {
-        hsnDefaultsUsed: hsnDefaultProducts,
-        hsnDefaultsNote: `Used default HSN ${SHIPMOZO_DEFAULT_HSN} for products missing admin HSN.`,
-      });
-    }
-
     const pushPayload: Record<string, unknown> = {
       order_id: shipmozoOrderRef(order),
       order_date: new Date().toISOString().slice(0, 10),
@@ -606,8 +729,17 @@ export async function bookShipmozoShipmentForOrder(
 
     const push = await callShipmozo("/push-order", "POST", pushPayload);
     const pushMessage = shipmozoPushErrorMessage(push.parsed, push.raw);
+    const pushedAt = new Date().toISOString();
     await appendShipmozoMetadata(orderId, {
-      pushOrder: { ok: push.ok, status: push.status, response: push.parsed, message: push.ok ? null : pushMessage },
+      pushOrder: {
+        ok: push.ok,
+        status: push.status,
+        response: push.parsed,
+        rawResponse: push.raw,
+        message: push.ok ? null : pushMessage,
+        pushedAt,
+        sentPayload: scrubPushPayloadForMetadata(pushPayload),
+      },
     });
 
     if (!push.ok) {

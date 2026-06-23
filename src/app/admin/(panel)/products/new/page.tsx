@@ -127,6 +127,19 @@ export default function NewProductPage() {
     })();
   }, [form.category_id]);
 
+  function handlePickUrls(urls: string[]) {
+    if (urls.length === 0) return;
+    setImages((prev) => [
+      ...prev,
+      ...urls.map((url) => ({
+        id: `picked-${Date.now()}-${Math.random()}`,
+        url,
+        uploading: false,
+      })),
+    ]);
+    toast.success(`Added ${urls.length} image(s) from Cloudinary`);
+  }
+
   async function handleAddFiles(files: FileList) {
     const fileArr = Array.from(files);
     // Use stable temp IDs so parallel updates target the right slots
@@ -589,6 +602,7 @@ export default function NewProductPage() {
             onReorder={setImages}
             onDelete={handleDeleteImage}
             onAddFiles={handleAddFiles}
+            onPickUrls={handlePickUrls}
             disabled={loading}
           />
         </section>

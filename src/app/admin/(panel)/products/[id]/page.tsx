@@ -202,6 +202,39 @@ export default function EditProductPage() {
     }
   }
 
+  async function handlePickUrls(urls: string[]) {
+    if (urls.length === 0) return;
+    const tempIds = urls.map((_, i) => `temp-pick-${Date.now()}-${i}-${Math.random()}`);
+
+    setImages((prev) => [
+      ...prev,
+      ...tempIds.map((tid, i) => ({ id: tid, url: urls[i]!, uploading: true })),
+    ]);
+
+    await Promise.allSettled(
+      urls.map(async (url, i) => {
+        try {
+          const imgRes = await fetch(`/api/admin/products/${id}/images`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const imgParsed = await parseAdminJsonResponse(imgRes);
+          if (!imgParsed.ok) throw new Error(imgParsed.message);
+          const imgData = imgParsed.data as GalleryImage;
+
+          setImages((prev) =>
+            prev.map((img) => (img.id === tempIds[i] ? imgData : img))
+          );
+        } catch (err: unknown) {
+          toast.error(err instanceof Error ? err.message : "Failed to add image");
+          setImages((prev) => prev.filter((img) => img.id !== tempIds[i]));
+        }
+      })
+    );
+    toast.success(`Added ${urls.length} image(s) from Cloudinary`);
+  }
+
   async function handleAddFiles(files: FileList) {
     const fileArr = Array.from(files);
     const tempIds = fileArr.map((_, i) => `temp-${Date.now()}-${i}-${Math.random()}`);
@@ -341,6 +374,48 @@ export default function EditProductPage() {
         }
       })
     );
+  }
+
+  async function handlePickVariantUrls(variantId: string, urls: string[]) {
+    if (urls.length === 0) return;
+    const tempIds = urls.map((_, i) => `temp-pick-${Date.now()}-${i}-${Math.random()}`);
+
+    setVariantImages((prev) => ({
+      ...prev,
+      [variantId]: [
+        ...(prev[variantId] ?? []),
+        ...tempIds.map((tid, i) => ({ id: tid, url: urls[i]!, uploading: true })),
+      ],
+    }));
+
+    await Promise.allSettled(
+      urls.map(async (url, i) => {
+        try {
+          const imgRes = await fetch(`/api/admin/products/${id}/images`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url, product_variant_id: variantId }),
+          });
+          const imgParsed = await parseAdminJsonResponse(imgRes);
+          if (!imgParsed.ok) throw new Error(imgParsed.message);
+          const imgData = imgParsed.data as GalleryImage;
+
+          setVariantImages((prev) => ({
+            ...prev,
+            [variantId]: (prev[variantId] ?? []).map((img) =>
+              img.id === tempIds[i] ? imgData : img
+            ),
+          }));
+        } catch (err: unknown) {
+          toast.error(err instanceof Error ? err.message : "Failed to add image");
+          setVariantImages((prev) => ({
+            ...prev,
+            [variantId]: (prev[variantId] ?? []).filter((img) => img.id !== tempIds[i]),
+          }));
+        }
+      })
+    );
+    toast.success(`Added ${urls.length} image(s) from Cloudinary`);
   }
 
   async function handleDeleteVariantImage(variantId: string, img: GalleryImage) {
@@ -857,6 +932,7 @@ export default function EditProductPage() {
                       onReorder={(order) => handleReorderVariantImages(variant.id, order)}
                       onDelete={(img) => handleDeleteVariantImage(variant.id, img)}
                       onAddFiles={(files) => handleAddVariantFiles(variant.id, files)}
+                      onPickUrls={(urls) => handlePickVariantUrls(variant.id, urls)}
                       disabled={loading || deleting}
                     />
                   </div>
@@ -880,6 +956,7 @@ export default function EditProductPage() {
           onReorder={handleReorder}
           onDelete={handleDeleteImage}
           onAddFiles={handleAddFiles}
+          onPickUrls={handlePickUrls}
           disabled={loading}
         />
       </section>

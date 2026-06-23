@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Toaster } from "react-hot-toast";
 import SiteTopLoader from "@/components/Common/SiteTopLoader";
 
-const NAV = [
+const NAV: { href: string; label: string; superAdminOnly?: boolean }[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/inventory", label: "Inventory" },
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/admin/marketing", label: "Marketing" },
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/csv", label: "CSV Upload" },
+  { href: "/admin/media", label: "Media upload", superAdminOnly: true },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/users", label: "Admin Users" },
 ];
@@ -31,6 +32,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!isAllowed) redirect("/admin/login");
 
   const roleLabel = roles[0] ?? "ADMIN";
+  const isSuperAdmin = roles.includes("SUPER_ADMIN");
+  const navItems = NAV.filter((item) => !item.superAdminOnly || isSuperAdmin);
 
   return (
     <div className="min-h-screen bg-gray-1">
@@ -58,7 +61,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 grid gap-6 lg:grid-cols-[260px_minmax(0,_1fr)]">
         <aside className="rounded-2xl border border-gray-3 bg-white p-4 h-fit">
           <nav className="space-y-1">
-            {NAV.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

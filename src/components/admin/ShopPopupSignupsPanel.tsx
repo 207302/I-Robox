@@ -62,10 +62,26 @@ type Props = {
   compact?: boolean;
 };
 
+type BroadcastPreview = {
+  productCount: number;
+  products: { name: string; priceLabel: string; productUrl: string }[];
+};
+
+type BroadcastResult = {
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  recipients?: number;
+  sent?: number;
+  failed?: number;
+  productCount?: number;
+};
+
 export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = false }: Props) {
   const [rows, setRows] = useState<NotifySignupRow[]>([]);
   const [loading, setLoading] = useState(loadOnMount);
   const [exporting, setExporting] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
 
   async function loadSignups() {
     setLoading(true);
@@ -126,6 +142,61 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
             onClick={() => void loadSignups().then(() => toast.success("List refreshed"))}
           >
             {loading ? "Loading…" : "Refresh"}
+          </button>
+          <button
+            type="button"
+            disabled={broadcasting || rows.length === 0}
+            className="rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-dark hover:bg-gray-1 disabled:opacity-60"
+            onClick={async () => {
+              setBroadcasting(true);
+              try {
+                const preview = await parseAdminJson<BroadcastPreview>(
+                  await fetchAdminWithRetry(
+                    "/api/admin/marketing/notify-signups/broadcast",
+                    { cache: "no-store" }
+                  )
+                );
+                if (preview.productCount === 0) {
+                  toast.error("No active products to feature — add products first.");
+                  return;
+                }
+                const productList = preview.products.map((p) => `• ${p.name}`).join("\n");
+                const confirmed = window.confirm(
+                  `Send latest-drops email to all ${rows.length} signup${rows.length === 1 ? "" : "s"}?\n\n` +
+                    `The email will include ${preview.productCount} newest products:\n${productList}\n\n` +
+                    "Plus a link to the shop page. Product list is fetched fresh at send time."
+                );
+                if (!confirmed) return;
+
+                const result = await parseAdminJson<BroadcastResult>(
+                  await fetchAdminWithRetry("/api/admin/marketing/notify-signups/broadcast", {
+                    method: "POST",
+                    credentials: "include",
+                  })
+                );
+                if (result.skipped) {
+                  const msg =
+                    result.reason === "smtp_not_configured"
+                      ? "SMTP not configured — set EMAIL_SERVER_* on the server."
+                      : result.reason === "no_products"
+                        ? "No active products to feature."
+                        : "No signups to email.";
+                  toast.error(msg);
+                  return;
+                }
+                const failed = result.failed ?? 0;
+                toast.success(
+                  `Sent to ${result.sent ?? 0} of ${result.recipients ?? rows.length}` +
+                    (failed > 0 ? ` (${failed} failed)` : "")
+                );
+              } catch (err: unknown) {
+                toast.error(err instanceof Error ? err.message : "Bulk email failed");
+              } finally {
+                setBroadcasting(false);
+              }
+            }}
+          >
+            {broadcasting ? "Sending…" : "Send bulk email"}
           </button>
           <button
             type="button"

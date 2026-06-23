@@ -5,12 +5,11 @@ import { Keyboard } from "swiper/modules";
 import { Swiper, SwiperSlide, type SwiperRef } from "swiper/react";
 
 import { usePreviewSlider } from "@/app/context/PreviewSliderContext";
-import SafeProductImage from "@/components/Common/SafeProductImage";
+import ZoomableGalleryImage from "@/components/Common/ZoomableGalleryImage";
 import {
   getProductGalleryImages,
   PRODUCT_IMAGE_PLACEHOLDER,
 } from "@/lib/shop/productCardImage";
-import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
 import { productImageAlt } from "@/lib/seo/metadata";
 import { useAppSelector } from "@/redux/store";
 
@@ -31,6 +30,7 @@ const PreviewSliderModal = () => {
 
   const sliderRef = useRef<SwiperRef | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [slideZoomed, setSlideZoomed] = useState(false);
 
   const handlePrev = useCallback(() => {
     sliderRef.current?.swiper?.slidePrev();
@@ -62,6 +62,7 @@ const PreviewSliderModal = () => {
 
   useEffect(() => {
     if (!isModalPreviewOpen) return;
+    setSlideZoomed(false);
     setActiveIndex(
       Math.min(previewStartIndex, Math.max(0, galleryImages.length - 1))
     );
@@ -169,37 +170,43 @@ const PreviewSliderModal = () => {
             key={`${title}-${initialSlide}-${galleryImages.join("|")}`}
             ref={sliderRef}
             modules={[Keyboard]}
-            keyboard={{ enabled: true }}
+            keyboard={{ enabled: !slideZoomed }}
+            allowTouchMove={!slideZoomed}
             slidesPerView={1}
             spaceBetween={20}
             initialSlide={initialSlide}
-            onSlideChange={(swiper) => setActiveIndex(swiper.activeIndex)}
+            onSlideChange={(swiper) => {
+              setActiveIndex(swiper.activeIndex);
+              setSlideZoomed(false);
+            }}
             className="preview-slider__swiper h-full w-full"
           >
             {galleryImages.map((src, key) => (
               <SwiperSlide key={`${src}-${key}`} className="!flex items-center justify-center">
-                <div className="relative mx-auto flex h-[min(80vh,720px)] w-full max-w-4xl items-center justify-center">
-                  <SafeProductImage
-                    src={resolveProductImageSrc(src || PRODUCT_IMAGE_PLACEHOLDER)}
-                    alt={productImageAlt(title)}
-                    width={900}
-                    height={900}
-                    className="mx-auto max-h-[min(80vh,720px)] w-auto max-w-full object-contain"
-                    sizes="(max-width: 1024px) 95vw, 900px"
-                    priority={key === initialSlide}
-                    fetchPriority={key === initialSlide ? "high" : undefined}
-                    loading={key === initialSlide ? undefined : "lazy"}
-                  />
-                </div>
+                <ZoomableGalleryImage
+                  src={src || PRODUCT_IMAGE_PLACEHOLDER}
+                  alt={productImageAlt(title)}
+                  priority={key === initialSlide}
+                  fetchPriority={key === initialSlide ? "high" : undefined}
+                  loading={key === initialSlide ? undefined : "lazy"}
+                  onZoomChange={key === activeIndex ? setSlideZoomed : undefined}
+                />
               </SwiperSlide>
             ))}
           </Swiper>
 
           {showNav ? (
-            <p className="mt-4 text-sm text-white/80">
-              Swipe or use arrow keys to browse · {activeIndex + 1} of {galleryImages.length}
+            <p className="mt-4 text-center text-sm text-white/80">
+              {slideZoomed
+                ? "Drag to pan · Click to zoom out"
+                : "Click to zoom · Pinch on mobile · Swipe or arrow keys to browse"}{" "}
+              · {activeIndex + 1} of {galleryImages.length}
             </p>
-          ) : null}
+          ) : (
+            <p className="mt-4 text-center text-sm text-white/80">
+              {slideZoomed ? "Drag to pan · Click to zoom out" : "Click to zoom · Pinch on mobile"}
+            </p>
+          )}
         </div>
       </FullscreenOverlayContent>
     </FullscreenOverlay>

@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import { useRef, useState } from "react";
+import PickFromCloudinaryButton from "@/components/admin/PickFromCloudinaryButton";
+import type { CloudinaryFolderId } from "@/lib/cloudinary/adminImageUploadConstants";
 
 export interface GalleryImage {
   id?: string;
@@ -19,6 +21,9 @@ interface Props {
   onDelete: (img: GalleryImage, idx: number) => void;
   /** Called when files are picked via button or file-drop */
   onAddFiles: (files: FileList) => void;
+  /** Called when images are picked from Cloudinary library */
+  onPickUrls?: (urls: string[]) => void | Promise<void>;
+  cloudinaryFolder?: CloudinaryFolderId;
   disabled?: boolean;
 }
 
@@ -27,6 +32,8 @@ export default function ImageGallery({
   onReorder,
   onDelete,
   onAddFiles,
+  onPickUrls,
+  cloudinaryFolder = "irobox/products",
   disabled,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -169,7 +176,7 @@ export default function ImageGallery({
           </div>
         ))}
 
-        {/* Add button */}
+        {/* Add from computer */}
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
@@ -177,8 +184,21 @@ export default function ImageGallery({
           className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-3 hover:border-blue flex flex-col items-center justify-center gap-1 text-meta-3 hover:text-blue transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="text-2xl leading-none">+</span>
-          <span className="text-xs">Add image</span>
+          <span className="text-xs">Upload</span>
         </button>
+
+        {onPickUrls ? (
+          <div className="flex w-24 h-24 flex-col items-center justify-center">
+            <PickFromCloudinaryButton
+              folder={cloudinaryFolder}
+              multiple
+              disabled={disabled}
+              label="Library"
+              className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-gray-3 px-1 text-xs font-medium text-meta-3 hover:border-blue hover:text-blue disabled:opacity-50"
+              onSelect={(urls) => void onPickUrls(urls)}
+            />
+          </div>
+        ) : null}
       </div>
 
       <input
@@ -193,7 +213,8 @@ export default function ImageGallery({
         }}
       />
       <p className="mt-2 text-xs text-meta-4">
-        Drag tiles to reorder · First image is the cover · Drop files here · JPEG, PNG, WebP or GIF · max 5 MB each
+        Drag tiles to reorder · First image is the cover · Upload or pick from Cloudinary · JPEG, PNG,
+        WebP or GIF · max 9 MB each
       </p>
     </div>
   );

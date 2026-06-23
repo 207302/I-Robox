@@ -18,6 +18,8 @@ import {
 } from "@/lib/marketing/abandonedCart";
 import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
 import ShopPopupSignupsPanel from "@/components/admin/ShopPopupSignupsPanel";
+import AdminImageUrlField from "@/components/admin/AdminImageUrlField";
+import PickFromCloudinaryButton from "@/components/admin/PickFromCloudinaryButton";
 import type { MarketingTab } from "@/lib/admin/marketingTab";
 import { useMarketingAdminDeferred } from "./MarketingAdminContext";
 
@@ -1060,12 +1062,22 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                     </div>
                     <label className="sm:col-span-2">
                       <span className="text-sm font-medium">Image URL</span>
-                      <input
-                        name="image_url"
-                        value={heroEditImageUrl}
-                        onChange={(e) => setHeroEditImageUrl(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
-                      />
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <input
+                          name="image_url"
+                          value={heroEditImageUrl}
+                          onChange={(e) => setHeroEditImageUrl(e.target.value)}
+                          className="min-w-0 flex-1 rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                        />
+                        <PickFromCloudinaryButton
+                          folder="irobox/homepage-hero"
+                          multiple={false}
+                          label="Pick image"
+                          onSelect={(urls) => {
+                            if (urls[0]) setHeroEditImageUrl(urls[0]);
+                          }}
+                        />
+                      </div>
                     </label>
                     <label className="sm:col-span-2">
                       <span className="text-sm font-medium">Replace image (optional)</span>
@@ -1243,10 +1255,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               }
             }}
           >
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Image URL (optional if uploading)</span>
-              <input name="image_url" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
+            <AdminImageUrlField
+              name="image_url"
+              label="Image URL (optional if uploading)"
+              folder="irobox/homepage-hero"
+              className="sm:col-span-2"
+            />
             <label className="sm:col-span-2">
               <span className="text-sm font-medium">Upload Banner (Cloudinary)</span>
               <input
@@ -1480,10 +1494,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               <span className="text-sm font-medium">Subtitle</span>
               <input name="subtitle" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
             </label>
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Image URL (optional if uploading)</span>
-              <input name="image_url" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
+            <AdminImageUrlField
+              name="image_url"
+              label="Image URL (optional if uploading)"
+              folder="irobox/homepage-highlights"
+              className="sm:col-span-2"
+            />
             <label className="sm:col-span-2">
               <span className="text-sm font-medium">Upload Image (Cloudinary)</span>
               <input
@@ -1630,10 +1646,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               />
             </label>
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Image URL (optional if uploading)</span>
-              <input name="image_url" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
+            <AdminImageUrlField
+              name="image_url"
+              label="Image URL (optional if uploading)"
+              folder="irobox/homepage-brand-rail"
+              className="sm:col-span-2"
+            />
             <label className="sm:col-span-2">
               <span className="text-sm font-medium">Upload image (Cloudinary)</span>
               <input
@@ -1804,10 +1822,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               />
             </label>
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Image URL (optional if uploading)</span>
-              <input name="image_url" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
+            <AdminImageUrlField
+              name="image_url"
+              label="Image URL (optional if uploading)"
+              folder="irobox/homepage-category-tiles"
+              className="sm:col-span-2"
+            />
             <label className="sm:col-span-2">
               <span className="text-sm font-medium">Upload image (Cloudinary)</span>
               <input
@@ -2112,10 +2132,12 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               <span className="text-sm font-medium">Body</span>
               <textarea name="body" required rows={3} className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
             </label>
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Image URL (optional if uploading)</span>
-              <input name="image_url" className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
+            <AdminImageUrlField
+              name="image_url"
+              label="Image URL (optional if uploading)"
+              folder="irobox/marketing-popups"
+              className="sm:col-span-2"
+            />
             <label className="sm:col-span-2">
               <span className="text-sm font-medium">Upload Image (Cloudinary)</span>
               <input

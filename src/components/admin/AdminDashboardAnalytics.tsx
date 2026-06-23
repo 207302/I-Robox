@@ -78,9 +78,11 @@ export default function AdminDashboardAnalytics({ ga4Configured }: Props) {
       <div className="rounded-2xl border border-gray-3 bg-white p-5">
         <h2 className="text-lg font-semibold text-dark">Site traffic</h2>
         <p className="mt-2 text-sm text-meta-3">
-          Connect Google Analytics 4 to see live visitors and traffic on this dashboard. Add{" "}
-          <code className="text-xs">GA4_PROPERTY_ID</code>, <code className="text-xs">GA4_CLIENT_EMAIL</code>, and{" "}
-          <code className="text-xs">GA4_PRIVATE_KEY</code> to your environment.
+          Connect Google Analytics 4 to see live visitors and traffic on this dashboard. Set{" "}
+          <code className="text-xs">GA4_PROPERTY_ID</code> and either{" "}
+          <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON</code> (full JSON file) or{" "}
+          <code className="text-xs">GA4_CLIENT_EMAIL</code> +{" "}
+          <code className="text-xs">GA4_PRIVATE_KEY</code> in your environment.
         </p>
       </div>
     );

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/utils/formatePrice";
 import Link from "next/link";
-import { isGa4Configured } from "@/lib/ga4/client";
+import { isGa4Configured } from "@/lib/ga4/credentials";
 import AdminDashboardAnalytics from "@/components/admin/AdminDashboardAnalytics";
 
 export const metadata = {

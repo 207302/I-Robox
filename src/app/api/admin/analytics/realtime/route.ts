@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin/rbac";
-import { isGa4Configured } from "@/lib/ga4/client";
+import { formatGa4CredentialError, isGa4Configured } from "@/lib/ga4/credentials";
 import { getRealtimeUsers } from "@/lib/ga4/queries";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -22,7 +22,7 @@ export async function GET() {
       const data = await getRealtimeUsers();
       return NextResponse.json({ data });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch live users";
+      const message = formatGa4CredentialError(error);
       return NextResponse.json({ error: message }, { status: 500 });
     }
   });

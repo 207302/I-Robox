@@ -1,6 +1,11 @@
 import "server-only";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import type { google } from "@google-analytics/data/build/protos/protos";
+import {
+  formatGa4CredentialError,
+  getGa4Credentials,
+  isGa4Configured,
+} from "./credentials";
 
 type RunReportRequest = google.analytics.data.v1beta.IRunReportRequest;
 type RunReportResponse = google.analytics.data.v1beta.IRunReportResponse;
@@ -9,39 +14,17 @@ type RunRealtimeReportResponse = google.analytics.data.v1beta.IRunRealtimeReport
 
 let clientInstance: BetaAnalyticsDataClient | null = null;
 
-export function isGa4Configured(): boolean {
-  return Boolean(
-    process.env.GA4_PROPERTY_ID?.trim() &&
-      process.env.GA4_CLIENT_EMAIL?.trim() &&
-      process.env.GA4_PRIVATE_KEY
-  );
-}
-
-function getCredentials() {
-  const clientEmail = process.env.GA4_CLIENT_EMAIL?.trim();
-  const privateKeyRaw = process.env.GA4_PRIVATE_KEY;
-  const propertyId = process.env.GA4_PROPERTY_ID?.trim();
-
-  if (!clientEmail || !privateKeyRaw || !propertyId) {
-    throw new Error(
-      "GA4 credentials missing. Set GA4_PROPERTY_ID, GA4_CLIENT_EMAIL, and GA4_PRIVATE_KEY in .env.local."
-    );
-  }
-
-  const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
-
-  return { clientEmail, privateKey, propertyId };
-}
+export { isGa4Configured };
 
 export function getGa4PropertyResource(): string {
-  const { propertyId } = getCredentials();
+  const { propertyId } = getGa4Credentials();
   return `properties/${propertyId}`;
 }
 
 export function getGa4Client(): BetaAnalyticsDataClient {
   if (clientInstance) return clientInstance;
 
-  const { clientEmail, privateKey } = getCredentials();
+  const { clientEmail, privateKey } = getGa4Credentials();
   clientInstance = new BetaAnalyticsDataClient({
     credentials: {
       client_email: clientEmail,
@@ -69,6 +52,10 @@ export function dimensionString(
   return row?.dimensionValues?.[index]?.value?.trim() ?? "";
 }
 
+function wrapGa4Error(error: unknown, label: string): Error {
+  return new Error(`${label}: ${formatGa4CredentialError(error)}`);
+}
+
 export async function runReport(request: Omit<RunReportRequest, "property">): Promise<RunReportResponse> {
   const client = getGa4Client();
   const property = getGa4PropertyResource();
@@ -80,8 +67,7 @@ export async function runReport(request: Omit<RunReportRequest, "property">): Pr
     });
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown GA4 API error";
-    throw new Error(`GA4 API request failed: ${message}`);
+    throw wrapGa4Error(error, "GA4 API request failed");
   }
 }
 
@@ -98,7 +84,6 @@ export async function runRealtimeReport(
     });
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown GA4 API error";
-    throw new Error(`GA4 realtime API request failed: ${message}`);
+    throw wrapGa4Error(error, "GA4 realtime API request failed");
   }
 }

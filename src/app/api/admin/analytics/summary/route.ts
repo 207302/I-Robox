@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin/rbac";
-import { isGa4Configured } from "@/lib/ga4/client";
+import { formatGa4CredentialError, isGa4Configured } from "@/lib/ga4/credentials";
 import { defaultDateRangeLast7Days, getExecutiveSummary } from "@/lib/ga4/queries";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -23,7 +23,7 @@ export async function GET() {
       const data = await getExecutiveSummary(range);
       return NextResponse.json({ data, startDate: range.startDate, endDate: range.endDate });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch analytics summary";
+      const message = formatGa4CredentialError(error);
       return NextResponse.json({ error: message }, { status: 500 });
     }
   });

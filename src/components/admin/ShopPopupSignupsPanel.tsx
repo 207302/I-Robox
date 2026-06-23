@@ -71,6 +71,8 @@ type BroadcastResult = {
   ok: boolean;
   skipped?: boolean;
   reason?: string;
+  message?: string;
+  smtpError?: string;
   recipients?: number;
   sent?: number;
   failed?: number;
@@ -82,6 +84,30 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
   const [loading, setLoading] = useState(loadOnMount);
   const [exporting, setExporting] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(row: NotifySignupRow) {
+    const confirmed = window.confirm(
+      `Delete signup for ${row.full_name} (${row.email})? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(row.id);
+    try {
+      await parseAdminJson<{ ok: boolean }>(
+        await fetchAdminWithRetry(`/api/admin/marketing/notify-signups/${row.id}`, {
+          method: "DELETE",
+          credentials: "include",
+        })
+      );
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      toast.success("Signup deleted");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not delete signup");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function loadSignups() {
     setLoading(true);
@@ -178,6 +204,9 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                   const msg =
                     result.reason === "smtp_not_configured"
                       ? "SMTP not configured — set EMAIL_SERVER_* on the server."
+                      : result.reason === "smtp_blocked"
+                        ? result.message ||
+                          "SMTP blocked by your email host. Enable outbound mail in Hostinger hPanel or use Gmail SMTP."
                       : result.reason === "no_products"
                         ? "No active products to feature."
                         : "No signups to email.";
@@ -185,6 +214,12 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                   return;
                 }
                 const failed = result.failed ?? 0;
+                if (result.smtpError) {
+                  toast.error(
+                    `Partial send — ${result.sent ?? 0} sent, ${failed} failed. ${result.smtpError}`
+                  );
+                  return;
+                }
                 toast.success(
                   `Sent to ${result.sent ?? 0} of ${result.recipients ?? rows.length}` +
                     (failed > 0 ? ` (${failed} failed)` : "")
@@ -244,6 +279,7 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Signed up</th>
                 <th className="px-4 py-3 font-medium">Updated</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-3">
@@ -257,6 +293,16 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-meta-3">
                     {formatSignupDate(row.updated_at)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      disabled={deletingId === row.id}
+                      onClick={() => void handleDelete(row)}
+                      className="text-sm font-medium text-red-600 hover:underline disabled:opacity-60"
+                    >
+                      {deletingId === row.id ? "Deleting…" : "Delete"}
+                    </button>
                   </td>
                 </tr>
               ))}

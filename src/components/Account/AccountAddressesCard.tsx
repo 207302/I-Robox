@@ -4,6 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import type { SavedAddressRecord } from "@/lib/account/savedAddress";
+import {
+  indianMobileErrorMessage,
+  sanitizeIndianPhoneInput,
+} from "@/lib/auth/indianMobile";
+import {
+  getShippingAddressValidationError,
+  sanitizeIndianPinInput,
+} from "@/lib/validation/address";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -25,7 +33,7 @@ const ADDRESS_FIELDS = [
   ["line2", "Address line 2 (optional)", false],
   ["city", "City", true],
   ["state", "State", true],
-  ["postal_code", "Postal code", true],
+  ["postal_code", "PIN code", true],
   ["country", "Country", true],
 ] as const;
 
@@ -99,6 +107,13 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
   async function handleModalSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!modal) return;
+
+    const validationError = getShippingAddressValidationError(form);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     setSaving(true);
     try {
       const isEdit = modal.mode === "edit";
@@ -199,8 +214,28 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
       <label key={key} className="block">
         <span className="mb-1 block text-sm font-medium text-dark">{label}</span>
         <input
+          type={key === "phone" || key === "postal_code" ? "tel" : "text"}
+          inputMode={key === "phone" || key === "postal_code" ? "numeric" : undefined}
+          maxLength={key === "phone" ? 10 : key === "postal_code" ? 6 : undefined}
+          pattern={key === "phone" ? "[6-9][0-9]{9}" : undefined}
+          title={
+            key === "phone"
+              ? indianMobileErrorMessage()
+              : key === "postal_code"
+                ? "Enter a valid 6-digit Indian PIN code"
+                : undefined
+          }
           value={form[key]}
-          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const next =
+              key === "phone"
+                ? sanitizeIndianPhoneInput(raw)
+                : key === "postal_code"
+                  ? sanitizeIndianPinInput(raw)
+                  : raw;
+            setForm((f) => ({ ...f, [key]: next }));
+          }}
           required={required}
           className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />

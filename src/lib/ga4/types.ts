@@ -163,6 +163,11 @@ export type ChartDataPoint = {
   fill?: string;
 };
 
+export type RealtimeUsersData = {
+  activeUsers: number;
+  fetchedAt: string;
+};
+
 export type MetricCardProps = {
   label: string;
   value: number;

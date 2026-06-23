@@ -38,6 +38,7 @@ import {
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { allocateNextOrderNumber, formatOrderReference } from "@/lib/orders/orderNumber";
 import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
+import { validateShippingAddress } from "@/lib/validation/address";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import {
   collectOrderNotificationEmails,
@@ -74,18 +75,15 @@ export async function POST(req: NextRequest) {
     const couponCode = cleanText(body.couponCode, 80);
   
     if (items.length === 0) return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
-  
-    const full_name = cleanText(address.full_name, 150);
-    const phone = normalizePhone(address.phone);
+
+    const addressValidated = validateShippingAddress(address);
+    if (!addressValidated.ok) {
+      return NextResponse.json({ error: addressValidated.error }, { status: 400 });
+    }
+
     const email = normalizeEmail(address.email);
-    const line1 = cleanText(address.line1, 255);
-    const city = cleanText(address.city, 120);
-    const state = cleanText(address.state, 120);
-    const postal_code = cleanText(address.postal_code, 20);
-    const country = cleanText(address.country ?? "India", 80);
-  
-    if (!full_name || !phone || !email || !line1 || !city || !state || !postal_code || !country) {
-      return NextResponse.json({ error: "Address is incomplete" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
     if (!validateCommonEmailProvider(email)) {
       return NextResponse.json(
@@ -93,6 +91,20 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (hasSuspiciousInput(email)) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+
+    const {
+      full_name,
+      phone,
+      line1,
+      line2,
+      city,
+      state,
+      postal_code,
+      country,
+    } = addressValidated.address;
   
     const guestCheckoutRequested = body.guestCheckout === true || body.guestCheckout === "true";
     let sessionEmailNorm = "";
@@ -110,7 +122,7 @@ export async function POST(req: NextRequest) {
     const guestCheckout = guestCheckoutRequested || emailMismatch;
   
     if (
-      [full_name, phone, email, line1, city, state, postal_code, country, couponCode]
+      [email, couponCode]
         .filter(Boolean)
         .some((v) => hasSuspiciousInput(v))
     ) {
@@ -328,7 +340,7 @@ export async function POST(req: NextRequest) {
           full_name,
           phone,
           line1,
-          line2: address?.line2 ? String(address.line2) : null,
+          line2,
           city,
           state,
           postal_code,

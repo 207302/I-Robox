@@ -19,6 +19,11 @@ import {
   indianMobileErrorMessage,
   sanitizeIndianPhoneInput,
 } from "@/lib/auth/indianMobile";
+import {
+  getShippingAddressValidationError,
+  sanitizeIndianPinInput,
+} from "@/lib/validation/address";
+import { validateEmailAddress } from "@/lib/validation/rules";
 
 declare global {
   interface Window {
@@ -248,6 +253,18 @@ export default function CheckoutPage() {
       toast.error("Some cart items are invalid. Refresh the page or re-add items to cart.");
       return;
     }
+
+    const addressError = getShippingAddressValidationError(address);
+    if (addressError) {
+      toast.error(addressError);
+      return;
+    }
+    const emailResult = validateEmailAddress(address.email, { commonProviderOnly: true });
+    if (!emailResult.ok) {
+      toast.error(emailResult.error);
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -451,7 +468,7 @@ export default function CheckoutPage() {
                     ["line2", "Address line 2 (optional)"],
                     ["city", "City"],
                     ["state", "State"],
-                    ["postal_code", "Postal code"],
+                    ["postal_code", "PIN code"],
                     ["country", "Country"],
                   ] as const
                 ).map(([key, label]) => (
@@ -459,7 +476,9 @@ export default function CheckoutPage() {
                     <span className="mb-1 block text-sm font-medium text-dark">{label}</span>
                     <input
                       type={key === "phone" ? "tel" : key === "email" ? "email" : "text"}
-                      inputMode={key === "phone" ? "numeric" : undefined}
+                      inputMode={
+                        key === "phone" || key === "postal_code" ? "numeric" : undefined
+                      }
                       autoComplete={
                         key === "phone"
                           ? "tel"
@@ -467,15 +486,28 @@ export default function CheckoutPage() {
                             ? "email"
                             : key === "full_name"
                               ? "name"
-                              : undefined
+                              : key === "postal_code"
+                                ? "postal-code"
+                                : undefined
                       }
                       pattern={key === "phone" ? "[6-9][0-9]{9}" : undefined}
-                      title={key === "phone" ? indianMobileErrorMessage() : undefined}
-                      maxLength={key === "phone" ? 10 : undefined}
+                      title={
+                        key === "phone"
+                          ? indianMobileErrorMessage()
+                          : key === "postal_code"
+                            ? "Enter a valid 6-digit Indian PIN code"
+                            : undefined
+                      }
+                      maxLength={key === "phone" ? 10 : key === "postal_code" ? 6 : undefined}
                       value={(address as any)[key]}
                       onChange={(e) => {
                         const raw = e.target.value;
-                        const next = key === "phone" ? sanitizeIndianPhoneInput(raw) : raw;
+                        const next =
+                          key === "phone"
+                            ? sanitizeIndianPhoneInput(raw)
+                            : key === "postal_code"
+                              ? sanitizeIndianPinInput(raw)
+                              : raw;
                         setAddress((a) => ({ ...a, [key]: next }));
                         // Email is checkout-only (not stored on saved addresses); keep selection.
                         if (key !== "email" && selectedAddressId !== "new") {

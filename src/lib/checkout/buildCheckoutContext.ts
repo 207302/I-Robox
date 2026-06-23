@@ -27,6 +27,7 @@ import { generatePasswordSetupSecret, PASSWORD_SETUP_TTL_MS } from "@/lib/auth/p
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
 import bcrypt from "bcrypt";
+import { validateShippingAddress } from "@/lib/validation/address";
 
 type CheckoutItem = {
   productId: string;
@@ -84,32 +85,32 @@ export async function buildCheckoutContext(input: {
   const address = (body.address ?? {}) as Record<string, unknown>;
   const isGift = Boolean(body.isGift);
   const giftMessage = cleanOptionalText(body.giftMessage, 500);
+  const email = normalizeEmail(address.email);
   const couponCode = cleanText(body.couponCode, 80);
 
   if (items.length === 0) throw new Error("CART_EMPTY");
 
-  const full_name = cleanText(address.full_name, 150);
-  const phone = normalizePhone(address.phone);
-  const email = normalizeEmail(address.email);
-  const line1 = cleanText(address.line1, 255);
-  const line2 = cleanOptionalText(address.line2, 255);
-  const city = cleanText(address.city, 120);
-  const state = cleanText(address.state, 120);
-  const postal_code = cleanText(address.postal_code, 20);
-  const country = cleanText(address.country ?? "India", 80);
+  const addressValidated = validateShippingAddress(address as Record<string, unknown>);
+  if (!addressValidated.ok) throw new Error(addressValidated.error);
 
-  if (!full_name || !phone || !email || !line1 || !city || !state || !postal_code || !country) {
-    throw new Error("ADDRESS_INCOMPLETE");
-  }
+  if (!email) throw new Error("ADDRESS_INCOMPLETE");
   if (!validateCommonEmailProvider(email)) {
     throw new Error("EMAIL_PROVIDER_INVALID");
   }
+  if (hasSuspiciousInput(email)) throw new Error("INVALID_INPUT");
 
-  if (
-    [full_name, phone, email, line1, city, state, postal_code, country, couponCode]
-      .filter(Boolean)
-      .some((v) => hasSuspiciousInput(v))
-  ) {
+  const {
+    full_name,
+    phone,
+    line1,
+    line2,
+    city,
+    state,
+    postal_code,
+    country,
+  } = addressValidated.address;
+
+  if (couponCode && hasSuspiciousInput(couponCode)) {
     throw new Error("INVALID_INPUT");
   }
 

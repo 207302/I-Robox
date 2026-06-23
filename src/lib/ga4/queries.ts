@@ -1,7 +1,7 @@
 import "server-only";
 import { format, parseISO } from "date-fns";
 import { buildCacheKey, getCached, setCached } from "./cache";
-import { dimensionString, metricNumber, runReport } from "./client";
+import { dimensionString, metricNumber, runRealtimeReport, runReport } from "./client";
 import { formatGaDate } from "./formatters";
 import { getPreviousDateRange } from "./validateDateRange";
 import type {
@@ -17,6 +17,7 @@ import type {
   LandingPageRow,
   MetricSnapshot,
   ProductRow,
+  RealtimeUsersData,
   RevenueTrendPoint,
   TrafficAcquisitionData,
   TrafficRow,
@@ -337,6 +338,39 @@ export async function getUserBehaviour(range: DateRange): Promise<UserBehaviourD
   const data = { rows };
   setCached(cacheKey, data);
   return data;
+}
+
+const REALTIME_CACHE_MS = 30_000;
+
+let realtimeCache: { data: RealtimeUsersData; expiresAt: number } | null = null;
+
+export async function getRealtimeUsers(): Promise<RealtimeUsersData> {
+  const now = Date.now();
+  if (realtimeCache && realtimeCache.expiresAt > now) {
+    return realtimeCache.data;
+  }
+
+  const response = await runRealtimeReport({
+    metrics: [{ name: "activeUsers" }],
+  });
+
+  const data: RealtimeUsersData = {
+    activeUsers: metricNumber(response.rows?.[0], 0),
+    fetchedAt: new Date().toISOString(),
+  };
+
+  realtimeCache = { data, expiresAt: now + REALTIME_CACHE_MS };
+  return data;
+}
+
+export function defaultDateRangeLast7Days(): DateRange {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 6);
+  return {
+    startDate: format(start, "yyyy-MM-dd"),
+    endDate: format(end, "yyyy-MM-dd"),
+  };
 }
 
 export function defaultDateRangeLast30Days(): DateRange {

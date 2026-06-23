@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/utils/formatePrice";
 import Link from "next/link";
+import { isGa4Configured } from "@/lib/ga4/client";
+import AdminDashboardAnalytics from "@/components/admin/AdminDashboardAnalytics";
 
 export const metadata = {
   title: "Admin Dashboard | i-Robox",
@@ -24,10 +26,13 @@ export default async function AdminDashboard() {
   const lowStock = Number(inventoryRows[0]?.count ?? 0);
 
   const revenue = Number(revenueAgg._sum.total_amount ?? 0);
+  const ga4Configured = isGa4Configured();
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-dark">Dashboard</h1>
+
+      <AdminDashboardAnalytics ga4Configured={ga4Configured} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-gray-3 bg-white p-5">
@@ -58,8 +63,12 @@ export default async function AdminDashboard() {
 
       <div className="rounded-2xl border border-gray-3 bg-white p-5">
         <p className="text-sm text-meta-3">
-          This dashboard is intentionally lightweight (fast server render). Next we’ll add product,
-          inventory, order, coupon, and review management screens.
+          Store metrics above are from your database. Site traffic uses Google Analytics when configured.
+          For order-based reports, see{" "}
+          <Link href="/admin/analytics" className="text-blue hover:underline">
+            Admin analytics
+          </Link>
+          .
         </p>
       </div>
     </div>

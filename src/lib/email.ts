@@ -24,28 +24,29 @@ export type EmailAttachment = {
   contentType?: string;
 };
 
-export async function sendEmail(input: {
+type MailInput = {
   to: string;
   subject: string;
   html: string;
-  /** Plain-text part — improves deliverability and shows the link if HTML is clipped. */
   text?: string;
   attachments?: EmailAttachment[];
-}) {
-  if (!isEmailConfigured()) return { ok: false, skipped: true };
+};
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SERVER_HOST,
+function smtpConfig() {
+  return {
+    host: process.env.EMAIL_SERVER_HOST!,
     port: Number(process.env.EMAIL_SERVER_PORT),
     secure: Number(process.env.EMAIL_SERVER_PORT) === 465,
     auth: {
-      user: process.env.EMAIL_SERVER_USER,
-      pass: process.env.EMAIL_SERVER_PASSWORD,
+      user: process.env.EMAIL_SERVER_USER!,
+      pass: process.env.EMAIL_SERVER_PASSWORD!,
     },
-  });
+  };
+}
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
+function buildMailOptions(input: MailInput) {
+  return {
+    from: process.env.EMAIL_FROM!,
     to: input.to,
     subject: input.subject,
     html: input.html,
@@ -59,7 +60,50 @@ export async function sendEmail(input: {
           })),
         }
       : {}),
+  };
+}
+
+/** Reused pooled SMTP connection for bulk sends (faster than one connection per email). */
+export function createPooledEmailTransporter() {
+  if (!isEmailConfigured()) return null;
+  return nodemailer.createTransport({
+    ...smtpConfig(),
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 500,
   });
+}
+
+export function getSmtpErrorHint(err: unknown): string | null {
+  const response =
+    typeof err === "object" && err && "response" in err
+      ? String((err as { response?: string }).response ?? "")
+      : "";
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  const combined = `${response} ${message}`;
+
+  if (combined.includes("Disabled by user from hPanel")) {
+    return "Hostinger SMTP is turned off in hPanel. Enable outbound email for your mailbox, or set Gmail SMTP (smtp.gmail.com + app password) in Hostinger env vars.";
+  }
+  if (combined.includes("554 5.7.1")) {
+    return "SMTP server blocked sending (554). Check Hostinger email settings or use Gmail SMTP.";
+  }
+  return null;
+}
+
+export async function sendEmailWithTransporter(
+  transporter: nodemailer.Transporter,
+  input: MailInput
+) {
+  await transporter.sendMail(buildMailOptions(input));
+  return { ok: true as const };
+}
+
+export async function sendEmail(input: MailInput) {
+  if (!isEmailConfigured()) return { ok: false, skipped: true };
+
+  const transporter = nodemailer.createTransport(smtpConfig());
+  await transporter.sendMail(buildMailOptions(input));
 
   return { ok: true };
 }

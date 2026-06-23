@@ -44,6 +44,6 @@ export async function POST(req: NextRequest) {
       const result = await runLatestDropBroadcast();
       return NextResponse.json(result);
     },
-    { name: "POST /api/admin/marketing/notify-signups/broadcast", timeoutMs: 120_000 }
+    { name: "POST /api/admin/marketing/notify-signups/broadcast", timeoutMs: 300_000 }
   );
 }

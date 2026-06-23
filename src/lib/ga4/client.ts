@@ -4,8 +4,18 @@ import type { google } from "@google-analytics/data/build/protos/protos";
 
 type RunReportRequest = google.analytics.data.v1beta.IRunReportRequest;
 type RunReportResponse = google.analytics.data.v1beta.IRunReportResponse;
+type RunRealtimeReportRequest = google.analytics.data.v1beta.IRunRealtimeReportRequest;
+type RunRealtimeReportResponse = google.analytics.data.v1beta.IRunRealtimeReportResponse;
 
 let clientInstance: BetaAnalyticsDataClient | null = null;
+
+export function isGa4Configured(): boolean {
+  return Boolean(
+    process.env.GA4_PROPERTY_ID?.trim() &&
+      process.env.GA4_CLIENT_EMAIL?.trim() &&
+      process.env.GA4_PRIVATE_KEY
+  );
+}
 
 function getCredentials() {
   const clientEmail = process.env.GA4_CLIENT_EMAIL?.trim();
@@ -72,5 +82,23 @@ export async function runReport(request: Omit<RunReportRequest, "property">): Pr
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown GA4 API error";
     throw new Error(`GA4 API request failed: ${message}`);
+  }
+}
+
+export async function runRealtimeReport(
+  request: Omit<RunRealtimeReportRequest, "property">
+): Promise<RunRealtimeReportResponse> {
+  const client = getGa4Client();
+  const property = getGa4PropertyResource();
+
+  try {
+    const [response] = await client.runRealtimeReport({
+      property,
+      ...request,
+    });
+    return response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown GA4 API error";
+    throw new Error(`GA4 realtime API request failed: ${message}`);
   }
 }

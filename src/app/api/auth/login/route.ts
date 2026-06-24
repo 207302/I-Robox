@@ -7,6 +7,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { validateCommonEmailProvider, validateEmail } from "@/lib/validateEmai";
 import { cleanText, normalizePhone, readJsonBody, hasSuspiciousInput } from "@/lib/validation/input";
+import { requireRecaptchaFromBody } from "@/lib/security/recaptcha";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest) {
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
+
+    const recaptcha = await requireRecaptchaFromBody(body, req.ip ?? undefined);
+    if (!recaptcha.ok) {
+      return NextResponse.json({ error: recaptcha.error }, { status: 400 });
+    }
   
     const identifier =
       typeof body.identifier === "string"

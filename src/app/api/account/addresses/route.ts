@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mapDbAddressToSaved } from "@/lib/account/savedAddress";
 import { parseAddressInput } from "@/lib/account/parseAddressInput";
+import { isShippingAddressValid } from "@/lib/validation/address";
 import { getSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStorefront } from "@/lib/security/rateLimit";
@@ -34,7 +35,20 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      addresses: rows.map(mapDbAddressToSaved),
+      addresses: rows
+        .map(mapDbAddressToSaved)
+        .filter((row) =>
+          isShippingAddressValid({
+            full_name: row.full_name,
+            phone: row.phone,
+            line1: row.line1,
+            line2: row.line2,
+            city: row.city,
+            state: row.state,
+            postal_code: row.postal_code,
+            country: row.country,
+          })
+        ),
     });
   });
 }

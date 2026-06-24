@@ -21,6 +21,7 @@ import {
 } from "@/lib/auth/indianMobile";
 import {
   getShippingAddressValidationError,
+  isShippingAddressValid,
   sanitizeIndianPinInput,
 } from "@/lib/validation/address";
 import { validateEmailAddress } from "@/lib/validation/rules";
@@ -173,8 +174,27 @@ export default function CheckoutPage() {
   }
 
   function applySavedAddress(saved: SavedAddressRecord) {
-    const email = address.email.trim() || checkoutEmailForUser();
-    setAddress(savedAddressToCheckoutFields(saved, email));
+    const fields = savedAddressToCheckoutFields(saved, address.email.trim() || checkoutEmailForUser());
+    const validationError = getShippingAddressValidationError(fields);
+    if (validationError) {
+      toast.error(validationError);
+      setSelectedAddressId("new");
+      return;
+    }
+    setAddress(fields);
+  }
+
+  function savedAddressIsValid(saved: SavedAddressRecord): boolean {
+    return isShippingAddressValid({
+      full_name: saved.full_name,
+      phone: saved.phone,
+      line1: saved.line1,
+      line2: saved.line2,
+      city: saved.city,
+      state: saved.state,
+      postal_code: saved.postal_code,
+      country: saved.country,
+    });
   }
 
   useEffect(() => {
@@ -191,12 +211,14 @@ export default function CheckoutPage() {
       .then((res) => res.json().catch(() => ({})))
       .then((data) => {
         if (cancelled) return;
-        const list = Array.isArray(data?.addresses) ? (data.addresses as SavedAddressRecord[]) : [];
+        const list = (Array.isArray(data?.addresses) ? (data.addresses as SavedAddressRecord[]) : []).filter(
+          savedAddressIsValid
+        );
         setSavedAddresses(list);
 
         if (!hasAppliedPrimaryAddress.current) {
           const primary = list.find((a) => a.isPrimary);
-          if (primary) {
+          if (primary && savedAddressIsValid(primary)) {
             const email = checkoutEmailForUser();
             setAddress((current) =>
               savedAddressToCheckoutFields(primary, current.email.trim() || email)

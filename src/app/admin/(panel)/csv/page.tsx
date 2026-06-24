@@ -31,7 +31,7 @@ async function downloadCsv(url: string, fallbackFilename: string) {
 }
 
 const FILE_ACCEPT =
-  ".csv,.xlsx,.xls,text/csv,text/plain,application/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
+  ".csv,.xlsx,text/csv,text/plain,application/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export default function AdminCsvPage() {
   const [productsCsv, setProductsCsv] = useState("");
@@ -106,8 +106,7 @@ export default function AdminCsvPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-dark">CSV / Excel import & export</h1>
       <p className="text-sm text-meta-3 max-w-3xl">
-        Upload a <b className="text-dark">.csv</b>, <b className="text-dark">.xlsx</b>, or{" "}
-        <b className="text-dark">.xls</b> file, or paste CSV below. Excel files use the{" "}
+        Upload a <b className="text-dark">.csv</b> or <b className="text-dark">.xlsx</b> file, or paste CSV below. Excel files use the{" "}
         <b className="text-dark">first sheet only</b> — put your table on sheet 1. Column headers must
         match the documented names.
       </p>

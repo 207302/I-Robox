@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
+import { verifyStoredAdminTotpCode } from "@/lib/auth/adminTotp";
+import { verifyAdminTotpChallenge } from "@/lib/auth/adminTotpChallenge";
 import { issueAdminSession } from "@/lib/auth/issueAdminSession";
-import { signAdminTotpChallenge } from "@/lib/auth/adminTotpChallenge";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { readJsonBody } from "@/lib/validation/input";
-import { validateEmailAddress, validatePassword } from "@/lib/validation/rules";
+import { cleanText, readJsonBody } from "@/lib/validation/input";
+import { validateOtpCode } from "@/lib/validation/rules";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const ADMIN_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "STAFF", "SUPPORT"]);
@@ -13,7 +13,7 @@ const ADMIN_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "STAFF", "SUPPORT"]);
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
     try {
-      await rateLimitStrict(`admin_login:${req.ip ?? "unknown"}`, 1);
+      await rateLimitStrict(`admin_totp_verify:${req.ip ?? "unknown"}`, 1);
     } catch {
       return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
     }
@@ -21,50 +21,45 @@ export async function POST(req: NextRequest) {
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
-    const emailResult = validateEmailAddress(body.email, { commonProviderOnly: false });
-    if (!emailResult.ok) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+
+    const challenge = cleanText(body.challenge, 2048);
+    const otpResult = validateOtpCode(body.code ?? body.otp);
+    if (!challenge) {
+      return NextResponse.json({ error: "Session expired. Sign in again." }, { status: 400 });
     }
-    const passwordResult = validatePassword(body.password);
-    if (!passwordResult.ok) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    if (!otpResult.ok) {
+      return NextResponse.json({ error: otpResult.error }, { status: 400 });
     }
-    const email = emailResult.value;
-    const password = passwordResult.value;
+
+    const payload = verifyAdminTotpChallenge(challenge);
+    if (!payload) {
+      return NextResponse.json({ error: "Session expired. Sign in again." }, { status: 400 });
+    }
 
     const admin = await prisma.admin_users.findUnique({
-      where: { email },
+      where: { id: payload.sub },
       select: {
         id: true,
         email: true,
-        password_hash: true,
         is_active: true,
         totp_enabled: true,
+        totp_secret: true,
         admin_user_roles: { select: { roles: { select: { name: true } } } },
       },
     });
 
-    const dummyHash = "$2b$12$invalidhashfortimingprotection000000000000000000000000";
-    const hashToCheck = admin?.password_hash ?? dummyHash;
-    const passwordOk = await bcrypt.compare(password, hashToCheck);
-
-    if (!admin || !admin.is_active || !passwordOk) {
+    if (!admin || !admin.is_active || !admin.totp_enabled || !admin.totp_secret) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
     const roles = admin.admin_user_roles.map((ur) => ur.roles.name as string);
-    const hasAdminRole = roles.some((r) => ADMIN_ROLES.has(r));
-
-    if (!hasAdminRole) {
+    if (!roles.some((r) => ADMIN_ROLES.has(r))) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    if (admin.totp_enabled) {
-      return NextResponse.json({
-        ok: true,
-        requiresTotp: true,
-        challenge: signAdminTotpChallenge(admin.id),
-      });
+    const totpOk = await verifyStoredAdminTotpCode(admin.totp_secret, otpResult.value);
+    if (!totpOk) {
+      return NextResponse.json({ error: "Invalid authenticator code" }, { status: 401 });
     }
 
     await issueAdminSession({ adminId: admin.id, email: admin.email, roles });

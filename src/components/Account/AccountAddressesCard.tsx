@@ -189,6 +189,24 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
   }
 
   async function handleSetPrimary(id: string) {
+    const target = addresses.find((a) => a.id === id);
+    if (target) {
+      const validationError = getShippingAddressValidationError({
+        full_name: target.full_name,
+        phone: target.phone,
+        line1: target.line1,
+        line2: target.line2,
+        city: target.city,
+        state: target.state,
+        postal_code: target.postal_code,
+        country: target.country,
+      });
+      if (validationError) {
+        toast.error(validationError);
+        return;
+      }
+    }
+
     setPrimaryLoadingId(id);
     try {
       const res = await fetch(`/api/account/addresses/${id}/primary`, {
@@ -261,11 +279,28 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
           <p className="mt-3 text-sm text-meta-3">No saved addresses yet.</p>
         ) : (
           <div className="mt-4 space-y-3">
-            {addresses.map((a) => (
+            {addresses.map((a) => {
+              const validationError = getShippingAddressValidationError({
+                full_name: a.full_name,
+                phone: a.phone,
+                line1: a.line1,
+                line2: a.line2,
+                city: a.city,
+                state: a.state,
+                postal_code: a.postal_code,
+                country: a.country,
+              });
+              const isInvalid = Boolean(validationError);
+
+              return (
               <div
                 key={a.id}
                 className={`rounded-xl border p-4 ${
-                  a.isPrimary ? "border-blue bg-blue/5" : "border-gray-3"
+                  isInvalid
+                    ? "border-amber-300 bg-amber-50"
+                    : a.isPrimary
+                      ? "border-blue bg-blue/5"
+                      : "border-gray-3"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -277,11 +312,19 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
                           Primary
                         </span>
                       ) : null}
+                      {isInvalid ? (
+                        <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                          Needs fix
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-1 text-sm text-meta-3">
                       {a.line1}
                       {a.line2 ? `, ${a.line2}` : ""}, {a.city}, {a.state} {a.postal_code}
                     </div>
+                    {validationError ? (
+                      <p className="mt-2 text-sm text-amber-900">{validationError}</p>
+                    ) : null}
                     <div className="mt-1 text-sm text-meta-3">{a.phone}</div>
                     <div className="mt-1 text-sm text-meta-3">{a.country}</div>
                   </div>
@@ -293,11 +336,11 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
                     >
                       Edit
                     </button>
-                    {!a.isPrimary ? (
+                    {!a.isPrimary && !isInvalid ? (
                       <button
                         type="button"
                         disabled={primaryLoadingId === a.id}
-                        onClick={() => handleSetPrimary(a.id)}
+                        onClick={() => void handleSetPrimary(a.id)}
                         className="text-sm font-medium text-blue hover:underline disabled:opacity-60"
                       >
                         {primaryLoadingId === a.id ? "Saving…" : "Set primary"}
@@ -314,7 +357,8 @@ export default function AccountAddressesCard({ addresses: initialAddresses }: Pr
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </aside>

@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStorefront } from "@/lib/security/rateLimit";
 import { isUuid } from "@/lib/validation/input";
+import { isShippingAddressValid } from "@/lib/validation/address";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -30,9 +31,37 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
     const owned = await prisma.addresses.findFirst({
       where: { id, customer_id: session.sub },
-      select: { id: true },
+      select: {
+        id: true,
+        full_name: true,
+        phone: true,
+        line1: true,
+        line2: true,
+        city: true,
+        state: true,
+        postal_code: true,
+        country: true,
+      },
     });
     if (!owned) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (
+      !isShippingAddressValid({
+        full_name: owned.full_name,
+        phone: owned.phone,
+        line1: owned.line1,
+        line2: owned.line2,
+        city: owned.city,
+        state: owned.state,
+        postal_code: owned.postal_code,
+        country: owned.country,
+      })
+    ) {
+      return NextResponse.json(
+        { error: "Fix this address before setting it as primary." },
+        { status: 400 }
+      );
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.addresses.updateMany({

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { validateCommonEmailProvider } from "@/lib/validateEmai";
 import { validatePassword } from "@/lib/validation/rules";
 import PasswordInput from "@/components/Auth/PasswordInput";
+import RecaptchaWidget, { type RecaptchaWidgetRef } from "@/components/Auth/RecaptchaWidget";
+import { isRecaptchaEnabled } from "@/lib/security/recaptchaPublic";
 import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
 
 type Mode = "login" | "signup" | "forgot";
@@ -62,6 +64,11 @@ export default function LoginClient() {
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const recaptchaRef = useRef<RecaptchaWidgetRef>(null);
+
+  useEffect(() => {
+    recaptchaRef.current?.reset();
+  }, [mode]);
 
   useEffect(() => {
     const err = searchParams.get("error");
@@ -89,12 +96,18 @@ export default function LoginClient() {
         const passwordResult = validatePassword(password);
         if (!passwordResult.ok) throw new Error(passwordResult.error);
       }
+      const recaptchaToken = recaptchaRef.current?.getToken();
+      if (isRecaptchaEnabled() && !recaptchaToken) {
+        throw new Error("Please complete the reCAPTCHA check.");
+      }
       const loginOrSignupRoute = mode === "signup" ? "signup" : "login";
       const res = await fetch(`/api/auth/${loginOrSignupRoute}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
-          mode === "signup" ? { name, identifier: trimmedId, password } : { identifier: trimmedId, password }
+          mode === "signup"
+            ? { name, identifier: trimmedId, password, recaptchaToken }
+            : { identifier: trimmedId, password, recaptchaToken }
         ),
       });
       const data = await res.json().catch(() => ({}));
@@ -122,6 +135,7 @@ export default function LoginClient() {
       router.push("/");
       router.refresh();
     } catch (err: unknown) {
+      recaptchaRef.current?.reset();
       const message = err instanceof Error ? err.message : "Something went wrong";
       toast.error(message);
     } finally {
@@ -403,6 +417,8 @@ export default function LoginClient() {
                   />
                   <span className="mt-1 block text-xs text-meta-4">Minimum 8 characters.</span>
                 </label>
+
+                <RecaptchaWidget ref={recaptchaRef} />
 
                 <button
                   disabled={loading}

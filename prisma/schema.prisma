@@ -41,6 +41,8 @@ model admin_users {
   name          String?  @db.VarChar(150)
   phone         String?  @db.VarChar(30)
   is_active     Boolean  @default(true)
+  totp_secret   String?
+  totp_enabled  Boolean  @default(false)
   created_at    DateTime @default(now()) @db.Timestamptz(6)
   updated_at    DateTime @default(now()) @db.Timestamptz(6)
 

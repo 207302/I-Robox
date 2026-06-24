@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminWrite } from "@/lib/admin/rbac";
+import { jsonRowsToXlsxBuffer } from "@/lib/admin/spreadsheet";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 
 function formatIstDateTime(value: Date) {
@@ -39,12 +40,7 @@ export async function GET() {
       "Last updated (IST)": formatIstDateTime(row.updated_at),
     }));
 
-    const XLSX = await import("xlsx");
-    const worksheet = XLSX.utils.json_to_sheet(sheetRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Latest drops");
-
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const buffer = await jsonRowsToXlsxBuffer(sheetRows, "Latest drops");
     const date = new Date().toISOString().slice(0, 10);
 
     return new NextResponse(buffer, {

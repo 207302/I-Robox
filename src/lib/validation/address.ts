@@ -72,6 +72,59 @@ export function validateAddressTextField(
   return { ok: true, value: text };
 }
 
+function normalizeAddressCompare(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Reject common field mix-ups (phone in line2, full address in city, etc.). */
+export function validateAddressFieldConsistency(
+  address: ValidatedShippingAddress
+): { ok: true } | { ok: false; error: string } {
+  const line1 = normalizeAddressCompare(address.line1);
+  const line2 = address.line2?.trim() ?? "";
+  const city = normalizeAddressCompare(address.city);
+  const state = normalizeAddressCompare(address.state);
+  const postalLower = address.postal_code.trim().toLowerCase();
+  const phoneDigits = normalizeIndianMobileDigits(address.phone);
+
+  if (line1 && city && line1 === city) {
+    return fail("City cannot be the same as address line 1. Enter the city name only.");
+  }
+
+  if (city && postalLower === city) {
+    return fail("PIN code cannot be the same as the city name. Enter a valid 6-digit PIN.");
+  }
+
+  if (state && postalLower === state) {
+    return fail("PIN code cannot be the same as the state name.");
+  }
+
+  if (line2) {
+    const line2Mobile = normalizeIndianMobileDigits(line2);
+    if (line2Mobile && isValidIndianMobile(line2Mobile)) {
+      return fail("Address line 2 cannot be a phone number. Enter it in the phone field.");
+    }
+    if (phoneDigits && line2Mobile && line2Mobile === phoneDigits) {
+      return fail("Address line 2 cannot repeat the phone number.");
+    }
+  }
+
+  const cityTrimmed = address.city.trim();
+  if (cityTrimmed.length > 40) {
+    return fail("City name is too long. Enter the city only, not the full street address.");
+  }
+
+  if (cityTrimmed.split(/\s+/).filter(Boolean).length > 5) {
+    return fail("City should be a city name only, not a full street address.");
+  }
+
+  if (isIndiaCountry(address.country) && /^\d+$/.test(cityTrimmed)) {
+    return fail("Enter a valid city name.");
+  }
+
+  return { ok: true };
+}
+
 export function validateIndianPostalCode(
   value: unknown,
   country: string
@@ -135,19 +188,26 @@ export function validateShippingAddress(
   const countryField = validateAddressTextField(country, "Country", { maxLength: 80 });
   if (!countryField.ok || !countryField.value) return fail("Country is required");
 
-  return {
-    ok: true,
-    address: {
-      full_name: fullName.value!,
-      phone: normalizePhone(phoneDigits) || phoneDigits,
-      line1: line1.value!,
-      line2: line2.value,
-      city: city.value!,
-      state: state.value!,
-      postal_code: postal.value,
-      country: countryField.value,
-    },
+  const validated: ValidatedShippingAddress = {
+    full_name: fullName.value!,
+    phone: normalizePhone(phoneDigits) || phoneDigits,
+    line1: line1.value!,
+    line2: line2.value,
+    city: city.value!,
+    state: state.value!,
+    postal_code: postal.value,
+    country: countryField.value,
   };
+
+  const consistency = validateAddressFieldConsistency(validated);
+  if (!consistency.ok) return consistency;
+
+  return { ok: true, address: validated };
+}
+
+/** True when a stored address row can be used for checkout / account display. */
+export function isShippingAddressValid(body: Record<string, unknown>): boolean {
+  return validateShippingAddress(body).ok;
 }
 
 /** Client-side helper — returns first validation error or null. */

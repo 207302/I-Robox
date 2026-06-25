@@ -7,17 +7,50 @@ import type { ExecutiveSummaryData, RealtimeUsersData } from "@/lib/ga4/types";
 
 type Props = {
   ga4Configured: boolean;
+  ga4ConfigHint?: string | null;
 };
 
 const POLL_MS = 30_000;
 
-export default function AdminDashboardAnalytics({ ga4Configured }: Props) {
+export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }: Props) {
   const [realtime, setRealtime] = useState<RealtimeUsersData | null>(null);
   const [summary, setSummary] = useState<ExecutiveSummaryData | null>(null);
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [loadingRealtime, setLoadingRealtime] = useState(ga4Configured);
   const [loadingSummary, setLoadingSummary] = useState(ga4Configured);
+
+  const [configDiag, setConfigDiag] = useState<{
+    hasPropertyId: boolean;
+    hasJsonEnv: boolean;
+    jsonLength: number;
+    hasBase64Env: boolean;
+    hasClientEmail: boolean;
+    hasPrivateKey: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (ga4Configured) return;
+
+    let cancelled = false;
+
+    async function loadConfig() {
+      try {
+        const res = await fetch("/api/admin/analytics/config");
+        const json = await res.json().catch(() => null);
+        if (!cancelled && json && typeof json === "object") {
+          setConfigDiag(json);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void loadConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [ga4Configured]);
 
   useEffect(() => {
     if (!ga4Configured) return;
@@ -75,15 +108,42 @@ export default function AdminDashboardAnalytics({ ga4Configured }: Props) {
 
   if (!ga4Configured) {
     return (
-      <div className="rounded-2xl border border-gray-3 bg-white p-5">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
         <h2 className="text-lg font-semibold text-dark">Site traffic</h2>
-        <p className="mt-2 text-sm text-meta-3">
-          Connect Google Analytics 4 to see live visitors and traffic on this dashboard. Set{" "}
-          <code className="text-xs">GA4_PROPERTY_ID</code> and either{" "}
-          <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON</code> (full JSON file) or{" "}
+        {ga4ConfigHint ? (
+          <p className="mt-2 text-sm text-amber-900">{ga4ConfigHint}</p>
+        ) : (
+          <p className="mt-2 text-sm text-meta-3">
+            Connect Google Analytics 4 to see live visitors and traffic on this dashboard. Set{" "}
+            <code className="text-xs">GA4_PROPERTY_ID</code> and either{" "}
+            <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON</code> (one-line minified JSON) or{" "}
+            <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON_BASE64</code>, or{" "}
+            <code className="text-xs">GA4_CLIENT_EMAIL</code> +{" "}
+            <code className="text-xs">GA4_PRIVATE_KEY</code> in your environment.
+          </p>
+        )}
+        <p className="mt-3 text-xs text-amber-800">
+          On Hostinger, multi-line JSON in env vars often fails. Delete{" "}
+          <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON</code> and use{" "}
           <code className="text-xs">GA4_CLIENT_EMAIL</code> +{" "}
-          <code className="text-xs">GA4_PRIVATE_KEY</code> in your environment.
+          <code className="text-xs">GA4_PRIVATE_KEY</code> instead (most reliable), or minify JSON to
+          one line / use base64 — then redeploy.
         </p>
+        {configDiag ? (
+          <ul className="mt-3 space-y-1 text-xs text-amber-900">
+            <li>GA4_PROPERTY_ID: {configDiag.hasPropertyId ? "set" : "missing"}</li>
+            <li>
+              GA4_SERVICE_ACCOUNT_JSON:{" "}
+              {configDiag.hasJsonEnv ? `set (${configDiag.jsonLength} chars)` : "not set"}
+              {configDiag.hasJsonEnv && configDiag.jsonLength < 500
+                ? " — likely truncated by Hostinger"
+                : ""}
+            </li>
+            <li>GA4_SERVICE_ACCOUNT_JSON_BASE64: {configDiag.hasBase64Env ? "set" : "not set"}</li>
+            <li>GA4_CLIENT_EMAIL: {configDiag.hasClientEmail ? "set" : "not set"}</li>
+            <li>GA4_PRIVATE_KEY: {configDiag.hasPrivateKey ? "set" : "not set"}</li>
+          </ul>
+        ) : null}
       </div>
     );
   }

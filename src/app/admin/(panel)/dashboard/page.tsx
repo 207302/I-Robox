@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/utils/formatePrice";
 import Link from "next/link";
-import { isGa4Configured } from "@/lib/ga4/credentials";
+import { getGa4ConfigStatus } from "@/lib/ga4/credentials";
 import AdminDashboardAnalytics from "@/components/admin/AdminDashboardAnalytics";
 
 export const metadata = {
@@ -26,13 +26,16 @@ export default async function AdminDashboard() {
   const lowStock = Number(inventoryRows[0]?.count ?? 0);
 
   const revenue = Number(revenueAgg._sum.total_amount ?? 0);
-  const ga4Configured = isGa4Configured();
+  const ga4Status = getGa4ConfigStatus();
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-dark">Dashboard</h1>
 
-      <AdminDashboardAnalytics ga4Configured={ga4Configured} />
+      <AdminDashboardAnalytics
+        ga4Configured={ga4Status.configured}
+        ga4ConfigHint={ga4Status.hint}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-gray-3 bg-white p-5">

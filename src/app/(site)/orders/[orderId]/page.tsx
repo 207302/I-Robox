@@ -130,17 +130,17 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
   const trackingCarrier = order.carrier ?? order.shipments?.carrier ?? null;
 
   return (
-    <section className="pt-36 pb-16">
-      <div className="w-full px-4 mx-auto max-w-5xl sm:px-8 xl:px-0">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl font-semibold text-dark">Order details</h1>
-          <Link href="/orders" className="text-sm font-medium text-blue hover:underline">
+    <section className="overflow-x-hidden pt-36 pb-16">
+      <div className="mx-auto w-full min-w-0 max-w-5xl px-4 sm:px-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="min-w-0 text-2xl font-semibold text-dark">Order details</h1>
+          <Link href="/orders" className="shrink-0 text-sm font-medium text-blue hover:underline">
             Back to orders
           </Link>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,_1fr)_360px]">
-          <div className="rounded-2xl border border-gray-3 bg-white">
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,_1fr)_360px]">
+          <div className="min-w-0 rounded-2xl border border-gray-3 bg-white">
             <div className="p-5 sm:p-6 border-b border-gray-3">
               <div className="text-sm text-meta-3">Order</div>
               <div className="font-semibold text-dark">{formatOrderReference(order)}</div>
@@ -156,14 +156,14 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
 
             <div className="divide-y divide-gray-3">
               {order.order_items.map((it) => (
-                <div key={it.id} className="p-5 sm:p-6 flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="font-semibold text-dark">{it.product_name}</div>
+                <div key={it.id} className="flex items-start justify-between gap-4 p-5 sm:p-6">
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words font-semibold text-dark">{it.product_name}</div>
                     <div className="mt-1 text-sm text-meta-3">
                       Qty: {it.quantity} • Unit: {formatPrice(Number(it.unit_price))}
                     </div>
                   </div>
-                  <div className="text-sm font-semibold text-dark">
+                  <div className="shrink-0 text-sm font-semibold text-dark">
                     {formatPrice(Number(it.subtotal_amount))}
                   </div>
                 </div>
@@ -171,20 +171,20 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
             </div>
           </div>
 
-          <aside className="space-y-6">
+          <aside className="min-w-0 space-y-6">
             <div className="rounded-2xl border border-gray-3 bg-white p-5">
               <h2 className="text-lg font-semibold text-dark">Totals</h2>
               <div className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-meta-3">Subtotal</span>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="shrink-0 text-meta-3">Subtotal</span>
                   <span className="font-medium text-dark">{formatPrice(Number(order.subtotal_amount))}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-meta-3">Discount</span>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="shrink-0 text-meta-3">Discount</span>
                   <span className="font-medium text-dark">-{formatPrice(Number(order.discount_amount))}</span>
                 </div>
-                <div className="flex justify-between border-t border-gray-3 pt-2">
-                  <span className="text-meta-3">Total</span>
+                <div className="flex items-center justify-between gap-4 border-t border-gray-3 pt-2">
+                  <span className="shrink-0 text-meta-3">Total</span>
                   <span className="font-semibold text-dark">{formatPrice(Number(order.total_amount))}</span>
                 </div>
               </div>

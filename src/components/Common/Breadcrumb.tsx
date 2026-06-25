@@ -45,10 +45,10 @@ const Breadcrumb = ({
                   const isLast = index === breadcrumbItems.length - 1;
 
                   return (
-                    <li key={item.href} className="inline-flex items-center">
+                    <li key={item.href} className="inline-flex min-w-0 max-w-full items-center">
                       {isLast ? (
                         <span
-                          className="text-custom-sm font-medium leading-none text-blue"
+                          className="truncate text-custom-sm font-medium leading-none text-blue"
                           aria-current="page"
                         >
                           {item.label}
@@ -99,10 +99,18 @@ function generateBreadcrumbsFromPath(
   pathSegments.forEach((segment, index) => {
     currentPath += `/${segment}`;
 
-    // Format the label (capitalize, replace hyphens with spaces)
-    const label = segment
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (char) => char.toUpperCase());
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      segment
+    );
+
+    let label: string;
+    if (isUuid && pathSegments[0] === "orders") {
+      label = "Order details";
+    } else {
+      label = segment
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    }
 
     breadcrumbs.push({
       label,

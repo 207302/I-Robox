@@ -7,6 +7,10 @@ const SiteTopLoader = dynamic(() => import("@/components/Common/SiteTopLoader"),
 });
 
 /** Client-only top loader — must not use `dynamic({ ssr: false })` in a Server Layout. */
-export default function SiteTopLoaderDeferred() {
-  return <SiteTopLoader />;
+export default function SiteTopLoaderDeferred({
+  accentColor,
+}: {
+  accentColor?: string | null;
+}) {
+  return <SiteTopLoader accentColor={accentColor} />;
 }

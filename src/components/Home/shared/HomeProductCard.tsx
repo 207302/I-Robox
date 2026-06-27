@@ -25,15 +25,15 @@ export default function HomeProductCard({
     <Link
       href={`/shop/${item.slug}`}
       prefetch={shouldPrefetchHref(`/shop/${item.slug}`)}
-      className="group block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white hover:border-blue/40"
+      className="group block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white transition-transform duration-200 hover:-translate-y-1 hover:border-blue/40 hover:shadow-lg"
     >
-      <div className="relative aspect-square bg-gray-2">
+      <div className="relative aspect-square overflow-hidden bg-gray-2">
         <Image
           src={item.image}
           alt={productImageAlt(item.title)}
           fill
           sizes={HOME_PRODUCT_CARD_SIZES}
-          className="object-cover"
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
           quality={85}
           priority={priority}
           loading={priority ? undefined : "lazy"}

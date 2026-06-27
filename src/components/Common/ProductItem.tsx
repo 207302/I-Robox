@@ -171,7 +171,7 @@ function ProductItemInner({
         : undefined;
 
   return (
-    <div className="group rounded-xl border border-gray-7 bg-white p-3 sm:p-4">
+    <div className="group rounded-xl bg-white p-3 sm:p-4 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.10)] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_20px_48px_-6px_rgba(0,0,0,0.22),0_8px_20px_-4px_rgba(0,0,0,0.14)]">
       <div
         className={`relative mb-4 flex aspect-square w-full max-h-[min(280px,92vw)] items-center justify-center overflow-hidden rounded-xl border border-white bg-${bgClr}`}
       >

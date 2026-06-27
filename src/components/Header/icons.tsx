@@ -28,13 +28,14 @@ export const SearchIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const UserIcon = () => (
+export const UserIcon = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="25"
     height="25"
     viewBox="0 0 25 25"
     fill="none"
+    className={className}
   >
     <path
       fillRule="evenodd"
@@ -45,13 +46,14 @@ export const UserIcon = () => (
   </svg>
 );
 
-export const HeartIcon = () => (
+export const HeartIcon = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="25"
     height="25"
     viewBox="0 0 25 25"
     fill="none"
+    className={className}
   >
     <path
       d="M4.72345 5.8023C2.76927 7.75648 2.76927 10.9248 4.72345 12.879L11.4471 19.6028C12.0329 20.1886 12.9827 20.1886 13.5685 19.6028L20.2922 12.8791C22.2463 10.9249 22.2463 7.75659 20.2922 5.80241C18.338 3.84823 15.1696 3.84823 13.2155 5.80241L12.5079 6.51001L11.8002 5.8023C9.84597 3.84813 6.67762 3.84813 4.72345 5.8023Z"
@@ -113,5 +115,45 @@ export const CloseIcon = () => (
   >
     <line x1="18" y1="6" x2="6" y2="18"></line>
     <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+);
+
+export const HomeNavIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden
+  >
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5" />
+  </svg>
+);
+
+export const CategoryNavIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden
+  >
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
   </svg>
 );

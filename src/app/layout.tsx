@@ -3,15 +3,8 @@ import "./css/style.css";
 // splitting needs a future migration (e.g. per-route @import) without visual changes.
 import type { Metadata } from "next";
 import GtmLazy from "@/components/Analytics/GtmLazy";
-import { DM_Sans } from "next/font/google";
-const dm_sans = DM_Sans({
-  weight: ["400", "700"],
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  display: "swap",
-  preload: true,
-  adjustFontFallback: true,
-});
+import { Plus_Jakarta_Sans } from "next/font/google";
+const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
 const siteTitle = process.env.SITE_NAME ?? "i-Robox";
 
 /** Static metadata — avoids blocking TTFB on a cached DB round-trip for env-only SEO fields. */
@@ -33,14 +26,14 @@ export default function RootLayout({
 }) {
   const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || null;
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html lang="en" data-scroll-behavior="smooth" className={jakarta.variable}>
       <head>
         <link rel="preconnect" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
         <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
       </head>
-      <body suppressHydrationWarning={true} className={`${dm_sans.className} ${dm_sans.variable}`}>
+      <body suppressHydrationWarning={true} className="font-sans">
         {children}
         {gtmId ? <GtmLazy gtmId={gtmId} /> : null}
       </body>

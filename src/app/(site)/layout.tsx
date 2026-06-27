@@ -2,6 +2,7 @@ import Footer from "../../components/Footer";
 import ScrollOnNavigate from "@/components/Common/ScrollOnNavigate";
 import ScrollToTop from "@/components/Common/ScrollToTop";
 import Providers from "./Providers";
+import AccentColorTheme from "@/components/Common/AccentColorTheme";
 import SiteTopLoaderDeferred from "@/components/Common/SiteTopLoaderDeferred";
 import ToasterDeferred from "@/components/Common/ToasterDeferred";
 import BreadcrumbDeferred from "@/components/Common/BreadcrumbDeferred";
@@ -25,6 +26,7 @@ export default async function SiteLayout({
       storeContact,
       freeShippingThresholdInr,
       chromeColors,
+      accentColor,
     },
     initialMarketing,
   ] = await Promise.all([
@@ -36,10 +38,11 @@ export default async function SiteLayout({
     <div>
       <>
         <Providers initialMarketing={initialMarketing}>
+          <AccentColorTheme accentColor={accentColor} />
           <Suspense fallback={null}>
             <ScrollOnNavigate />
           </Suspense>
-          <SiteTopLoaderDeferred />
+          <SiteTopLoaderDeferred accentColor={accentColor} />
           <Suspense
             fallback={
               <header

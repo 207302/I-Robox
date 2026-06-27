@@ -3,7 +3,7 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "@/assets/icons";
 
 const ARROW_BTN =
-  "shrink-0 flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-dark shadow-none transition hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
+  "shrink-0 flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-dark shadow-none transition-all duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
 
 type Props = {
   scrollId: string;

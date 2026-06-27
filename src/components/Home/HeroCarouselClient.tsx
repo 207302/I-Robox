@@ -145,7 +145,7 @@ export default function HeroCarouselClient({
               e.preventDefault();
               goToPrev();
             }}
-            className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white transition-opacity duration-200 ${
+            className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 text-white transition-all duration-200 ${
               mobileControlsActive ? "opacity-95" : "opacity-30"
             } sm:left-4 sm:flex sm:h-11 sm:w-11 sm:items-center sm:justify-center sm:rounded-full sm:border-2 sm:border-white/80 sm:bg-transparent sm:opacity-100 sm:shadow-none sm:hover:bg-white/10`}
             aria-label="Previous banner"
@@ -159,7 +159,7 @@ export default function HeroCarouselClient({
               e.preventDefault();
               goToNext();
             }}
-            className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white transition-opacity duration-200 ${
+            className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 text-white transition-all duration-200 ${
               mobileControlsActive ? "opacity-95" : "opacity-30"
             } sm:right-4 sm:flex sm:h-11 sm:w-11 sm:items-center sm:justify-center sm:rounded-full sm:border-2 sm:border-white/80 sm:bg-transparent sm:opacity-100 sm:shadow-none sm:hover:bg-white/10`}
             aria-label="Next banner"
@@ -186,7 +186,7 @@ export default function HeroCarouselClient({
               e.preventDefault();
               startTransition(() => setActiveIndex(index));
             }}
-            className={`pointer-events-auto h-2.5 rounded-full transition-opacity duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            className={`pointer-events-auto h-2.5 rounded-full transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
               index === activeIndex
                 ? "w-8 bg-white shadow-sm"
                 : "w-2.5 bg-white/55 hover:bg-white/80"

@@ -15,9 +15,9 @@ export default function HomeBrandRailSection({ items }: HomeBrandRailSectionProp
   const showArrows = hasItems && items.length > 1;
 
   return (
-    <section className="py-14 bg-gray-1 border-y border-gray-3">
+    <section className="border-y border-gray-3 bg-gray-1 py-16">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-        <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-end">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <p className="mb-1 text-xs font-semibold tracking-[0.18em] uppercase text-blue">
               Shop by brand

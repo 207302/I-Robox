@@ -70,7 +70,7 @@ export default function HeroBannerOverlay({ overlay }: { overlay?: HeroOverlayPr
                   href={overlayCopy.ctaHref}
                   prefetch={shouldPrefetchHref(overlayCopy.ctaHref)}
                   style={ctaLabelStyle}
-                  className={`inline-flex items-center rounded-lg bg-red px-5 py-2.5 text-sm font-semibold shadow-lg shadow-black/25 transition hover:bg-red-dark sm:px-6 sm:py-3 sm:text-base ${ctaLabelStyle ? "" : "text-white"}`}
+                  className={`inline-flex items-center rounded-lg bg-red px-5 py-2.5 text-sm font-semibold shadow-lg shadow-black/25 transition-all duration-200 hover:bg-red-dark sm:px-6 sm:py-3 sm:text-base ${ctaLabelStyle ? "" : "text-white"}`}
                 >
                   {overlayCopy.ctaLabel}
                 </Link>

@@ -269,7 +269,7 @@ const MobileMenu = ({
               <Link
                 href="/login"
                 prefetch={false}
-                className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                className="flex items-center text-sm font-medium text-blue hover:text-blue-dark"
                 onClick={onClose}
               >
                 Sign In

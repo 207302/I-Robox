@@ -952,6 +952,8 @@ model site_marketing_settings {
   footer_text_color       String?  @db.VarChar(20)
   /// Footer links and accent text (e.g. #ff3d3d).
   footer_link_color       String?  @db.VarChar(20)
+  /// Site-wide accent: buttons, links, cart badge, progress bars, pagination, etc.
+  accent_color            String?  @db.VarChar(20)
   updated_at              DateTime @default(now()) @db.Timestamptz(6)
 }
 

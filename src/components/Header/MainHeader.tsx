@@ -267,7 +267,7 @@ const MainHeader = ({
                   <Link
                     href="/login"
                     prefetch={false}
-                    className="text-xs sm:text-sm font-semibold text-[#ff3d3d] hover:text-[#ff6b6b] hover:underline"
+                    className="text-xs sm:text-sm font-semibold text-white underline-offset-2 hover:underline"
                   >
                     Sign in
                   </Link>

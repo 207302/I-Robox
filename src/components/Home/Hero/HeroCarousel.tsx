@@ -52,7 +52,7 @@ const HeroCarousal = ({ sliders }: { sliders: any }) => {
 
               <Link
                 href={`/shop/${slider?.product?.slug}`}
-                className="inline-flex py-3 mt-10 font-medium text-white duration-200 ease-out rounded-lg text-custom-sm bg-dark px-9 hover:bg-darkLight"
+                className="inline-flex py-3 mt-10 font-medium text-white rounded-lg text-custom-sm bg-dark px-9 transition-all duration-200 ease-out hover:bg-darkLight"
               >
                 Shop Now
               </Link>

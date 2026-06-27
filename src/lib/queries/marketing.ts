@@ -128,3 +128,20 @@ export const getSiteChromeColors = unstable_cache(
   ["site-chrome-colors"],
   { revalidate: 3600, tags: [MARKETING_TAG] }
 );
+
+export const getSiteAccentColor = unstable_cache(
+  async (): Promise<string | null> => {
+    try {
+      const row = await prisma.site_marketing_settings.findUnique({
+        where: { id: SITE_MARKETING_SETTINGS_ID },
+        select: { accent_color: true },
+      });
+      const color = row?.accent_color?.trim();
+      return color || null;
+    } catch {
+      return null;
+    }
+  },
+  ["site-accent-color"],
+  { revalidate: 3600, tags: [MARKETING_TAG] }
+);

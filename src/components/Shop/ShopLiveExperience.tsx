@@ -23,6 +23,7 @@ import {
   type ShopQueryState,
 } from "@/lib/shop/shopQuery";
 import { useDebounce } from "@/hooks/useDebounce";
+import { bindShopFilterScrollbarReveal } from "@/lib/shop/filterScrollbarReveal";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/shop/shopConstants";
 import { throttle } from "@/lib/perf/throttle";
 import type { ProductSearchItem } from "@/lib/search/productSearch";
@@ -206,6 +207,7 @@ export default function ShopLiveExperience({
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const productsPaneRef = useRef<HTMLDivElement>(null);
+  const shopSectionRef = useRef<HTMLElement>(null);
   const desktopSidebarPaneRef = useRef<HTMLDivElement>(null);
   const desktopSidebarScrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -862,6 +864,8 @@ export default function ShopLiveExperience({
     };
   }, [products.length, totalPages, currentPage, gridBusy, query.q, clientMatchCount]);
 
+  useEffect(() => bindShopFilterScrollbarReveal(shopSectionRef.current), []);
+
   const filterHoverHandlers = useCallback(
     (fieldName: string, value: string, isChecked: boolean) => ({
       onMouseEnter: () => {
@@ -1141,7 +1145,7 @@ export default function ShopLiveExperience({
   };
 
   return (
-    <section className="overflow-hidden py-10 pb-20">
+    <section ref={shopSectionRef} className="py-10 pb-20">
       <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         <div className="mb-6 flex items-center justify-between gap-3">
           <div>
@@ -1262,7 +1266,7 @@ export default function ShopLiveExperience({
               >
               <h2 className="sr-only">Products</h2>
               {products.length > 0 ? (
-                <div className="relative overflow-hidden">
+                <div className="relative pb-8">
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={listing.page}
@@ -1285,7 +1289,7 @@ export default function ShopLiveExperience({
                             : "exitToRight"
                       }
                       transition={slideTransition}
-                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9"
+                      className="grid grid-cols-1 gap-x-7.5 gap-y-9 px-4 py-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
                     >
                       {productGrid}
                     </motion.div>
@@ -1371,7 +1375,7 @@ export default function ShopLiveExperience({
 
           <aside className="shop-desktop-filters-aside lg:col-start-1 lg:row-start-1">
             <div ref={desktopSidebarPaneRef} className="shop-desktop-sidebar-pane">
-              <div ref={desktopSidebarScrollRef} className="shop-desktop-sidebar-scroll">
+              <div ref={desktopSidebarScrollRef} className="shop-desktop-sidebar-scroll pb-8">
                 {renderFilters("shop-filters-form", true)}
               </div>
             </div>

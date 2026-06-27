@@ -100,6 +100,7 @@ type SiteSettingsRow = {
   footer_bg_color?: string | null;
   footer_text_color?: string | null;
   footer_link_color?: string | null;
+  accent_color?: string | null;
 };
 
 type QuickLinkPageAdminKey = "about" | "privacy" | "terms" | "returns" | "faq" | "contact";
@@ -322,7 +323,9 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [footerBgColor, setFooterBgColor] = useState(st0?.footer_bg_color ?? "");
   const [footerTextColor, setFooterTextColor] = useState(st0?.footer_text_color ?? "");
   const [footerLinkColor, setFooterLinkColor] = useState(st0?.footer_link_color ?? "");
+  const [accentColor, setAccentColor] = useState(st0?.accent_color ?? "");
   const [chromeColorsSaving, setChromeColorsSaving] = useState(false);
+  const [accentColorSaving, setAccentColorSaving] = useState(false);
   const [quickLinkPages, setQuickLinkPages] = useState<
     Record<QuickLinkPageAdminKey, { title: string; subtitle: string; content: string }>
   >({
@@ -2406,6 +2409,50 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
 
       {tab === "settings" ? (
         <div className="space-y-8">
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
+            <h2 className="text-lg font-semibold">Accent color</h2>
+            <p className="text-sm text-meta-3">
+              One color for the customer-facing site: cart badge, top progress bar, link hovers,
+            active nav, pagination, Add to Cart buttons, newsletter &ldquo;Notify me&rdquo;,
+            scroll-to-top, and more. Does not change the admin panel. Leave empty to use the
+            default theme red (<span className="font-mono">#c41e3a</span>).
+            </p>
+            <HexColorField
+              label="Accent color"
+              value={accentColor}
+              onChange={setAccentColor}
+              placeholder="#c41e3a"
+            />
+            <button
+              type="button"
+              disabled={accentColorSaving}
+              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setAccentColorSaving(true);
+                  const row = await j<SiteSettingsRow>(
+                    await fetch("/api/admin/marketing/settings", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        accent_color: accentColor.trim() || null,
+                      }),
+                    })
+                  );
+                  setAccentColor(row.accent_color ?? "");
+                  toast.success("Accent color saved");
+                  router.refresh();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Failed");
+                } finally {
+                  setAccentColorSaving(false);
+                }
+              }}
+            >
+              {accentColorSaving ? "Saving…" : "Save accent color"}
+            </button>
+          </section>
+
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
             <h2 className="text-lg font-semibold">Free shipping threshold</h2>
             <p className="text-sm text-meta-3">

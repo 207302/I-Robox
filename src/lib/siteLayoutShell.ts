@@ -7,7 +7,7 @@ import { getHeaderNavData } from "@/lib/nav/headerNav";
 import { getStoreContactDisplay } from "@/lib/marketing/storeContactDisplay";
 import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
 import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
-import { getSiteChromeColors } from "@/lib/queries/marketing";
+import { getSiteChromeColors, getSiteAccentColor } from "@/lib/queries/marketing";
 import type { HeaderNavData } from "@/lib/nav/headerNav";
 import { ANNOUNCEMENTS_TAG, MARKETING_TAG } from "@/lib/cache/homePageCache";
 import { CATEGORIES_TAG, HEADER_NAV_TAG } from "@/lib/cache/tags";
@@ -23,6 +23,7 @@ export type SiteLayoutShell = {
   storeContact: Awaited<ReturnType<typeof getStoreContactDisplay>>;
   freeShippingThresholdInr: Awaited<ReturnType<typeof getFreeShippingThresholdInr>>;
   chromeColors: SiteChromeColors;
+  accentColor: string | null;
 };
 
 export const EMPTY_SHELL: SiteLayoutShell = {
@@ -46,6 +47,7 @@ export const EMPTY_SHELL: SiteLayoutShell = {
   },
   freeShippingThresholdInr: 2000,
   chromeColors: EMPTY_CHROME_COLORS,
+  accentColor: null,
 };
 
 async function safe<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> {
@@ -73,11 +75,13 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
   const marqueeRows = activeAnnouncements.filter((e) => e.placement === "MARQUEE");
   const utilityPrimary = utilityRows[0];
 
-  const [headerNav, storeContact, freeShippingThresholdInr, chromeColors] = await Promise.all([
+  const [headerNav, storeContact, freeShippingThresholdInr, chromeColors, accentColor] =
+    await Promise.all([
     safe("headerNav", EMPTY_SHELL.headerNav, getHeaderNavData),
     safe("storeContact", EMPTY_SHELL.storeContact, getStoreContactDisplay),
     safe("freeShippingThresholdInr", EMPTY_SHELL.freeShippingThresholdInr, getFreeShippingThresholdInr),
     safe("chromeColors", EMPTY_SHELL.chromeColors, getSiteChromeColors),
+    safe("accentColor", EMPTY_SHELL.accentColor, getSiteAccentColor),
   ]);
 
   return {
@@ -96,6 +100,7 @@ async function loadSiteLayoutShell(): Promise<SiteLayoutShell> {
     storeContact,
     freeShippingThresholdInr,
     chromeColors,
+    accentColor,
   };
 }
 

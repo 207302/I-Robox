@@ -6,7 +6,8 @@
 
 @theme {
   --font-*: initial;
-  --font-body: var(--font-dm-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-sans);
 
   --color-*: initial;
   --color-current: currentColor;
@@ -633,7 +634,7 @@ input[type="search"]::-webkit-search-results-decoration {
   top: 0;
   left: 0;
   height: 100%;
-  background-color: #e53935;
+  background-color: var(--color-blue, #c41e3a);
   transition: width 0.35s ease-out;
 }
 
@@ -687,7 +688,7 @@ input[type="search"]::-webkit-search-results-decoration {
   height: 100%;
   width: 38%;
   border-radius: 9999px;
-  background-color: var(--color-blue, #3c50e0);
+  background-color: var(--color-blue, #c41e3a);
   animation: shop-search-results-bar 0.95s ease-in-out infinite;
 }
 
@@ -701,7 +702,7 @@ input[type="search"]::-webkit-search-results-decoration {
   height: 2.25rem;
   border-radius: 9999px;
   border: 2px solid #e5e7eb;
-  border-top-color: var(--color-blue, #3c50e0);
+  border-top-color: var(--color-blue, #c41e3a);
   background-color: rgb(255 255 255 / 0.92);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
   animation: shop-search-results-spin 0.75s linear infinite;
@@ -753,8 +754,8 @@ input[type="search"]::-webkit-search-results-decoration {
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    scrollbar-gutter: stable;
     scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
   }
 
   .shop-desktop-sidebar-scroll::-webkit-scrollbar {
@@ -763,6 +764,15 @@ input[type="search"]::-webkit-search-results-decoration {
 
   .shop-desktop-sidebar-scroll::-webkit-scrollbar-thumb {
     border-radius: 999px;
+    background-color: transparent;
+    transition: background-color 0.2s ease;
+  }
+
+  .shop-desktop-sidebar-scroll.is-scrolling {
+    scrollbar-color: #d1d5db transparent;
+  }
+
+  .shop-desktop-sidebar-scroll.is-scrolling::-webkit-scrollbar-thumb {
     background-color: #d1d5db;
   }
 }
@@ -834,8 +844,8 @@ input[type="search"]::-webkit-search-results-decoration {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
 
 .shop-filter-list-scroll::-webkit-scrollbar {
@@ -844,6 +854,15 @@ input[type="search"]::-webkit-search-results-decoration {
 
 .shop-filter-list-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.shop-filter-list-scroll.is-scrolling {
+  scrollbar-color: #d1d5db transparent;
+}
+
+.shop-filter-list-scroll.is-scrolling::-webkit-scrollbar-thumb {
   background-color: #d1d5db;
 }
 

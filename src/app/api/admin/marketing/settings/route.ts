@@ -323,6 +323,11 @@ export async function PATCH(req: NextRequest) {
       if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
       data.footer_link_color = colorResult.value;
     }
+    if (body.accent_color !== undefined) {
+      const colorResult = validateOptionalHexColor(body.accent_color);
+      if (!colorResult.ok) return NextResponse.json({ error: colorResult.error }, { status: 400 });
+      data.accent_color = colorResult.value;
+    }
 
     let excludedBrandIds: string[] | undefined;
     if (body.free_shipping_excluded_brand_ids !== undefined) {
@@ -405,6 +410,7 @@ export async function PATCH(req: NextRequest) {
       footer_bg_color: null,
       footer_text_color: null,
       footer_link_color: null,
+      accent_color: null,
     };
   
     try {

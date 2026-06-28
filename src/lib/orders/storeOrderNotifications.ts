@@ -4,7 +4,7 @@ import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { formatPrice } from "@/utils/formatePrice";
 
-export const STORE_ORDER_NOTIFICATION_EMAIL = "iroboxtoys@gmail.com";
+export const STORE_ORDER_NOTIFICATION_EMAIL = "info@i-robox.com";
 
 function escapeHtml(s: string) {
   return s

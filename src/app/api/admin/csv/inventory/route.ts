@@ -5,6 +5,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { readJsonBody, sanitizeCsvPayload } from "@/lib/validation/input";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
+import { touchActiveCartsContainingProduct } from "@/lib/inventory/cartStock";
 import { upsertProductLevelInventory } from "@/lib/inventory/productLevelInventory";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 
@@ -71,6 +72,13 @@ export async function POST(req: NextRequest) {
     await syncLowStockAlertsByProductIds([...touchedProductIds]).catch((err) => {
       console.error("[admin csv inventory POST] low stock alert sync failed", err);
     });
+    await Promise.all(
+      [...touchedProductIds].map((productId) =>
+        touchActiveCartsContainingProduct(productId).catch((err) => {
+          console.error("[admin csv inventory POST] active cart touch failed", productId, err);
+        })
+      )
+    );
   
     return NextResponse.json({ ok: true, count }, { status: 200 });
     },

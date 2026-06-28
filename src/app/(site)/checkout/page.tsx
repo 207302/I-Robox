@@ -8,6 +8,8 @@ import { formatPrice } from "@/utils/formatePrice";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import { checkoutItemsFromCart } from "@/lib/checkout/checkoutCartItems";
 import { toRazorpayPrefillContact } from "@/lib/marketing/contactPhoneUtils";
+import { fetchProductStockCheck, lineItemStockError, stockLookupKey } from "@/lib/cart/stockCheckClient";
+import type { ProductStockCheckMap } from "@/lib/cart/stockCheckClient";
 import { useSession } from "@/hooks/useSession";
 import { usePublicMarketing } from "@/hooks/usePublicMarketing";
 import {
@@ -61,6 +63,9 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState("new");
   const [addressesLoading, setAddressesLoading] = useState(false);
   const hasAppliedPrimaryAddress = useRef(false);
+  const [stockByProductId, setStockByProductId] = useState<ProductStockCheckMap>({});
+  const [stockCheckLoading, setStockCheckLoading] = useState(true);
+  const [stockCheckFailed, setStockCheckFailed] = useState(false);
 
   const previewSubtotal = Number(totalPrice || 0);
 
@@ -147,6 +152,62 @@ export default function CheckoutPage() {
   useEffect(() => {
     setCouponBreakdown(null);
   }, [items, couponCode]);
+
+  useEffect(() => {
+    const stockLines = items
+      .map((item) => ({
+        productId: String(item.productId ?? "").trim(),
+        productVariantId: item.variantId?.trim() || null,
+      }))
+      .filter((line) => line.productId);
+
+    if (stockLines.length === 0) {
+      setStockByProductId({});
+      setStockCheckLoading(false);
+      setStockCheckFailed(false);
+      return;
+    }
+
+    let cancelled = false;
+    setStockCheckLoading(true);
+    setStockCheckFailed(false);
+    void fetchProductStockCheck(stockLines)
+      .then((products) => {
+        if (!cancelled) setStockByProductId(products);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStockByProductId({});
+          setStockCheckFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStockCheckLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
+  const stockErrorsByLineId = useMemo(() => {
+    const errors: Record<string, string> = {};
+    for (const item of items) {
+      const productId = String(item.productId ?? "").trim();
+      const message = lineItemStockError({
+        name: item.name,
+        quantity: item.quantity,
+        stock: productId
+          ? stockByProductId[stockLookupKey(productId, item.variantId)]
+          : undefined,
+      });
+      if (message) errors[String(item.id)] = message;
+    }
+    return errors;
+  }, [items, stockByProductId]);
+
+  const hasStockBlocker =
+    stockCheckFailed || Object.keys(stockErrorsByLineId).length > 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -267,6 +328,7 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
+    if (hasStockBlocker) return;
     if (!items.length) {
       toast.error("Your cart is empty");
       return;
@@ -564,6 +626,40 @@ export default function CheckoutPage() {
 
           <aside className="rounded-2xl border border-gray-3 bg-white p-5 h-fit">
             <h2 className="text-lg font-semibold text-dark">Order summary</h2>
+            {items.length > 0 ? (
+              <ul className="mt-4 space-y-3 border-b border-gray-3 pb-4">
+                {items.map((item) => {
+                  const stockError = stockErrorsByLineId[String(item.id)];
+                  return (
+                    <li key={String(item.id)} className="text-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-dark line-clamp-2">{item.name}</p>
+                          <p className="text-xs text-meta-3 mt-0.5">Qty {item.quantity}</p>
+                        </div>
+                        <span className="shrink-0 font-medium text-dark">
+                          {formatPrice(Number(item.price || 0) * Number(item.quantity || 0))}
+                        </span>
+                      </div>
+                      {stockError ? (
+                        <p className="mt-1.5 text-xs font-medium text-red-600">{stockError}</p>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {stockCheckLoading ? (
+              <p className="mt-3 text-xs text-meta-3">Checking stock availability…</p>
+            ) : stockCheckFailed ? (
+              <p className="mt-3 text-xs font-medium text-red-600">
+                Unable to verify stock — please refresh before proceeding.
+              </p>
+            ) : hasStockBlocker ? (
+              <p className="mt-3 text-xs font-medium text-red-600">
+                Remove or update out-of-stock items before paying.
+              </p>
+            ) : null}
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-meta-3">Subtotal</span>
@@ -620,7 +716,7 @@ export default function CheckoutPage() {
             </div>
 
             <button
-              disabled={loading}
+              disabled={loading || stockCheckLoading || hasStockBlocker || !items.length}
               onClick={handlePlaceOrder}
               className="mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
             >

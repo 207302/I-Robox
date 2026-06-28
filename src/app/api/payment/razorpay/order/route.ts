@@ -7,6 +7,7 @@ import { buildCheckoutContext } from "@/lib/checkout/buildCheckoutContext";
 import { sealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, razorpayPublicConfig } from "@/lib/payments/razorpay";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { StockValidationError } from "@/lib/inventory/cartStock";
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
@@ -92,9 +93,14 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      if (message === "OUT_OF_STOCK") {
+      if (message === "OUT_OF_STOCK" || e instanceof StockValidationError) {
         return NextResponse.json(
-          { error: "One or more items are out of stock. Please refresh cart and try again." },
+          {
+            error:
+              e instanceof StockValidationError
+                ? e.message
+                : "One or more items are out of stock. Please refresh cart and try again.",
+          },
           { status: 409 }
         );
       }

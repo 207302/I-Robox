@@ -45,6 +45,7 @@ import {
   sendEmailToRecipients,
 } from "@/lib/orders/orderNotificationEmails";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
 
 type CheckoutItem = {
   productId: string;
@@ -331,9 +332,24 @@ export async function POST(req: NextRequest) {
       freeShippingExcludedBrandIds,
     });
     const total = totalBeforeShip + shippingAmount;
+
+    try {
+      await assertCartItemsInStock(
+        lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
+        new Map(lineItems.map((li) => [li.productId, li.productName]))
+      );
+    } catch (e: unknown) {
+      const msg =
+        e instanceof StockValidationError
+          ? e.message
+          : "One or more items are out of stock";
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
   
     // Transaction: create address, order, items, reserve inventory.
-    const order = await prisma.$transaction(async (tx) => {
+    let order;
+    try {
+      order = await prisma.$transaction(async (tx) => {
       const addr = await tx.addresses.create({
         data: {
           customer_id: checkoutUserId,
@@ -419,6 +435,16 @@ export async function POST(req: NextRequest) {
   
       return createdOrder;
     }, PRISMA_TRANSACTION_OPTIONS);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "OUT_OF_STOCK") {
+        return NextResponse.json(
+          { error: "One or more items went out of stock. Please refresh your cart and try again." },
+          { status: 400 }
+        );
+      }
+      throw e;
+    }
   
     // Best-effort low-stock alerting after reservation update.
     await syncLowStockAlertsByProductIds(lineItems.map((li) => li.productId)).catch((err) => {

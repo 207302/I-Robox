@@ -6,6 +6,8 @@ import {
   newGuestAccountPasswordEmailHtml,
   newGuestAccountPasswordEmailText,
   type EmailAttachment,
+  isEmailConfigured,
+  getMissingEmailEnvKeys,
 } from "@/lib/email";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { loadOrderEmailLines } from "@/lib/email/orderEmailLines";
@@ -109,7 +111,23 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
   }
 
   const recipients = collectOrderNotificationEmails(checkoutFormEmail, accountEmail);
-  if (recipients.length === 0) return;
+  console.info("[postOrderFulfillment] order confirmation email", {
+    orderId,
+    checkoutFormEmail: checkoutFormEmail || null,
+    accountEmail: accountEmail ?? null,
+    recipients,
+    smtpConfigured: isEmailConfigured(),
+    missingEnv: isEmailConfigured() ? [] : getMissingEmailEnvKeys(),
+  });
+
+  if (recipients.length === 0) {
+    console.warn("[postOrderFulfillment] no notification recipients — confirmation email skipped", {
+      orderId,
+      checkoutFormEmail: checkoutFormEmail || null,
+      accountEmail: accountEmail ?? null,
+    });
+    return;
+  }
 
   const orderRow = await prisma.orders.findUnique({
     where: { id: orderId },
@@ -141,13 +159,20 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
       console.error("[postOrderFulfillment] invoice pdf failed", invoiceErr);
     }
 
-    await sendEmailToRecipients({
+    const emailResult = await sendEmailToRecipients({
       recipients,
       subject: "Order placed successfully",
       html: orderConfirmedCustomerEmailHtml({ orderId: orderRef, lines: orderLines }),
       text: orderConfirmedCustomerEmailText({ orderId: orderRef, lines: orderLines }),
       attachments,
     });
+    if (!emailResult.ok) {
+      console.error("[postOrderFulfillment] order confirmation email not delivered", {
+        orderId,
+        recipients,
+        emailResult,
+      });
+    }
   } catch (err) {
     console.error("[postOrderFulfillment] order email failed", err);
   }

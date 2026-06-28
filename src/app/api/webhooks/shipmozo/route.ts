@@ -14,17 +14,17 @@ function verifyShipmozoSecret(req: NextRequest): boolean {
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
-    try {
-      if (!verifyShipmozoSecret(req)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+    if (!verifyShipmozoSecret(req)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
+    try {
       let body: Record<string, unknown>;
       try {
         body = (await req.json()) as Record<string, unknown>;
       } catch (err) {
         console.error("[shipmozo-webhook] invalid JSON body", err);
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 200 });
       }
 
       const payload = {
@@ -37,10 +37,10 @@ export async function POST(req: NextRequest) {
       };
 
       if (!payload.status) {
-        return NextResponse.json({ error: "Missing status" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "Missing status" }, { status: 200 });
       }
       if (!payload.awb && !payload.order_id) {
-        return NextResponse.json({ error: "Missing awb or order_id" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "Missing awb or order_id" }, { status: 200 });
       }
 
       const result = await applyShipmozoWebhookUpdate(payload);
@@ -49,13 +49,18 @@ export async function POST(req: NextRequest) {
           payload,
           error: result.error,
         });
-        return NextResponse.json({ error: result.error }, { status: result.status });
+        return NextResponse.json({ ok: false, error: result.error }, { status: 200 });
       }
 
-      return NextResponse.json({ success: true }, { status: 200 });
+      if ("skipped" in result && result.skipped) {
+        return NextResponse.json({ ok: true, skipped: true }, { status: 200 });
+      }
+
+      return NextResponse.json({ ok: true }, { status: 200 });
     } catch (err) {
       console.error("[shipmozo-webhook] unhandled error", err);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+      const message = err instanceof Error ? err.message : "Internal server error";
+      return NextResponse.json({ ok: false, error: message }, { status: 200 });
     }
   });
 }

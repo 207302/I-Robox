@@ -108,8 +108,11 @@ const ORDER_STATUS_WHITELIST = new Set([
   "REFUNDED",
 ]);
 
+/** Manual admin payment-status marks surfaced in the order status dropdown. */
+const ADMIN_PAYMENT_STATUS_MARK_WHITELIST = new Set(["PARTIALLY_REFUNDED"]);
+
 export function isAllowedOrderStatus(value: string) {
-  return ORDER_STATUS_WHITELIST.has(value);
+  return ORDER_STATUS_WHITELIST.has(value) || ADMIN_PAYMENT_STATUS_MARK_WHITELIST.has(value);
 }
 
 const SHIPMENT_STATUS_WHITELIST = new Set([

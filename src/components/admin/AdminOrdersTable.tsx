@@ -9,7 +9,9 @@ import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import { AdminPagination } from "@/components/admin/AdminPagination";
 import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
 import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
+import { looksLikeTxnId } from "@/lib/admin/orderTxnSearch";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
+import type { ShipmentStatus } from "@/lib/shipping/shipmozoTrackingConstants";
 
 const PAGE_SIZE = 50;
 const MAX_BULK_DELETE = 50;
@@ -28,11 +30,14 @@ export type AdminOrderRow = {
   orderNumber: string;
   orderId: string;
   status: string;
+  shipmentStatus: ShipmentStatus | null;
   paymentStatus: string;
   totalAmount: number;
   createdAtLabel: string;
   customerName: string | null;
   customerEmail: string | null;
+  razorpayPaymentId: string | null;
+  refundTransactionId: string | null;
   productNames: string;
   products: AdminOrderProductThumb[];
 };
@@ -53,6 +58,8 @@ function filterOrders(rows: AdminOrderRow[], query: string): AdminOrderRow[] {
       o.status,
       o.paymentStatus,
       o.customerEmail ?? "guest",
+      o.razorpayPaymentId ?? "",
+      o.refundTransactionId ?? "",
       o.productNames,
     ]
       .join(" ")
@@ -69,6 +76,9 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
   const bulk = useBulkSelection();
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [txnLookup, setTxnLookup] = useState<{ id: string; orderId: string } | null>(null);
+
+  const loadedOrderIds = useMemo(() => new Set(orders.map((o) => o.id)), [orders]);
 
   const tableColSpan = TABLE_COL_COUNT + (canDelete ? 1 : 0);
 
@@ -96,6 +106,56 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  useEffect(() => {
+    const q = deferredQuery.trim();
+    if (!looksLikeTxnId(q)) {
+      setTxnLookup(null);
+      return;
+    }
+
+    const inFiltered = filtered.some(
+      (o) =>
+        o.razorpayPaymentId === q ||
+        o.refundTransactionId === q ||
+        o.id === q ||
+        o.orderId === q
+    );
+    if (inFiltered) {
+      setTxnLookup(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetchAdminWithRetry(
+          `/api/admin/orders/search?txn=${encodeURIComponent(q)}`,
+          { signal: controller.signal }
+        );
+        const data = (await res.json().catch(() => ({}))) as {
+          found?: boolean;
+          id?: string;
+          orderId?: string;
+        };
+        if (controller.signal.aborted) return;
+        if (res.ok && data.found && data.id && data.orderId) {
+          setTxnLookup({ id: data.id, orderId: data.orderId });
+        } else {
+          setTxnLookup(null);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setTxnLookup(null);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [deferredQuery, filtered]);
+
+  const showTxnBanner =
+    txnLookup !== null &&
+    (!loadedOrderIds.has(txnLookup.id) || !filtered.some((o) => o.id === txnLookup.id));
 
   const paged = useMemo(() => {
     const skip = (safePage - 1) * PAGE_SIZE;
@@ -177,7 +237,7 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search order id, name, email, product, status…"
+            placeholder="Search order id, name, email, product, status, transaction id…"
             aria-label="Search orders"
             autoComplete="off"
             className="min-w-0 flex-1 rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm text-dark outline-none focus:border-blue"
@@ -203,6 +263,22 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
           />
         ) : null}
       </div>
+
+      {showTxnBanner && txnLookup ? (
+        <div
+          className="rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-dark"
+          role="status"
+        >
+          This order is outside the current view —{" "}
+          <Link
+            href={`/admin/orders/${txnLookup.id}`}
+            className="font-medium text-blue hover:underline"
+          >
+            click to open it directly
+          </Link>
+          <span className="text-meta-3"> ({txnLookup.orderId})</span>
+        </div>
+      ) : null}
 
       {total > 0 ? (
         <p className={`text-sm text-meta-3 ${searching ? "opacity-60" : ""}`}>
@@ -295,7 +371,14 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
                         <div className="text-xs text-meta-4 break-all">{o.customerEmail}</div>
                       ) : null}
                     </td>
-                    <td className="py-3 px-4 text-dark">{o.status}</td>
+                    <td className="py-3 px-4 text-dark">
+                      <div>{o.status}</div>
+                      {o.shipmentStatus === "NOT_DELIVERED" ? (
+                        <span className="mt-1 inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800">
+                          Not Delivered
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="py-3 px-4 text-dark">{o.paymentStatus}</td>
                     <td className="py-3 px-4 text-dark">{formatPrice(o.totalAmount)}</td>
                     <td className="py-3 px-4">

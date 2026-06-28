@@ -7,6 +7,7 @@ import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
+import { touchActiveCartsContainingProduct } from "@/lib/inventory/cartStock";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
 import { deleteProductById, destroyCloudinaryImages } from "@/lib/admin/deleteProduct";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
@@ -309,15 +310,16 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   
     // Update inventory row if quantity fields were sent
-    const hasQty = body.available_quantity !== undefined || body.low_stock_threshold !== undefined;
-    if (hasQty) {
+    const hasQuantityChange = body.available_quantity !== undefined;
+    const hasThresholdChange = body.low_stock_threshold !== undefined;
+    if (hasQuantityChange || hasThresholdChange) {
       const inv = await prisma.inventory.findFirst({
         where: { product_id: id, product_variant_id: null },
         select: { id: true },
       });
       const data: Record<string, number> = {};
-      if (body.available_quantity !== undefined) data.available_quantity = Math.max(0, Number(body.available_quantity));
-      if (body.low_stock_threshold !== undefined) data.low_stock_threshold = Math.max(0, Number(body.low_stock_threshold));
+      if (hasQuantityChange) data.available_quantity = Math.max(0, Number(body.available_quantity));
+      if (hasThresholdChange) data.low_stock_threshold = Math.max(0, Number(body.low_stock_threshold));
   
       if (inv) {
         await prisma.inventory.update({ where: { id: inv.id }, data });
@@ -342,8 +344,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
     after(async () => {
       try {
-        if (hasQty) {
+        if (hasQuantityChange || hasThresholdChange) {
           await syncLowStockAlertsByProductIds([productIdForAfter]);
+        }
+        if (hasQuantityChange) {
+          await touchActiveCartsContainingProduct(productIdForAfter);
         }
         revalidateProductCatalog({
           slug: nextSlug,

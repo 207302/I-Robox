@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { deleteOrderById } from "@/lib/admin/deleteOrder";
-import { restoreSoldInventoryForOrder } from "@/lib/inventory/orderInventoryRestore";
+import { restoreSoldInventoryForOrder, orderPaymentCountedAsSold } from "@/lib/inventory/orderInventoryRestore";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { requireAdmin, requireSuperAdmin } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
@@ -21,8 +21,13 @@ import {
 } from "@/lib/validation/input";
 import { notifyCustomerOrderOrShipmentUpdate } from "@/lib/orders/customerOrderNotifications";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
+import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
+import {
+  sendManualFullRefundEmail,
+  sendManualPartialRefundEmail,
+} from "@/lib/email/refundConfirmationEmail";
 import { runApiRoute } from "@/lib/api/runApiRoute";
-import { compactOrderId } from "@/lib/orders/orderNumber";
+import { compactOrderId, formatOrderReference } from "@/lib/orders/orderNumber";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import {
   applyShipmozoWebhookUpdate,
@@ -66,6 +71,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         status: true,
         payment_status: true,
         payment_provider: true,
+        external_payment_id: true,
+        refund_transaction_id: true,
+        refunded_amount: true,
         subtotal_amount: true,
         discount_amount: true,
         shipping_amount: true,
@@ -138,6 +146,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         status: String(order.status),
         paymentStatus,
         paymentMethod: formatPaymentMethod(order.payment_provider, paymentStatus),
+        razorpayPaymentId:
+          (order.payment_provider ?? "").toLowerCase().includes("razorpay") &&
+          order.external_payment_id?.trim()
+            ? order.external_payment_id.trim()
+            : null,
+        refundTransactionId: order.refund_transaction_id?.trim() || null,
+        refundedAmount:
+          typeof order.refunded_amount === "number" ? order.refunded_amount : null,
         subtotalAmount: Number(order.subtotal_amount),
         discountAmount: Number(order.discount_amount),
         shippingAmount: Number(order.shipping_amount),
@@ -224,8 +240,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     const before = await prisma.orders.findUnique({
       where: { id },
       select: {
+        id: true,
+        order_number: true,
         status: true,
         payment_status: true,
+        refund_transaction_id: true,
+        refunded_amount: true,
         customers: { select: { email: true } },
         shipments: { select: { status: true, carrier: true, tracking_number: true } },
       },
@@ -233,7 +253,8 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
     const prevStatus = String(before.status);
-    const paymentSucceeded = String(before.payment_status) === "SUCCEEDED";
+    const prevPaymentStatus = String(before.payment_status);
+    const paymentSucceeded = orderPaymentCountedAsSold(prevPaymentStatus);
     const prevShip = before.shipments
       ? {
           status: String(before.shipments.status),
@@ -243,16 +264,60 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       : null;
   
     let restoredProductIds: string[] = [];
-    if (status === "REFUNDED" && prevStatus !== "REFUNDED") {
+    let skipShipmentNotify = false;
+    let nextOrderStatusForNotify = prevStatus;
+    let emailError: string | null = null;
+    const refundEmailErrorMessage =
+      "Email failed to send — refund status was saved. Please notify the customer manually.";
+
+    if (status === "PARTIALLY_REFUNDED") {
+      if (prevPaymentStatus === "REFUNDED") {
+        return NextResponse.json(
+          { error: "Cannot downgrade a fully refunded order to partial refund" },
+          { status: 400 }
+        );
+      }
+      if (prevPaymentStatus !== "PARTIALLY_REFUNDED") {
+        await prisma.orders.update({
+          where: { id },
+          data: { payment_status: "PARTIALLY_REFUNDED" },
+        });
+        skipShipmentNotify = true;
+        const emailTo = displayEmailForCustomer(before.customers?.email ?? null);
+        if (emailTo && !isSyntheticPhoneSignupEmail(emailTo)) {
+          try {
+            const emailResult = await sendManualPartialRefundEmail({
+              to: emailTo,
+              orderRef: formatOrderReference(before),
+              refundTransactionId: before.refund_transaction_id,
+              refundedAmountPaise: before.refunded_amount,
+            });
+            if (!emailResult.ok) {
+              emailError = refundEmailErrorMessage;
+            }
+          } catch (err) {
+            console.error("[admin orders PUT] partial refund email failed", err);
+            emailError = refundEmailErrorMessage;
+          }
+        }
+      }
+    } else if (
+      status === "REFUNDED" &&
+      (prevStatus !== "REFUNDED" || prevPaymentStatus === "PARTIALLY_REFUNDED")
+    ) {
+      const shouldRestoreInventory =
+        paymentSucceeded || prevPaymentStatus === "PARTIALLY_REFUNDED";
       const restoreResult = await prisma.$transaction(async (tx) => {
-        const restore = await restoreSoldInventoryForOrder(tx, id, paymentSucceeded);
+        const restore = await restoreSoldInventoryForOrder(tx, id, shouldRestoreInventory);
         if (!restore.ok) return restore;
 
         await tx.orders.update({
           where: { id },
           data: {
             status: "REFUNDED",
-            ...(paymentSucceeded ? { payment_status: "REFUNDED" } : {}),
+            ...(paymentSucceeded || prevPaymentStatus === "PARTIALLY_REFUNDED"
+              ? { payment_status: "REFUNDED" }
+              : {}),
           },
         });
         return restore;
@@ -262,8 +327,31 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         return NextResponse.json({ error: restoreResult.error }, { status: 409 });
       }
       restoredProductIds = restoreResult.productIds;
+      nextOrderStatusForNotify = "REFUNDED";
+      skipShipmentNotify = true;
+      // Skip if webhook or a prior manual action already set payment_status to REFUNDED (avoids duplicate email).
+      if (prevPaymentStatus !== "REFUNDED") {
+        const emailTo = displayEmailForCustomer(before.customers?.email ?? null);
+        if (emailTo && !isSyntheticPhoneSignupEmail(emailTo)) {
+          try {
+            const emailResult = await sendManualFullRefundEmail({
+              to: emailTo,
+              orderRef: formatOrderReference(before),
+              refundTransactionId: before.refund_transaction_id,
+              refundedAmountPaise: before.refunded_amount,
+            });
+            if (!emailResult.ok) {
+              emailError = refundEmailErrorMessage;
+            }
+          } catch (err) {
+            console.error("[admin orders PUT] full refund email failed", err);
+            emailError = refundEmailErrorMessage;
+          }
+        }
+      }
     } else {
       await prisma.orders.update({ where: { id }, data: { status: status as any } });
+      nextOrderStatusForNotify = status;
     }
 
     if (restoredProductIds.length > 0) {
@@ -280,7 +368,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   
     let nextShip = prevShip;
-    let skipShipmentNotify = false;
     const shipment = body.shipment;
     if (shipment && typeof shipment === "object" && !Array.isArray(shipment)) {
       const s = shipment as Record<string, unknown>;
@@ -389,10 +476,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (emailTo && !isSyntheticPhoneSignupEmail(emailTo) && !skipShipmentNotify) {
       try {
         await notifyCustomerOrderOrShipmentUpdate({
-          to: emailTo,
+          to: displayEmailForCustomer(emailTo) ?? emailTo,
           orderId: id,
           previousOrderStatus: prevStatus,
-          nextOrderStatus: status,
+          nextOrderStatus: nextOrderStatusForNotify,
           previousShipment: prevShip,
           nextShipment: nextShip,
         });
@@ -401,7 +488,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
     }
   
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json(
+      emailError ? { ok: true, emailError } : { ok: true },
+      { status: emailError ? 207 : 200 }
+    );
   
   });}
 

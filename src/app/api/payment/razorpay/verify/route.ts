@@ -6,13 +6,99 @@ import { createOrderAccessToken } from "@/lib/security/orderAccess";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { cleanText, readJsonBody } from "@/lib/validation/input";
-import { buildCheckoutContext } from "@/lib/checkout/buildCheckoutContext";
+import { buildCheckoutContext, type CheckoutContext } from "@/lib/checkout/buildCheckoutContext";
 import { unsealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, verifyRazorpayPaymentSignature } from "@/lib/payments/razorpay";
 import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
 import { allocateNextOrderNumber } from "@/lib/orders/orderNumber";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
+
+const REFUND_ERROR_MAX = 2000;
+const OUT_OF_STOCK_PREFIX = "OUT_OF_STOCK:";
+
+async function recordStockFailedPaymentAttempt(
+  ctx: CheckoutContext,
+  paymentId: string,
+  refundId: string | null,
+  stockError: string
+) {
+  const refundNote = [
+    stockError,
+    refundId ? `Auto-refund issued: ${refundId}` : "Auto-refund could not be completed",
+  ]
+    .join(" | ")
+    .slice(0, REFUND_ERROR_MAX);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.orders.findFirst({
+        where: { external_payment_id: paymentId, payment_provider: "razorpay" },
+        select: { id: true },
+      });
+      if (existing) {
+        await tx.orders.update({
+          where: { id: existing.id },
+          data: {
+            refund_error: refundNote,
+            ...(refundId ? { refund_transaction_id: refundId } : {}),
+          },
+        });
+        return;
+      }
+
+      const addr = await tx.addresses.create({
+        data: {
+          customer_id: ctx.checkoutUserId,
+          full_name: ctx.address.full_name,
+          phone: ctx.address.phone,
+          line1: ctx.address.line1,
+          line2: ctx.address.line2,
+          city: ctx.address.city,
+          state: ctx.address.state,
+          postal_code: ctx.address.postal_code,
+          country: ctx.address.country,
+          is_default_billing: false,
+          is_default_shipping: false,
+        },
+        select: { id: true },
+      });
+
+      const order_number = await allocateNextOrderNumber(tx);
+      await tx.orders.create({
+        data: {
+          order_number,
+          customer_id: ctx.checkoutUserId,
+          status: "PAYMENT_FAILED",
+          payment_status: refundId ? "REFUNDED" : "SUCCEEDED",
+          subtotal_amount: ctx.subtotal,
+          discount_amount: ctx.discount,
+          shipping_amount: ctx.shipping,
+          tax_amount: 0,
+          total_amount: ctx.total,
+          currency: "INR",
+          coupon_id: ctx.coupon?.id ?? null,
+          shipping_address_id: addr.id,
+          billing_address_id: addr.id,
+          payment_provider: "razorpay",
+          external_payment_id: paymentId,
+          refund_transaction_id: refundId,
+          refunded_amount: refundId ? Math.round(ctx.total * 100) : null,
+          refund_error: refundNote,
+          is_gift: ctx.isGift,
+          gift_message: ctx.giftMessage,
+        },
+      });
+    }, PRISMA_TRANSACTION_OPTIONS);
+  } catch (err) {
+    console.error("[razorpay/verify] failed to record stock-failed payment attempt", {
+      paymentId,
+      refundId,
+      err,
+    });
+  }
+}
 
 export async function POST(req: NextRequest) {
   return runApiRoute(
@@ -84,7 +170,39 @@ export async function POST(req: NextRequest) {
       if (Number(payment.amount) !== expectedAmountPaise) {
         return NextResponse.json({ error: "Payment amount mismatch" }, { status: 400 });
       }
-  
+
+      try {
+        await assertCartItemsInStock(
+          ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
+          new Map(ctx.lineItems.map((li) => [li.productId, li.productName]))
+        );
+      } catch (stockErr) {
+        if (!(stockErr instanceof StockValidationError)) throw stockErr;
+
+        let userMessage = stockErr.message;
+        try {
+          const refund = await razorpay.payments.refund(razorpayPaymentId, {
+            amount: expectedAmountPaise,
+          });
+          const refundId = String((refund as { id?: string }).id ?? "").trim();
+          console.info("[razorpay/verify] auto-refund after stock failure", {
+            paymentId: razorpayPaymentId,
+            refundId,
+          });
+          await recordStockFailedPaymentAttempt(ctx, razorpayPaymentId, refundId || null, stockErr.message);
+          userMessage = `${stockErr.message} Your payment has been refunded automatically.`;
+        } catch (refundErr) {
+          console.error("[razorpay/verify] auto-refund failed after stock failure", {
+            paymentId: razorpayPaymentId,
+            refundErr,
+          });
+          await recordStockFailedPaymentAttempt(ctx, razorpayPaymentId, null, stockErr.message);
+          userMessage = `${stockErr.message} We could not complete your order — please contact support for a refund.`;
+        }
+
+        return NextResponse.json({ error: userMessage }, { status: 409 });
+      }
+
       const created = await prisma.$transaction(async (tx) => {
         const addr = await tx.addresses.create({
           data: {
@@ -154,7 +272,9 @@ export async function POST(req: NextRequest) {
               sold_quantity: { increment: li.quantity },
             },
           });
-          if (updated.count !== 1) throw new Error("OUT_OF_STOCK");
+          if (updated.count !== 1) {
+            throw new Error(`${OUT_OF_STOCK_PREFIX}${li.productName} (${li.productId})`);
+          }
   
           await tx.inventory_reservations.create({
             data: {
@@ -185,18 +305,26 @@ export async function POST(req: NextRequest) {
       const productIds = ctx.lineItems.map((li) => li.productId);
   
       after(async () => {
-        await runPostOrderFulfillment({
-          orderId: created.id,
-          productIds,
-          checkoutFormEmail: ctx.address.email,
-          accountEmail: ctx.accountEmail,
-          newAccountPasswordSetup: ctx.newAccountPasswordSetup,
-          audit: {
-            customerId: ctx.checkoutUserId,
-            ipAddress: req.ip ?? null,
-            userAgent: req.headers.get("user-agent"),
-          },
-        });
+        try {
+          await runPostOrderFulfillment({
+            orderId: created.id,
+            productIds,
+            checkoutFormEmail: ctx.address.email,
+            accountEmail: ctx.accountEmail,
+            newAccountPasswordSetup: ctx.newAccountPasswordSetup,
+            audit: {
+              customerId: ctx.checkoutUserId,
+              ipAddress: req.ip ?? null,
+              userAgent: req.headers.get("user-agent"),
+            },
+          });
+        } catch (fulfillmentErr) {
+          console.error("[razorpay/verify] post-order fulfillment failed", {
+            orderId: created.id,
+            checkoutFormEmail: ctx.address.email,
+            error: fulfillmentErr,
+          });
+        }
       });
   
       return NextResponse.json(
@@ -217,8 +345,17 @@ export async function POST(req: NextRequest) {
         code: e?.code,
         meta: e?.meta,
       });
-      if (String(e?.message ?? "") === "OUT_OF_STOCK") {
-        return NextResponse.json({ error: "Item went out of stock while paying" }, { status: 409 });
+      if (String(e?.message ?? "").startsWith(OUT_OF_STOCK_PREFIX) || e instanceof StockValidationError) {
+        const outMsg = String(e?.message ?? "");
+        const stockDetail = outMsg.startsWith(OUT_OF_STOCK_PREFIX)
+          ? `${outMsg.slice(OUT_OF_STOCK_PREFIX.length)} went out of stock while paying`
+          : outMsg;
+        return NextResponse.json(
+          {
+            error: e instanceof StockValidationError ? e.message : stockDetail,
+          },
+          { status: 409 }
+        );
       }
       const msg = String(e?.message ?? "");
       if (msg.startsWith("MAX_ORDER_QTY_EXCEEDED:")) {

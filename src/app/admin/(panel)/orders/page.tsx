@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { compactOrderId } from "@/lib/orders/orderNumber";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import { AdminOrdersTable, type AdminOrderRow } from "@/components/admin/AdminOrdersTable";
+import type { ShipmentStatus } from "@/lib/shipping/shipmozoTrackingConstants";
 
 function formatDateTimeIst(value: Date | string) {
   const d = value instanceof Date ? value : new Date(value);
@@ -32,7 +33,11 @@ export default async function AdminOrdersPage() {
       id: true,
       order_number: true,
       status: true,
+      shipment_status: true,
       payment_status: true,
+      payment_provider: true,
+      external_payment_id: true,
+      refund_transaction_id: true,
       total_amount: true,
       created_at: true,
       customer_id: true,
@@ -82,6 +87,7 @@ export default async function AdminOrdersPage() {
       orderNumber: o.order_number,
       orderId: compactOrderId(o.order_number),
       status: String(o.status),
+      shipmentStatus: (o.shipment_status as ShipmentStatus | null) ?? null,
       paymentStatus: String(o.payment_status),
       totalAmount: Number(o.total_amount),
       createdAtLabel: formatDateTimeIst(o.created_at),
@@ -90,6 +96,11 @@ export default async function AdminOrdersPage() {
         o.customers?.name?.trim() ||
         null,
       customerEmail: o.customers?.email ?? null,
+      razorpayPaymentId:
+        o.payment_provider === "razorpay" && o.external_payment_id
+          ? o.external_payment_id
+          : null,
+      refundTransactionId: o.refund_transaction_id ?? null,
       productNames: o.order_items.map((item) => item.product_name).join(" "),
       products: [...productMap.values()],
     };

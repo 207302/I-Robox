@@ -25,7 +25,8 @@
     "deps:outdated": "npm outdated",
     "algolia:reindex": "node src/algolia/reindex.ts",
     "import-demo-data": "node scripts/import-demo-data.js",
-    "quick-links:markdown-to-html": "tsx scripts/convert-quick-link-markdown-to-html.ts"
+    "quick-links:markdown-to-html": "tsx scripts/convert-quick-link-markdown-to-html.ts",
+    "test:order-email": "node scripts/test-order-email.mjs"
   },
   "dependencies": {
     "@google-analytics/data": "^6.1.0",

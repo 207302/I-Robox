@@ -654,65 +654,10 @@ input[type="search"]::-webkit-search-results-decoration {
   animation: shop-filters-panel-in 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Shop — listing loading (search + filters: dim grid, progress bar, spinner) */
-@keyframes shop-search-results-bar {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(350%);
-  }
-}
-
-@keyframes shop-search-results-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.shop-search-results-busy-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  height: 3px;
-  overflow: hidden;
-  border-radius: 9999px;
-  background-color: #e5e7eb;
-}
-
-.shop-search-results-busy-bar::after {
-  content: "";
-  display: block;
-  height: 100%;
-  width: 38%;
-  border-radius: 9999px;
-  background-color: var(--color-blue, #c41e3a);
-  animation: shop-search-results-bar 0.95s ease-in-out infinite;
-}
-
+/* Shop — listing loading (search + filters: dim grid while ToyLoader drives) */
 .shop-search-results-grid-dim {
   opacity: 0.45;
   pointer-events: none;
-}
-
-.shop-search-results-busy-spinner {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 9999px;
-  border: 2px solid #e5e7eb;
-  border-top-color: var(--color-blue, #c41e3a);
-  background-color: rgb(255 255 255 / 0.92);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
-  animation: shop-search-results-spin 0.75s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shop-search-results-busy-bar::after,
-  .shop-search-results-busy-spinner {
-    animation: none;
-  }
 }
 
 /* Mobile-only filters toggle (below Shop heading) — reliable across Tailwind v4 breakpoints */

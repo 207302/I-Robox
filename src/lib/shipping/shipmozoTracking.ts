@@ -4,11 +4,18 @@ import { isUuid } from "@/lib/validation/input";
 import { fetchShipmozoTrackOrder, fetchShipmozoOrderDetailWithCandidates, collectShipmozoLookupIds, appendShipmozoMetadata } from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
+  sendNotDeliveredCustomerEmail,
+  sendNotDeliveredStoreAlert,
+} from "@/lib/email/notDeliveredEmails";
+import {
   notifyCustomerAfterShipmozoUpdate,
   type ShipmentSnapshot,
 } from "@/lib/orders/customerOrderNotifications";
 import {
+  SHIPMOZO_NOT_DELIVERED_STATUS,
+  SHIPMOZO_NOT_DELIVERED_REPOLL_AFTER_MS,
   SHIPMOZO_TRACKING_STEPS,
+  isShipmozoNotDeliveredStatus,
   type ShipmozoTrackingStatus,
 } from "@/lib/shipping/shipmozoTrackingConstants";
 
@@ -193,8 +200,133 @@ async function sendShipmozoCustomerEmails(input: {
   });
 }
 
+async function applyShipmozoNotDeliveredUpdate(payload: ShipmozoWebhookPayload) {
+  const order = await findOrderForShipmozoWebhook({
+    awb: payload.awb,
+    orderId: payload.order_id,
+  });
+  if (!order) {
+    return { ok: false as const, error: "Order not found", status: 404 };
+  }
+
+  const awb = (payload.awb ?? "").trim() || undefined;
+  const carrier = (payload.carrier ?? "").trim() || undefined;
+  const location = (payload.location ?? "").trim() || undefined;
+  const updatedAt = payload.timestamp ? new Date(payload.timestamp) : new Date();
+
+  const txResult = await prisma.$transaction(async (tx) => {
+    const before = await tx.orders.findUnique({
+      where: { id: order.id },
+      select: {
+        shipment_status: true,
+        shipments: { select: { metadata: true } },
+      },
+    });
+    if (!before) {
+      return { kind: "not_found" as const };
+    }
+
+    const previousShipmentStatus = before.shipment_status ?? "ORDER_PLACED";
+    if (previousShipmentStatus === SHIPMOZO_NOT_DELIVERED_STATUS) {
+      return { kind: "repeat" as const };
+    }
+
+    const existingShipment = await tx.shipments.findUnique({
+      where: { order_id: order.id },
+      select: { metadata: true },
+    });
+    const prevMeta =
+      existingShipment?.metadata && typeof existingShipment.metadata === "object"
+        ? (existingShipment.metadata as Record<string, unknown>)
+        : {};
+    const prevShipmozo =
+      typeof prevMeta.shipmozo === "object" && prevMeta.shipmozo
+        ? (prevMeta.shipmozo as Record<string, unknown>)
+        : {};
+
+    await tx.orders.update({
+      where: { id: order.id },
+      data: {
+        shipment_status: SHIPMOZO_NOT_DELIVERED_STATUS,
+        shipment_updated_at: updatedAt,
+        ...(awb ? { awb_number: awb } : {}),
+        ...(carrier ? { carrier } : {}),
+        ...(location ? { shipment_location: location } : {}),
+      },
+    });
+
+    await tx.shipments.upsert({
+      where: { order_id: order.id },
+      create: {
+        order_id: order.id,
+        tracking_number: awb ?? null,
+        carrier: carrier ?? "Shipmozo",
+        metadata: {
+          shipmozo: {
+            lastWebhook: payload,
+            lastStatus: SHIPMOZO_NOT_DELIVERED_STATUS,
+            updatedAt: updatedAt.toISOString(),
+          },
+        } as object,
+      },
+      update: {
+        ...(awb ? { tracking_number: awb } : {}),
+        ...(carrier ? { carrier } : {}),
+        metadata: {
+          ...prevMeta,
+          shipmozo: {
+            ...prevShipmozo,
+            lastWebhook: payload,
+            lastStatus: SHIPMOZO_NOT_DELIVERED_STATUS,
+            updatedAt: updatedAt.toISOString(),
+          },
+        } as object,
+      },
+    });
+
+    return {
+      kind: "updated" as const,
+      previousShipmentStatus,
+    };
+  });
+
+  if (txResult.kind === "not_found") {
+    return { ok: false as const, error: "Order not found", status: 404 };
+  }
+
+  if (txResult.kind === "repeat") {
+    console.info("[shipmozo-nd] repeat ND webhook, skipping DB update", { orderId: order.id });
+    return { ok: true as const, skipped: true as const, orderId: order.id };
+  }
+
+  try {
+    await sendNotDeliveredCustomerEmail(order.id);
+  } catch (emailErr) {
+    console.error("[shipmozo-nd] customer email failed", { orderId: order.id, emailErr });
+  }
+  try {
+    await sendNotDeliveredStoreAlert(order.id);
+  } catch (emailErr) {
+    console.error("[shipmozo-nd] store alert email failed", { orderId: order.id, emailErr });
+  }
+
+  return {
+    ok: true as const,
+    orderId: order.id,
+    previousStatus: txResult.previousShipmentStatus,
+    mappedStatus: SHIPMOZO_NOT_DELIVERED_STATUS,
+    shouldSendPickupEmail: false,
+    awb: awb ?? null,
+    carrier: carrier ?? null,
+  };
+}
+
 export async function applyShipmozoWebhookUpdate(payload: ShipmozoWebhookPayload) {
   const statusRaw = String(payload.status ?? "").trim();
+  if (isShipmozoNotDeliveredStatus(statusRaw)) {
+    return applyShipmozoNotDeliveredUpdate(payload);
+  }
+
   const mappedStatus = normalizeShipmozoWebhookStatus(statusRaw);
   if (!mappedStatus) {
     return { ok: false as const, error: `Unsupported status: ${statusRaw}`, status: 400 };
@@ -532,6 +664,13 @@ export async function syncShipmozoTrackingForOrder(
     if (order.shipment_status === "DELIVERED") {
       return { ok: true as const, skipped: true as const, reason: "already_delivered" };
     }
+    if (order.shipment_status === SHIPMOZO_NOT_DELIVERED_STATUS) {
+      const ndUpdatedAt = order.shipment_updated_at?.getTime() ?? 0;
+      const ndAgeMs = ndUpdatedAt > 0 ? Date.now() - ndUpdatedAt : 0;
+      if (ndAgeMs < SHIPMOZO_NOT_DELIVERED_REPOLL_AFTER_MS) {
+        return { ok: true as const, skipped: true as const, reason: "not_delivered" };
+      }
+    }
 
     const minAgeMs = options?.minAgeMs ?? DEFAULT_SYNC_MIN_AGE_MS;
     if (
@@ -575,13 +714,24 @@ export async function runShipmozoTrackingSync() {
 
   const lookbackDays = Math.max(1, Number(process.env.SHIPMOZO_TRACKING_LOOKBACK_DAYS ?? 45) || 45);
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(Date.now() - SHIPMOZO_NOT_DELIVERED_REPOLL_AFTER_MS);
   const batchSize = Math.max(1, Math.min(100, Number(process.env.SHIPMOZO_TRACKING_BATCH_SIZE ?? 40) || 40));
 
   const orders = await prisma.orders.findMany({
     where: {
       created_at: { gte: since },
       shipment_status: { not: "DELIVERED" },
-      OR: [{ awb_number: { not: null } }, { shipments: { tracking_number: { not: null } } }],
+      AND: [
+        {
+          OR: [
+            { shipment_status: { not: SHIPMOZO_NOT_DELIVERED_STATUS } },
+            { shipment_updated_at: { lt: sevenDaysAgo } },
+          ],
+        },
+        {
+          OR: [{ awb_number: { not: null } }, { shipments: { tracking_number: { not: null } } }],
+        },
+      ],
     },
     orderBy: [{ shipment_updated_at: "asc" }, { created_at: "desc" }],
     take: batchSize,

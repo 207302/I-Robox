@@ -1,0 +1,6 @@
+ALTER TYPE "payment_status_type" ADD VALUE IF NOT EXISTS 'PARTIALLY_REFUNDED';
+
+ALTER TABLE "orders"
+  ADD COLUMN IF NOT EXISTS "refund_transaction_id" VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS "refunded_amount" INTEGER,
+  ADD COLUMN IF NOT EXISTS "refund_error" TEXT;

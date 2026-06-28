@@ -36,6 +36,19 @@ export function verifyRazorpayPaymentSignature(input: {
   return digest === input.razorpaySignature;
 }
 
+export function isRazorpayWebhookSecretConfigured() {
+  return Boolean(process.env.RAZORPAY_WEBHOOK_SECRET?.trim());
+}
+
+/** Logs at startup when refund webhooks cannot verify signatures. */
+export function warnRazorpayWebhookSecretMissing() {
+  if (isRazorpayWebhookSecretConfigured()) return;
+  console.error(
+    "[razorpay] RAZORPAY_WEBHOOK_SECRET is not set — refund webhooks will fail signature verification. " +
+      "Copy the webhook secret from Razorpay Dashboard → Account & Settings → Webhooks and set it in your environment."
+  );
+}
+
 export function verifyRazorpayWebhookSignature(input: {
   rawBody: string;
   signature: string;

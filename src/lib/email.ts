@@ -18,6 +18,31 @@ export function isEmailConfigured() {
   );
 }
 
+/** For diagnostics — which SMTP env vars are missing (never logs secrets). */
+export function getMissingEmailEnvKeys(): string[] {
+  const keys = [
+    "EMAIL_SERVER_HOST",
+    "EMAIL_SERVER_PORT",
+    "EMAIL_SERVER_USER",
+    "EMAIL_SERVER_PASSWORD",
+    "EMAIL_FROM",
+  ] as const;
+  return keys.filter((key) => !String(process.env[key] ?? "").trim());
+}
+
+/** Logs at startup when transactional email cannot be sent (order confirmations, refunds, etc.). */
+export function warnEmailSmtpMissing() {
+  const missing = getMissingEmailEnvKeys();
+  if (missing.length === 0) return;
+  console.error(
+    "[email] SMTP not configured — order confirmation and notification emails will be skipped. " +
+      `Missing: ${missing.join(", ")}. ` +
+      "On Hostinger: hPanel → Websites → Node.js → your app → Environment variables. " +
+      "Use smtp.hostinger.com + info@i-robox.com for orders (see .env.example). " +
+      "Set EMAIL_SERVER_HOST, EMAIL_SERVER_PORT, EMAIL_SERVER_USER, EMAIL_SERVER_PASSWORD, EMAIL_FROM, then redeploy."
+  );
+}
+
 export type EmailAttachment = {
   filename: string;
   content: Buffer | Uint8Array;
@@ -100,12 +125,39 @@ export async function sendEmailWithTransporter(
 }
 
 export async function sendEmail(input: MailInput) {
-  if (!isEmailConfigured()) return { ok: false, skipped: true };
+  const missing = getMissingEmailEnvKeys();
+  if (missing.length > 0) {
+    console.error("[sendEmail] skipped — SMTP not configured", {
+      to: input.to,
+      subject: input.subject,
+      missingEnv: missing,
+    });
+    return { ok: false as const, skipped: true as const, reason: "smtp_not_configured" as const };
+  }
 
-  const transporter = nodemailer.createTransport(smtpConfig());
-  await transporter.sendMail(buildMailOptions(input));
+  console.info("[sendEmail] sending", { to: input.to, subject: input.subject });
 
-  return { ok: true };
+  try {
+    const transporter = nodemailer.createTransport(smtpConfig());
+    const result = await transporter.sendMail(buildMailOptions(input));
+    console.info("[sendEmail] sent", {
+      to: input.to,
+      subject: input.subject,
+      messageId: result.messageId ?? null,
+      accepted: result.accepted,
+      rejected: result.rejected,
+    });
+    return { ok: true as const };
+  } catch (err) {
+    const hint = getSmtpErrorHint(err);
+    console.error("[sendEmail] failed", {
+      to: input.to,
+      subject: input.subject,
+      error: err,
+      hint,
+    });
+    throw err;
+  }
 }
 
 export function orderEmailTemplate(input: {

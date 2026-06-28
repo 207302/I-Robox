@@ -28,6 +28,7 @@ import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
 import bcrypt from "bcrypt";
 import { validateShippingAddress } from "@/lib/validation/address";
+import { assertCartItemsInStock } from "@/lib/inventory/cartStock";
 
 type CheckoutItem = {
   productId: string;
@@ -236,24 +237,10 @@ export async function buildCheckoutContext(input: {
 
   // Validate product-level inventory before creating a payment order so users do not pay for
   // items that cannot be reserved/confirmed later.
-  const qtyByProduct = new Map<string, number>();
-  for (const li of lineItems) {
-    qtyByProduct.set(li.productId, (qtyByProduct.get(li.productId) ?? 0) + li.quantity);
-  }
-  const invRows = await prisma.inventory.findMany({
-    where: {
-      product_id: { in: [...qtyByProduct.keys()] },
-      product_variant_id: null,
-    },
-    select: { product_id: true, available_quantity: true },
-  });
-  const invMap = new Map(invRows.map((r) => [r.product_id, r.available_quantity]));
-  for (const [productId, requiredQty] of qtyByProduct.entries()) {
-    const available = invMap.get(productId) ?? 0;
-    if (available < requiredQty) {
-      throw new Error("OUT_OF_STOCK");
-    }
-  }
+  await assertCartItemsInStock(
+    lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
+    new Map(lineItems.map((li) => [li.productId, li.productName]))
+  );
 
   const subtotal = lineItems.reduce((s, li) => s + li.subtotal, 0);
   let discount = 0;

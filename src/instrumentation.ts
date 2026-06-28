@@ -1,6 +1,20 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  try {
+    const { warnRazorpayWebhookSecretMissing } = await import("@/lib/payments/razorpay");
+    warnRazorpayWebhookSecretMissing();
+  } catch (err) {
+    console.warn("[instrumentation] Razorpay webhook secret check skipped:", err);
+  }
+
+  try {
+    const { warnEmailSmtpMissing } = await import("@/lib/email");
+    warnEmailSmtpMissing();
+  } catch (err) {
+    console.warn("[instrumentation] SMTP env check skipped:", err);
+  }
+
   // Dev / `next dev`: env + Prisma init happen on first request, not during instrumentation.
   if (process.env.NODE_ENV !== "production") return;
 

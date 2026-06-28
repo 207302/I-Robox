@@ -129,6 +129,34 @@ type AdminOrderDetailClientProps = {
   canDelete?: boolean;
 };
 
+function CopyableTransactionId({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Could not copy to clipboard");
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <code className="font-mono text-xs break-all text-dark">{value}</code>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        title={copied ? "Copied!" : "Copy to clipboard"}
+        className="relative shrink-0 rounded border border-gray-3 bg-gray-1 px-2 py-0.5 text-xs font-medium text-meta-3 hover:bg-gray-2 transition"
+      >
+        {copied ? "Copied!" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailClientProps) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -137,6 +165,13 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   const [deleting, setDeleting] = useState(false);
   const [syncingShipment, setSyncingShipment] = useState(false);
   const [pushingShipmozo, setPushingShipmozo] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState("PENDING");
+
+  function resolveStatusSelection(order: { status?: string; paymentStatus?: string }): string {
+    if (order.paymentStatus === "PARTIALLY_REFUNDED") return "PARTIALLY_REFUNDED";
+    if (order.paymentStatus === "REFUNDED") return "REFUNDED";
+    return order.status ?? "PENDING";
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -148,7 +183,10 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
         const json = await res.json().catch(() => null);
         if (cancelled || !res.ok || !json) return;
         setData((prev: any) => {
-          if (!prev || !options?.silent) return json;
+          if (!prev || !options?.silent) {
+            setSelectedStatus(resolveStatusSelection(json));
+            return json;
+          }
           return {
             ...prev,
             shipment: {
@@ -178,18 +216,20 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   }, [id]);
 
   const statusOptions = useMemo(
-    () => [
-      "PENDING",
-      "PAYMENT_FAILED",
-      "CONFIRMED",
-      "CANCELLED",
-      "SHIPPED",
-      "DELIVERED",
-      "RETURN_REQUESTED",
-      "RETURN_APPROVED",
-      "RETURN_REJECTED",
-      "REFUNDED",
-    ],
+    () =>
+      [
+        { value: "PENDING", label: "Pending" },
+        { value: "PAYMENT_FAILED", label: "Payment failed" },
+        { value: "CONFIRMED", label: "Confirmed" },
+        { value: "CANCELLED", label: "Cancelled" },
+        { value: "SHIPPED", label: "Shipped" },
+        { value: "DELIVERED", label: "Delivered" },
+        { value: "RETURN_REQUESTED", label: "Return requested" },
+        { value: "RETURN_APPROVED", label: "Return approved" },
+        { value: "RETURN_REJECTED", label: "Return rejected" },
+        { value: "REFUNDED", label: "Refunded" },
+        { value: "PARTIALLY_REFUNDED", label: "Partial Refund" },
+      ] as const,
     []
   );
 
@@ -223,13 +263,21 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   }
 
   async function save() {
+    if (selectedStatus === "PARTIALLY_REFUNDED" || selectedStatus === "REFUNDED") {
+      const label = selectedStatus === "PARTIALLY_REFUNDED" ? "Partial Refund" : "Refunded";
+      const confirmed = window.confirm(
+        `This will update the payment status to ${label} and email the customer. This cannot be undone. Continue?`
+      );
+      if (!confirmed) return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/orders/${id}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          status: data.status,
+          status: selectedStatus,
           shipment: {
             ...data.shipment,
             trackingStatus: data.shipment?.trackingStatus,
@@ -237,8 +285,18 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
         }),
       });
       const out = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(out?.error || "Failed to save");
-      toast.success("Order updated");
+      if (!res.ok && res.status !== 207) throw new Error(out?.error || "Failed to save");
+      if (res.status === 207 && typeof out.emailError === "string") {
+        toast(out.emailError, { duration: 6000, icon: "⚠️" });
+      } else {
+        toast.success("Order updated");
+      }
+      const refresh = await fetch(`/api/admin/orders/${id}`);
+      const json = await refresh.json().catch(() => null);
+      if (refresh.ok && json) {
+        setData(json);
+        setSelectedStatus(resolveStatusSelection(json));
+      }
       router.refresh();
     } catch (e: any) {
       toast.error(e?.message || "Failed");
@@ -269,6 +327,12 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   }
 
   if (!data) return <div className="text-sm text-meta-3">Loading…</div>;
+
+  const isRazorpayPayment = (data.paymentMethod ?? "").toLowerCase().includes("razorpay");
+  const isRefunded =
+    data.paymentStatus === "REFUNDED" ||
+    data.paymentStatus === "PARTIALLY_REFUNDED" ||
+    Boolean(data.refundTransactionId);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -335,7 +399,7 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
           </div>
           <div className="sm:col-span-2">
             <dt className="text-meta-3">Address</dt>
-            <dd className="mt-0.5 font-medium text-dark">
+            <dd className="mt-0.5 font-medium text-dark max-w-xs break-words">
               {data.shippingAddress ? (
                 <span className="block space-y-0.5">
                   <span className="block">
@@ -363,12 +427,44 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
               ) : null}
             </dd>
           </div>
-          <div>
+          <div className="sm:col-span-2">
             <dt className="text-meta-3">Payment</dt>
-            <dd className="mt-0.5 font-medium text-dark">
-              {data.paymentMethod ?? "—"}
-              {data.paymentStatus ? (
-                <span className="block text-meta-3 font-normal">{data.paymentStatus}</span>
+            <dd className="mt-0.5 space-y-3 font-medium text-dark">
+              <div>{data.paymentMethod ?? "—"}</div>
+              {isRazorpayPayment && data.paymentStatus === "SUCCEEDED" ? (
+                <p className="text-sm font-medium text-green-700">Razorpay payment succeeded</p>
+              ) : null}
+              <div>
+                <div className="text-meta-3 text-xs font-normal">Payment status</div>
+                <div className="mt-0.5">{data.paymentStatus ?? "—"}</div>
+              </div>
+              {(data.razorpayPaymentId || data.refundTransactionId) ? (
+                <div className="space-y-2">
+                  <div className="text-meta-3 text-xs font-normal">Transaction ID</div>
+                  {data.razorpayPaymentId ? (
+                    <div>
+                      <div className="text-xs text-meta-3 font-normal mb-1">Payment</div>
+                      <CopyableTransactionId value={data.razorpayPaymentId} />
+                    </div>
+                  ) : null}
+                  {data.refundTransactionId ? (
+                    <div>
+                      <div className="text-xs text-meta-3 font-normal mb-1">Refund</div>
+                      <CopyableTransactionId value={data.refundTransactionId} />
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div>
+                  <div className="text-meta-3 text-xs font-normal">Transaction ID</div>
+                  <div className="mt-0.5 text-meta-3 font-normal">—</div>
+                </div>
+              )}
+              {isRefunded && typeof data.refundedAmount === "number" ? (
+                <div>
+                  <div className="text-meta-3 text-xs font-normal">Refunded amount</div>
+                  <div className="mt-0.5">{formatPrice(data.refundedAmount / 100)}</div>
+                </div>
               ) : null}
             </dd>
           </div>
@@ -386,16 +482,29 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-dark">Order status</span>
           <select
-            value={data.status ?? "PENDING"}
-            onChange={(e) => setData((d: any) => ({ ...d, status: e.target.value }))}
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           >
             {statusOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
+              <option
+                key={s.value}
+                value={s.value}
+                disabled={data.paymentStatus === "REFUNDED" && s.value === "PARTIALLY_REFUNDED"}
+              >
+                {s.label}
               </option>
             ))}
           </select>
+          {data.paymentStatus === "REFUNDED" ? (
+            <p className="mt-1.5 text-xs text-amber-700">
+              This order has already been fully refunded.
+            </p>
+          ) : null}
+          <p className="mt-1.5 text-xs text-meta-3">
+            &ldquo;Partial Refund&rdquo; and &ldquo;Refunded&rdquo; update payment status and email the
+            customer. Other options update fulfilment status only.
+          </p>
         </label>
       </div>
 

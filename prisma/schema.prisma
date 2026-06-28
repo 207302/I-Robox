@@ -346,6 +346,9 @@ model orders {
   shipping_address_id                             String?                  @db.Uuid
   billing_address_id                              String?                  @db.Uuid
   external_payment_id                             String?                  @db.VarChar(255)
+  refund_transaction_id                           String?                  @db.VarChar(255)
+  refunded_amount                                 Int?
+  refund_error                                    String?
   payment_provider                                String?                  @db.VarChar(80)
   is_gift                                         Boolean                  @default(false)
   gift_message                                    String?
@@ -678,6 +681,7 @@ enum payment_status_type {
   SUCCEEDED
   FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 enum return_status_type {

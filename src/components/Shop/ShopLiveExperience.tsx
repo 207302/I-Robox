@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import ProductItem from "@/components/Common/ProductItem";
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
+import { ToyLoader } from "@/components/ui/ToyLoader";
 import { ChevronDown } from "@/components/Header/icons";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { shopPageHeading } from "@/lib/seo/categoryMetadata";
@@ -1243,21 +1244,16 @@ export default function ShopLiveExperience({
               className="relative scroll-mt-24"
               aria-busy={gridBusy}
             >
-              {gridResultsLoading ? (
-                <>
-                  <div
-                    className="shop-search-results-busy-bar"
-                    role="progressbar"
-                    aria-label="Loading products"
-                    aria-valuetext="Loading"
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-                    aria-hidden
-                  >
-                    <div className="shop-search-results-busy-spinner" />
-                  </div>
-                </>
+              {gridBusy ? (
+                <div
+                  className={
+                    gridResultsLoading
+                      ? "absolute top-0 left-0 right-0 z-20"
+                      : "mb-6 h-11 shrink-0"
+                  }
+                >
+                  <ToyLoader aria-label="Loading products" />
+                </div>
               ) : null}
               <div
                 className={

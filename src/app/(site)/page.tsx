@@ -1,12 +1,14 @@
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHomePageData } from "@/lib/queries/homePage";
+import { getFeaturedHomeReview } from "@/lib/queries/productReviews";
+import { getSiteChromeColors } from "@/lib/queries/marketing";
 import { withPagePerf } from "@/lib/observability/route";
 import Home, {
   type HomeBrandRailItem,
   type HomeCategoryTile,
   type HomeHighlightCard,
-  type HomeProductCard,
 } from "@/components/Home";
+import type { HomeProductCardItem } from "@/components/Home/shared/HomeProductCard";
 import type { HeroSlide } from "@/components/Home/heroTypes";
 import {
   cloudinaryCardUrl,
@@ -68,7 +70,7 @@ export default async function HomePage() {
   return withPagePerf("page:/", async () => {
   const now = new Date();
 
-  const {
+  const [{
     siteMarketingSettings,
     categoriesRaw,
     newArrivalsRaw,
@@ -77,7 +79,11 @@ export default async function HomePage() {
     highlightsRaw,
     brandRailRaw,
     categoryTilesRaw,
-  } = await getHomePageData();
+  }, chromeColors, featuredReviewRaw] = await Promise.all([
+    getHomePageData(),
+    getSiteChromeColors(),
+    getFeaturedHomeReview(),
+  ]);
 
   const highlightsSectionEyebrow =
     siteMarketingSettings?.highlights_section_eyebrow?.trim() || "Highlights";
@@ -113,8 +119,8 @@ export default async function HomePage() {
       // Link target priority (independent of `kind`):
       //   1) link_url override
       //   2) products  → /shop/<slug>
-      //   3) brands    → /shop?brand=<slug>
-      //   4) categories→ /shop?category=<slug>
+      //   3) brands    → /brand/<slug>
+      //   4) categories→ /category/<slug>
       //   5) /shop
       const product = "products" in h ? h.products : undefined;
       const brand = "brands" in h ? h.brands : undefined;
@@ -125,9 +131,9 @@ export default async function HomePage() {
         if (product?.slug) {
           href = `/shop/${product.slug}`;
         } else if (brand?.slug) {
-          href = `/shop?brand=${encodeURIComponent(brand.slug)}`;
+          href = `/brand/${encodeURIComponent(brand.slug)}`;
         } else if (category?.slug) {
-          href = `/shop?category=${encodeURIComponent(category.slug)}`;
+          href = `/category/${encodeURIComponent(category.slug)}`;
         } else {
           href = "/shop";
         }
@@ -158,7 +164,7 @@ export default async function HomePage() {
       id: row.id,
       name: row.label_override?.trim() || row.categories!.name,
       slug: row.categories!.slug,
-      image: row.image_url ? cloudinaryCardUrl(row.image_url, 480) : null,
+      image: row.image_url ? cloudinaryCardUrl(row.image_url, 640) : null,
     }));
 
   const categories: HomeCategoryTile[] =
@@ -179,29 +185,44 @@ export default async function HomePage() {
     )
     .map((row) => ({
       id: row.id,
-      href: `/shop?brand=${encodeURIComponent(row.brands!.slug)}`,
+      href: `/brand/${encodeURIComponent(row.brands!.slug)}`,
       image: cloudinaryCardUrl(row.image_url, 480),
       label: row.label_override?.trim() || row.brands!.name,
       alt: row.brands!.name,
     }));
 
-  const newArrivals: HomeProductCard[] = newArrivalsRaw.map((p) => ({
+  const newArrivals: HomeProductCardItem[] = newArrivalsRaw.map((p) => ({
     id: p.id,
+    productId: p.id,
     slug: p.slug,
     title: p.title,
     image: cloudinaryProductCardUrl(pickCardImage(p.product_images), 380),
     price: Number(p.price),
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
+    averageRating: p.averageRating ?? null,
+    reviewCount: p.reviewCount ?? 0,
   }));
 
-  const bestSellers: HomeProductCard[] = bestSellersRaw.map((p) => ({
+  const bestSellers: HomeProductCardItem[] = bestSellersRaw.map((p) => ({
     id: p.id,
+    productId: p.id,
     slug: p.slug,
     title: p.title,
     image: cloudinaryProductCardUrl(pickCardImage(p.product_images), 380),
     price: Number(p.price),
     discountedPrice: p.discountedPrice == null ? null : Number(p.discountedPrice),
+    averageRating: p.averageRating ?? null,
+    reviewCount: p.reviewCount ?? 0,
   }));
+
+  const featuredReview = featuredReviewRaw
+    ? {
+        ...featuredReviewRaw,
+        productImageUrl: featuredReviewRaw.productImageUrl
+          ? cloudinaryProductCardUrl(featuredReviewRaw.productImageUrl, 192)
+          : null,
+      }
+    : null;
 
   return (
     <>
@@ -218,6 +239,11 @@ export default async function HomePage() {
         categories={categories}
         newArrivals={newArrivals}
         bestSellers={bestSellers}
+        featuredReview={featuredReview}
+        footerChrome={{
+          footerBg: chromeColors.footerBg,
+          footerText: chromeColors.footerText,
+        }}
       />
     </>
   );

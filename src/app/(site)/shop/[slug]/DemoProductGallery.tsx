@@ -2,34 +2,46 @@
 
 import { usePreviewSlider } from "@/app/context/PreviewSliderContext";
 import { FullScreenIcon } from "@/assets/icons";
+import HomeProductWishlistButton from "@/components/Home/shared/HomeProductWishlistButton";
 import SafeProductImage from "@/components/Common/SafeProductImage";
 import { resolveProductImageSrc } from "@/lib/shop/productImagePlaceholder";
 import { productImageAlt } from "@/lib/seo/metadata";
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 
 const SWIPE_THRESHOLD = 40;
-/** Auto-advance main image when there are multiple photos */
 const AUTO_ADVANCE_MS = 4500;
-/** Main stage slide animation */
 const SLIDE_MS = 600;
 
-/** Scroll thumbnail rail horizontally only — avoids scrollIntoView jumping the page on mobile */
 function scrollThumbnailIntoRail(rail: HTMLDivElement, thumb: HTMLElement) {
-  const targetLeft = thumb.offsetLeft - (rail.clientWidth - thumb.offsetWidth) / 2;
-  const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  const targetTop = thumb.offsetTop - (rail.clientHeight - thumb.offsetHeight) / 2;
+  const maxScroll = Math.max(0, rail.scrollHeight - rail.clientHeight);
   rail.scrollTo({
-    left: Math.max(0, Math.min(targetLeft, maxScroll)),
+    top: Math.max(0, Math.min(targetTop, maxScroll)),
     behavior: "smooth",
   });
 }
+
+type WishlistProps = {
+  productId: string;
+  slug: string;
+  title: string;
+  image: string;
+  price: number;
+};
 
 type Props = {
   title: string;
   images: string[];
   galleryId?: string;
+  wishlist?: WishlistProps;
 };
 
-export default function DemoProductGallery({ title, images, galleryId = "default" }: Props) {
+export default function DemoProductGallery({
+  title,
+  images,
+  galleryId = "default",
+  wishlist,
+}: Props) {
   const { openPreviewModal } = usePreviewSlider();
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
@@ -79,16 +91,6 @@ export default function DemoProductGallery({ title, images, galleryId = "default
     openLightbox(activeIndex);
   };
 
-  const scrollThumbnails = (direction: "left" | "right") => {
-    const rail = thumbnailRailRef.current;
-    if (!rail) return;
-    const amount = Math.max(rail.clientWidth * 0.75, 180);
-    rail.scrollBy({
-      left: direction === "right" ? amount : -amount,
-      behavior: "smooth",
-    });
-  };
-
   useEffect(() => {
     const onSelect = (event: Event) => {
       const customEvent = event as CustomEvent<{
@@ -105,9 +107,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
       const image = customEvent.detail?.image;
       if (!image) return;
       const idx = images.indexOf(image);
-      if (idx >= 0) {
-        goTo(idx);
-      }
+      if (idx >= 0) goTo(idx);
     };
 
     window.addEventListener("product-gallery-select-image", onSelect as EventListener);
@@ -158,7 +158,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
   return (
     <div
       ref={galleryRootRef}
-      className="w-full max-w-full space-y-3 overflow-x-hidden sm:space-y-4"
+      className="flex w-full flex-row gap-3"
       onPointerEnter={() => {
         autoplayPausedRef.current = true;
       }}
@@ -166,15 +166,56 @@ export default function DemoProductGallery({ title, images, galleryId = "default
         autoplayPausedRef.current = false;
       }}
     >
+      {images.length > 1 ? (
+        <div
+          ref={thumbnailRailRef}
+          className="flex max-h-[300px] w-[72px] shrink-0 flex-col gap-2 overflow-y-auto no-scrollbar md:max-h-[420px]"
+        >
+          {images.map((thumbnail, index) => (
+            <button
+              key={`${thumbnail}-${index}`}
+              type="button"
+              data-thumb-index={index}
+              onClick={() => goTo(index)}
+              className={`relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg border bg-white object-contain transition ${
+                activeIndex === index
+                  ? "border-blue shadow-md"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+              aria-label={`Show image ${index + 1}`}
+            >
+              <SafeProductImage
+                src={resolveProductImageSrc(thumbnail)}
+                alt={`${title} — thumbnail ${index + 1} | i-robox`}
+                fill
+                sizes="72px"
+                className="object-contain p-1.5"
+                loading="lazy"
+              />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div
-        className="relative w-full aspect-square overflow-hidden rounded-2xl border border-gray-3 bg-gray-1 touch-pan-y"
+        className="relative min-w-0 flex-1 overflow-hidden rounded-2xl bg-gray-50 touch-pan-y h-[300px] md:h-[420px]"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
+        {wishlist ? (
+          <HomeProductWishlistButton
+            productId={wishlist.productId}
+            slug={wishlist.slug}
+            title={wishlist.title}
+            image={wishlist.image}
+            price={wishlist.price}
+          />
+        ) : null}
+
         <button
           type="button"
           onClick={() => openLightbox(activeIndex)}
-          className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-3 bg-white/95 text-dark shadow-sm transition hover:bg-white sm:right-4 sm:top-4"
+          className="absolute left-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white"
           aria-label="Open fullscreen image viewer"
         >
           <FullScreenIcon />
@@ -202,7 +243,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 event.stopPropagation();
                 goTo(activeIndex - 1);
               }}
-              className="absolute left-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-3 bg-white/95 text-dark shadow-sm transition hover:bg-white sm:left-3 sm:h-10 sm:w-10"
+              className="absolute left-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white"
               aria-label="Previous image"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -221,7 +262,7 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 event.stopPropagation();
                 goTo(activeIndex + 1);
               }}
-              className="absolute right-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-3 bg-white/95 text-dark shadow-sm transition hover:bg-white sm:right-3 sm:h-10 sm:w-10"
+              className="absolute right-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white"
               aria-label="Next image"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -252,10 +293,14 @@ export default function DemoProductGallery({ title, images, galleryId = "default
                 >
                   <SafeProductImage
                     src={resolveProductImageSrc(src)}
-                    alt={index === 0 ? productImageAlt(title) : `${title} — view ${index + 1} | i-robox`}
+                    alt={
+                      index === 0
+                        ? productImageAlt(title)
+                        : `${title} — view ${index + 1} | i-robox`
+                    }
                     fill
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    className="object-contain p-2 sm:p-4"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    className="object-contain p-4"
                     priority={index === 0}
                     fetchPriority={index === 0 ? "high" : undefined}
                     loading={index === 0 ? undefined : "lazy"}
@@ -269,102 +314,13 @@ export default function DemoProductGallery({ title, images, galleryId = "default
             src={resolveProductImageSrc(images[0])}
             alt={productImageAlt(title)}
             fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            className="object-contain p-2 sm:p-4"
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="object-contain p-4"
             priority
             fetchPriority="high"
           />
         ) : null}
       </div>
-
-      {images.length > 1 ? (
-        <div className="flex min-h-[4.5rem] items-center gap-2 sm:min-h-24">
-          <button
-            type="button"
-            onClick={() => scrollThumbnails("left")}
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-3 bg-white text-dark shadow-sm transition hover:bg-gray-1 sm:inline-flex"
-            aria-label="Scroll thumbnails left"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M10 3.5L5.5 8L10 12.5"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-
-          <div className="min-w-0 flex-1 overflow-x-hidden">
-            <div ref={thumbnailRailRef} className="flex w-full max-w-full gap-3 overflow-x-auto pb-1 no-scrollbar">
-              {images.map((thumbnail, index) => (
-                <button
-                  key={`${thumbnail}-${index}`}
-                  type="button"
-                  data-thumb-index={index}
-                  onClick={() => goTo(index)}
-                  className={`relative aspect-square h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border bg-white sm:h-24 sm:w-24 ${
-                    activeIndex === index ? "border-blue" : "border-gray-3"
-                  }`}
-                  aria-label={`Show image ${index + 1}`}
-                >
-                  <SafeProductImage
-                    src={resolveProductImageSrc(thumbnail)}
-                    alt={`${title} — thumbnail ${index + 1} | i-robox`}
-                    fill
-                    sizes="(max-width: 1024px) 33vw, 16vw"
-                    className="object-contain p-2"
-                    loading="lazy"
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => scrollThumbnails("right")}
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-3 bg-white text-dark shadow-sm transition hover:bg-gray-1 sm:inline-flex"
-            aria-label="Scroll thumbnails right"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M6 3.5L10.5 8L6 12.5"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      ) : (
-        <div ref={thumbnailRailRef} className="flex w-full max-w-full gap-3 overflow-x-auto pb-1 no-scrollbar">
-          {images.map((thumbnail, index) => (
-            <button
-              key={`${thumbnail}-${index}`}
-              type="button"
-              data-thumb-index={index}
-              onClick={() => goTo(index)}
-              className={`relative aspect-square h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border bg-white sm:h-24 sm:w-24 ${
-                activeIndex === index ? "border-blue" : "border-gray-3"
-              }`}
-              aria-label={`Show image ${index + 1}`}
-            >
-              <SafeProductImage
-                src={resolveProductImageSrc(thumbnail)}
-                alt={`${title} — thumbnail ${index + 1} | i-robox`}
-                fill
-                sizes="(max-width: 1024px) 33vw, 16vw"
-                className="object-contain p-2"
-                loading="lazy"
-              />
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
-

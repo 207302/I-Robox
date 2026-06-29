@@ -90,6 +90,7 @@ export function revalidateProductCatalog(options?: RevalidateProductCatalogOptio
 
 export function revalidateProductReviews(productId: string): void {
   revalidateTag(productReviewsTag(productId));
+  revalidateTag(HOME_PAGE_TAG);
 }
 
 export async function revalidateProductById(productId: string): Promise<void> {
@@ -107,6 +108,7 @@ export async function revalidateProductReviewsByReviewId(reviewId: string): Prom
     select: { product_id: true },
   });
   if (row?.product_id) revalidateProductReviews(row.product_id);
+  else revalidateTag(HOME_PAGE_TAG);
 }
 
 /** Category tree, nav, shop facets, home tiles fallback. */

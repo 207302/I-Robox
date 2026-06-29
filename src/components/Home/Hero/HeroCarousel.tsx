@@ -9,6 +9,7 @@ import "swiper/css";
 import Image from "next/image";
 import Link from "next/link";
 import { IHeroSlider } from "@/types/hero";
+import { htmlToPlainText } from "@/lib/htmlPlainText";
 
 const HeroCarousal = ({ sliders }: { sliders: any }) => {
   return (
@@ -47,7 +48,7 @@ const HeroCarousal = ({ sliders }: { sliders: any }) => {
               </h1>
 
               <p className="text-base text-meta-3">
-                {slider?.product?.shortDescription?.slice(0, 100)}
+                {htmlToPlainText(slider?.product?.shortDescription ?? "").slice(0, 100)}
               </p>
 
               <Link

@@ -1,13 +1,20 @@
-import Image from "next/image";
-import Link from "next/link";
 import FadeInSection from "@/components/ui/FadeInSection";
 import HeroBannerSection from "./HeroBannerSection";
-import HomeProductCard from "./shared/HomeProductCard";
 import type { HeroSlide } from "./heroTypes";
 import HomeBrandRailSection from "./HomeBrandRailSection";
+import HomeBottomTrustBar from "./HomeBottomTrustBar";
 import HomeCategoryTilesSection from "./HomeCategoryTilesSection";
 import HomeHighlightsSection from "./HomeHighlightsSection";
-import HomeProductCarouselSection from "./HomeProductCarouselSection";
+import HomeNewsletterBanner from "./HomeNewsletterBanner";
+import HomeStatsBar from "./HomeStatsBar";
+import HomeTrustBar from "./HomeTrustBar";
+import HomeWhyChooseRow from "./HomeWhyChooseRow";
+import HomeSectionHeader from "./shared/HomeSectionHeader";
+import HomeProductRail from "./shared/HomeProductRail";
+import type { HomeProductCardItem } from "./shared/HomeProductCard";
+import { HOME_SECTION_INNER, HOME_SECTION_SHELL } from "./shared/homeRailStyles";
+import type { SiteChromeColors } from "@/lib/marketing/chromeColors";
+import type { HomeFeaturedReview } from "@/lib/queries/productReviews";
 
 export type HomeBrandRailItem = {
   id: string;
@@ -34,14 +41,8 @@ export type HomeCategoryTile = {
   image?: string | null;
 };
 
-export type HomeProductCard = {
-  id: string;
-  slug: string;
-  title: string;
-  image: string;
-  price: number;
-  discountedPrice?: number | null;
-};
+/** @deprecated Use HomeProductCardItem from shared/HomeProductCard */
+export type HomeProductCard = HomeProductCardItem;
 
 type HomeProps = {
   heroSlides?: HeroSlide[];
@@ -65,32 +66,11 @@ type HomeProps = {
   highlights?: HomeHighlightCard[];
   brandRail?: HomeBrandRailItem[];
   categories?: HomeCategoryTile[];
-  newArrivals?: HomeProductCard[];
-  bestSellers?: HomeProductCard[];
+  newArrivals?: HomeProductCardItem[];
+  bestSellers?: HomeProductCardItem[];
+  featuredReview?: HomeFeaturedReview | null;
+  footerChrome?: Pick<SiteChromeColors, "footerBg" | "footerText">;
 };
-
-const TRUST_BAR_ITEMS = [
-  {
-    icon: "/images/icons/icon-01.svg",
-    title: "Fast Delivery",
-    subtitle: "Across India",
-  },
-  {
-    icon: "/images/icons/icon-03.svg",
-    title: "100% Original",
-    subtitle: "Products",
-  },
-  {
-    icon: "/images/icons/icon-02.svg",
-    title: "Easy Returns",
-    subtitle: "7 Days Policy",
-  },
-  {
-    icon: "/images/icons/icon-04.svg",
-    title: "Secure Payment",
-    subtitle: "Multiple Options",
-  },
-] as const;
 
 const Home = ({
   heroSlides,
@@ -103,11 +83,10 @@ const Home = ({
   categories,
   newArrivals,
   bestSellers,
+  featuredReview,
+  footerChrome,
 }: HomeProps) => {
-  const spotlightItems =
-    highlights && highlights.length > 0
-      ? highlights
-      : null;
+  const spotlightItems = highlights && highlights.length > 0 ? highlights : null;
 
   return (
     <main className="bg-white">
@@ -122,99 +101,49 @@ const Home = ({
       </FadeInSection>
 
       <FadeInSection>
-        <section className="border-b border-gray-3 bg-white">
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-x-4 gap-y-5 px-4 py-6 sm:px-8 md:grid-cols-4 md:gap-6 md:py-7">
-            {TRUST_BAR_ITEMS.map((item) => (
-              <div key={item.title} className="flex items-center gap-3 md:justify-center md:gap-3.5">
-                <Image
-                  src={item.icon}
-                  alt={item.title}
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 shrink-0 md:h-9 md:w-9"
-                  sizes="36px"
-                  loading="lazy"
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-tight text-dark md:text-[15px]">{item.title}</p>
-                  <p className="text-xs font-medium leading-tight text-meta-3 md:text-[13px]">{item.subtitle}</p>
-                </div>
-              </div>
-            ))}
+        <HomeTrustBar />
+      </FadeInSection>
+
+      <FadeInSection className="overflow-visible">
+        <HomeCategoryTilesSection categories={categories ?? null} />
+      </FadeInSection>
+
+      <FadeInSection>
+        <section className={HOME_SECTION_SHELL}>
+          <div className={HOME_SECTION_INNER}>
+            <HomeSectionHeader title="New Arrivals" viewAllHref="/shop?sort=newest" />
+            <HomeProductRail
+              railId="home-new-arrivals-rail"
+              items={newArrivals ?? []}
+              showNewBadge
+              emptyMessage="No new arrivals yet — add products in Admin."
+            />
           </div>
         </section>
       </FadeInSection>
 
       <FadeInSection>
-        <section className="bg-white py-16">
-          <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-            <div className="max-w-2xl mx-auto mb-12 text-center">
-              <p className="mb-2 text-xs font-semibold tracking-[0.18em] uppercase text-blue">
-                {highlightsSectionEyebrow}
-              </p>
-              <h2 className="mb-3 text-2xl font-semibold sm:text-3xl text-dark">
-                {highlightsSectionHeading}
-              </h2>
-              <p className="text-sm leading-relaxed text-meta-3 sm:text-base">
-                Curated picks from our catalog.
-              </p>
-            </div>
-
-            <HomeHighlightsSection items={spotlightItems} />
+        <section className="overflow-visible bg-gray-50 py-12 md:py-14">
+          <div className={HOME_SECTION_INNER}>
+            <HomeHighlightsSection
+              items={spotlightItems}
+              sectionEyebrow={highlightsSectionEyebrow}
+              sectionHeading={highlightsSectionHeading}
+            />
           </div>
         </section>
       </FadeInSection>
 
       <FadeInSection>
-        <section className="border-y border-gray-3 bg-gray-1 py-16">
-          <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-            <div className="mb-10 flex items-center justify-between gap-3">
-              <div>
-                <p className="mb-1 text-xs font-semibold tracking-[0.18em] uppercase text-blue">
-                  New arrivals
-                </p>
-                <h2 className="text-xl font-semibold text-dark xl:text-heading-5">
-                  Latest drops in store.
-                </h2>
-              </div>
-              <Link
-                href="/shop"
-                prefetch={false}
-                className="text-sm font-medium text-blue transition-all duration-200 hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-            <HomeProductCarouselSection items={newArrivals ?? null} />
-          </div>
-        </section>
-      </FadeInSection>
-
-      <FadeInSection>
-        <section className="bg-white py-16">
-          <div className="w-full px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
-            <div className="mb-10 flex items-center justify-between gap-3">
-              <div>
-                <p className="mb-1 text-xs font-semibold tracking-[0.18em] uppercase text-blue">
-                  Best sellers
-                </p>
-                <h2 className="text-xl font-semibold text-dark xl:text-heading-5">
-                  Most-loved picks.
-                </h2>
-              </div>
-              <Link
-                href="/shop"
-                prefetch={false}
-                className="text-sm font-medium text-blue transition-all duration-200 hover:underline"
-              >
-                View all
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {(bestSellers ?? []).map((p) => (
-                <HomeProductCard key={p.id} item={p} />
-              ))}
-            </div>
+        <section className={`${HOME_SECTION_SHELL} pb-4 md:pb-6`}>
+          <div className={HOME_SECTION_INNER}>
+            <HomeSectionHeader title="Best Sellers" viewAllHref="/shop?sort=bestsellers" />
+            <HomeProductRail
+              railId="home-best-sellers-rail"
+              items={bestSellers ?? []}
+              showSaleBadge
+              emptyMessage="No best sellers yet — orders will populate this section."
+            />
           </div>
         </section>
       </FadeInSection>
@@ -224,9 +153,26 @@ const Home = ({
       </FadeInSection>
 
       <FadeInSection>
-        <HomeCategoryTilesSection categories={categories ?? null} />
+        <HomeStatsBar
+          footerBg={footerChrome?.footerBg}
+          footerText={footerChrome?.footerText}
+        />
       </FadeInSection>
 
+      <FadeInSection>
+        <HomeWhyChooseRow featuredReview={featuredReview} />
+      </FadeInSection>
+
+      <FadeInSection>
+        <HomeNewsletterBanner
+          footerBg={footerChrome?.footerBg}
+          footerText={footerChrome?.footerText}
+        />
+      </FadeInSection>
+
+      <FadeInSection>
+        <HomeBottomTrustBar />
+      </FadeInSection>
     </main>
   );
 };

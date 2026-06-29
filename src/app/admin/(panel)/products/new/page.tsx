@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import SelectWithCreate from "../../_components/SelectWithCreate";
 import ImageGallery, { GalleryImage } from "../../_components/ImageGallery";
+import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
 
 /** Match API upload limit — reject early before upload. */
 const MAX_IMAGE_BYTES = 9 * 1024 * 1024;
@@ -356,25 +357,24 @@ export default function NewProductPage() {
             </div>
           </section>
 
-          <label className="block">
+          <div className="block">
             <span className="mb-1 block text-sm font-medium text-dark">Short description</span>
-            <textarea
+            <QuickLinkHtmlEditor
+              editorKey="new-short-description"
+              height={220}
               value={form.short_description}
-              onChange={(e) => setForm((f) => ({ ...f, short_description: e.target.value }))}
-              rows={2}
-              className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+              onChange={(html) => setForm((f) => ({ ...f, short_description: html }))}
             />
-          </label>
+          </div>
 
-          <label className="block">
+          <div className="block">
             <span className="mb-1 block text-sm font-medium text-dark">Description</span>
-            <textarea
+            <QuickLinkHtmlEditor
+              editorKey="new-description"
               value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              rows={5}
-              className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+              onChange={(html) => setForm((f) => ({ ...f, description: html }))}
             />
-          </label>
+          </div>
 
           <label className="flex items-center gap-2 text-sm text-meta-3">
             <input

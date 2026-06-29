@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
+import { cleanOptionalHtml, cleanOptionalText, cleanText, hasSuspiciousInput, isUuid, readJsonBody } from "@/lib/validation/input";
 import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { touchActiveCartsContainingProduct } from "@/lib/inventory/cartStock";
 import { resolveProductTaxonomyForSave } from "@/lib/admin/productTaxonomy";
@@ -173,13 +173,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
     if (body.description !== undefined) {
       if (body.description !== null && typeof body.description !== "string") return bad();
-      const description = cleanOptionalText(body.description, 10000);
+      const description = cleanOptionalHtml(body.description, 10000);
       if (hasSuspiciousInput(description ?? "")) return bad();
       data.description = description;
     }
     if (body.short_description !== undefined) {
       if (body.short_description !== null && typeof body.short_description !== "string") return bad();
-      const short_description = cleanOptionalText(body.short_description, 2000);
+      const short_description = cleanOptionalHtml(body.short_description, 2000);
       if (hasSuspiciousInput(short_description ?? "")) return bad();
       data.short_description = short_description;
     }

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { DEFAULT_OG_IMAGE, SEO_SITE_NAME, SEO_SITE_URL } from "@/lib/seo/constants";
+import { htmlToPlainText } from "@/lib/htmlPlainText";
 
 export function truncateMetaDescription(text: string, max = 155): string {
-  const cleaned = text.replace(/\s+/g, " ").trim();
+  const cleaned = htmlToPlainText(text).replace(/\s+/g, " ").trim();
   if (!cleaned) return "";
   if (cleaned.length <= max) return cleaned;
   return `${cleaned.slice(0, max - 1).trimEnd()}…`;

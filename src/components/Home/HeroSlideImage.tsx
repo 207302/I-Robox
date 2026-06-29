@@ -27,7 +27,7 @@ export default function HeroSlideImage({ slide, isLcp, mobileSrc }: Props) {
         src={mobileSrc}
         alt={slide.title ?? "Hero banner"}
         fill
-        className="object-cover object-top lg:hidden"
+        className="object-cover object-center lg:hidden"
         sizes="(max-width: 1023px) 100vw, 0vw"
         priority={isLcp}
         loading={loading}
@@ -38,7 +38,7 @@ export default function HeroSlideImage({ slide, isLcp, mobileSrc }: Props) {
         src={desktopSrc}
         alt={slide.title ?? "Hero banner"}
         fill
-        className="object-cover object-top hidden lg:block"
+        className="object-cover object-center hidden lg:block"
         sizes="(max-width: 1023px) 0vw, 1440px"
         priority={isLcp}
         loading={loading}

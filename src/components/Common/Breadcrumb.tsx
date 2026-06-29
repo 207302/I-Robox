@@ -27,6 +27,8 @@ const Breadcrumb = ({
 }: BreadcrumbProps) => {
   const pathname = usePathname();
 
+  if (pathname.startsWith("/brand/") || pathname.startsWith("/category/")) return null;
+
   // If we're on the homepage, don't render the breadcrumb
   if (pathname === "/") return null;
 

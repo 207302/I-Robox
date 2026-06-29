@@ -1,18 +1,19 @@
 import type { HeaderNavData } from "@/lib/nav/headerNav";
 import type { MenuItem } from "./types";
 
-function shopSingleSelection(params: { brandSlug?: string; categorySlug?: string }) {
-  const u = new URLSearchParams();
-  if (params.categorySlug) u.set("category", params.categorySlug);
-  if (params.brandSlug) u.set("brand", params.brandSlug);
-  return `/shop?${u.toString()}`;
+function shopBrandPath(slug: string) {
+  return `/brand/${encodeURIComponent(slug)}`;
+}
+
+function shopCategoryPath(slug: string) {
+  return `/category/${encodeURIComponent(slug)}`;
 }
 
 /** Build primary nav: Categories = all categories, Brands = all brands. */
 export function buildHeaderMenuData(nav: HeaderNavData): MenuItem[] {
   const categoryItems: MenuItem[] = nav.categories.map((c) => ({
     title: c.name,
-    path: shopSingleSelection({ categorySlug: c.slug }),
+    path: shopCategoryPath(c.slug),
   }));
 
   const categoriesMenu: MenuItem =
@@ -25,7 +26,7 @@ export function buildHeaderMenuData(nav: HeaderNavData): MenuItem[] {
 
   const brandItems: MenuItem[] = nav.brands.map((b) => ({
     title: b.name,
-    path: shopSingleSelection({ brandSlug: b.slug }),
+    path: shopBrandPath(b.slug),
   }));
 
   const brandsMenu: MenuItem =

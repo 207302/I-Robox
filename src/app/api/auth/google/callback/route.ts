@@ -18,6 +18,11 @@ import { runApiRoute } from "@/lib/api/runApiRoute";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
+function appendLoginWelcomeParam(path: string): string {
+  if (path.includes("welcome=1")) return path;
+  return path.includes("?") ? `${path}&welcome=1` : `${path}?welcome=1`;
+}
+
 function redirectWithClearedOauthCookies(req: NextRequest, path: string) {
   const origin = getSiteOrigin(req);
   const url = new URL(path, origin);
@@ -165,7 +170,7 @@ export async function GET(req: NextRequest) {
       );
   
       const dest = nextStored.startsWith("/login") ? "/" : nextStored;
-      const res = redirectWithClearedOauthCookies(req, dest);
+      const res = redirectWithClearedOauthCookies(req, appendLoginWelcomeParam(dest));
       setSessionCookieOnResponse(res, token, SESSION_TTL_SECONDS);
       console.info("[auth/google/callback] sign-in OK", { customerId, dest });
       return res;

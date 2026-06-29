@@ -5,6 +5,13 @@ import ProductItem from "@/components/Common/ProductItem";
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
 import { ToyLoader } from "@/components/ui/ToyLoader";
 import { ChevronDown } from "@/components/Header/icons";
+import { LayoutGrid, LayoutList } from "lucide-react";
+import {
+  readShopMobileGridColumns,
+  shopProductGridClassName,
+  SHOP_MOBILE_GRID_STORAGE_KEY,
+  type ShopMobileGridColumns,
+} from "@/lib/shop/shopGridLayout";
 import { SHOP_GRID_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { shopPageHeading } from "@/lib/seo/categoryMetadata";
 import type { ShopListingData } from "@/lib/shop/shopListing";
@@ -33,7 +40,7 @@ import {
   isSearchProgressPending,
   setSearchProgress,
 } from "@/lib/shop/searchProgress";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   startTransition,
   useCallback,
@@ -196,6 +203,7 @@ export default function ShopLiveExperience({
   allBrands,
 }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlQueryString = searchParams.toString();
   const [listing, setListing] = useState(initialListing);
@@ -207,6 +215,9 @@ export default function ShopLiveExperience({
     parseShopQueryString(queryStringFromWindow(initialQueryString)).q
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileGridColumns, setMobileGridColumns] = useState<ShopMobileGridColumns>(() =>
+    readShopMobileGridColumns()
+  );
   const productsPaneRef = useRef<HTMLDivElement>(null);
   const shopSectionRef = useRef<HTMLElement>(null);
   const desktopSidebarPaneRef = useRef<HTMLDivElement>(null);
@@ -238,6 +249,15 @@ export default function ShopLiveExperience({
     ((items: ProductSearchItem[], q: string) => ProductSearchItem[]) | null
   >(null);
   const [searchFilterReady, setSearchFilterReady] = useState(false);
+
+  const setMobileGrid = useCallback((columns: ShopMobileGridColumns) => {
+    setMobileGridColumns(columns);
+    try {
+      localStorage.setItem(SHOP_MOBILE_GRID_STORAGE_KEY, String(columns));
+    } catch {
+      /* private browsing */
+    }
+  }, []);
 
   useEffect(() => {
     void import("@/lib/search/productSearch").then((m) => {
@@ -372,6 +392,10 @@ export default function ShopLiveExperience({
 
   const toggleCategory = useCallback(
     (slug: string) => {
+      if (!query.categorySlugs.includes(slug)) {
+        router.push(`/category/${encodeURIComponent(slug)}`);
+        return;
+      }
       const prevSig = [...query.categorySlugs].sort().join("|");
       const nextCategories = toggleListValue(query.categorySlugs, slug);
       const nextSig = [...nextCategories].sort().join("|");
@@ -384,14 +408,18 @@ export default function ShopLiveExperience({
         ...(categorySetChanged ? { brands: [], subtypes: [], collections: [] } : {}),
       });
     },
-    [commitQuery, query, searchInput]
+    [commitQuery, query, router, searchInput]
   );
 
   const toggleBrand = useCallback(
     (slug: string) => {
+      if (!query.brands.includes(slug)) {
+        router.push(`/brand/${encodeURIComponent(slug)}`);
+        return;
+      }
       toggleFilter("brands", slug);
     },
-    [toggleFilter]
+    [query.brands, router, toggleFilter]
   );
 
   const commitPriceFilters = useCallback(() => {
@@ -1209,6 +1237,42 @@ export default function ShopLiveExperience({
           ) : null}
         </div>
 
+        <div className="shop-mobile-grid-toggle-wrap mb-4 flex items-center justify-end gap-2 lg:hidden">
+          <span className="text-sm font-medium text-meta-3">View</span>
+          <div
+            className="inline-flex rounded-lg border border-gray-3 bg-white p-0.5"
+            role="group"
+            aria-label="Product grid layout"
+          >
+            <button
+              type="button"
+              onClick={() => setMobileGrid(1)}
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-md transition ${
+                mobileGridColumns === 1
+                  ? "bg-blue text-white"
+                  : "text-dark hover:bg-gray-1"
+              }`}
+              aria-label="One product per row"
+              aria-pressed={mobileGridColumns === 1}
+            >
+              <LayoutList className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileGrid(2)}
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-md transition ${
+                mobileGridColumns === 2
+                  ? "bg-blue text-white"
+                  : "text-dark hover:bg-gray-1"
+              }`}
+              aria-label="Two products per row"
+              aria-pressed={mobileGridColumns === 2}
+            >
+              <LayoutGrid className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </div>
+
         <div className="shop-page-columns flex flex-col gap-8 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
           <div className="min-w-0 lg:col-start-2 lg:row-start-1">
             {query.q.trim() ? (
@@ -1285,14 +1349,14 @@ export default function ShopLiveExperience({
                             : "exitToRight"
                       }
                       transition={slideTransition}
-                      className="grid grid-cols-1 gap-x-7.5 gap-y-9 px-4 py-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"
+                      className={shopProductGridClassName(mobileGridColumns)}
                     >
                       {productGrid}
                     </motion.div>
                   </AnimatePresence>
                 </div>
               ) : gridBusy ? (
-                <ShopProductGridSkeleton count={listing.pageSize || 12} />
+                <ShopProductGridSkeleton count={listing.pageSize || 12} mobileColumns={mobileGridColumns} />
               ) : (
                 <p className="text-sm text-meta-3">No products match your filters.</p>
               )}

@@ -11,6 +11,7 @@ import {
   notifyCustomerAfterShipmozoUpdate,
   type ShipmentSnapshot,
 } from "@/lib/orders/customerOrderNotifications";
+import { maybeSendReviewRequestEmail } from "@/lib/orders/maybeSendReviewRequestEmail";
 import {
   SHIPMOZO_NOT_DELIVERED_STATUS,
   SHIPMOZO_NOT_DELIVERED_REPOLL_AFTER_MS,
@@ -198,6 +199,21 @@ async function sendShipmozoCustomerEmails(input: {
     nextTrackingStep: input.nextTrackingStep,
     skipGenericBecausePickupEmailSent: pickupEmailSent,
   });
+
+  try {
+    await maybeSendReviewRequestEmail({
+      orderId: input.orderId,
+      previousOrderStatus: input.previousOrderStatus,
+      nextOrderStatus: input.nextOrderStatus,
+      previousTrackingStep: input.previousTrackingStep,
+      nextTrackingStep: input.nextTrackingStep,
+    });
+  } catch (reviewEmailErr) {
+    console.error("[shipmozo-update] review request email failed", {
+      orderId: input.orderId,
+      reviewEmailErr,
+    });
+  }
 }
 
 async function applyShipmozoNotDeliveredUpdate(payload: ShipmozoWebhookPayload) {

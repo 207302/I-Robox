@@ -70,9 +70,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   let productEntries: MetadataRoute.Sitemap = [];
   let categoryEntries: MetadataRoute.Sitemap = [];
+  let brandEntries: MetadataRoute.Sitemap = [];
 
   try {
-    const [products, categories] = await Promise.all([
+    const [products, categories, brands] = await Promise.all([
       prisma.products.findMany({
         where: { is_active: true },
         select: {
@@ -98,6 +99,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         select: { slug: true, updated_at: true },
         orderBy: { name: "asc" },
       }),
+      prisma.brands.findMany({
+        select: { slug: true, updated_at: true },
+        orderBy: { name: "asc" },
+      }),
     ]);
 
     productEntries = products.map((p) => {
@@ -112,8 +117,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     categoryEntries = categories.map((c) => ({
-      url: `${BASE}/shop?category=${encodeURIComponent(c.slug)}`,
+      url: `${BASE}/category/${encodeURIComponent(c.slug)}`,
       lastModified: c.updated_at,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
+
+    brandEntries = brands.map((b) => ({
+      url: `${BASE}/brand/${encodeURIComponent(b.slug)}`,
+      lastModified: b.updated_at,
       changeFrequency: "weekly" as const,
       priority: 0.7,
     }));
@@ -121,5 +133,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // e.g. missing DATABASE_URL at build — still serve static URLs
   }
 
-  return [...staticEntries, ...categoryEntries, ...productEntries];
+  return [...staticEntries, ...categoryEntries, ...brandEntries, ...productEntries];
 }

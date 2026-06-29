@@ -1,59 +1,107 @@
 import Image from "next/image";
 import Link from "next/link";
-import { HOME_PRODUCT_CARD_SIZES } from "@/lib/shop/productCardGridSizes";
 import { formatPrice } from "@/utils/formatePrice";
 import { productImageAlt } from "@/lib/seo/metadata";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
+import HomeProductWishlistButton from "./HomeProductWishlistButton";
+import {
+  HOME_RAIL_CARD_SHADOW,
+  HOME_RAIL_CARD_SHADOW_HOVER,
+  HOME_RAIL_CARD_WIDTH,
+  HOME_RAIL_IMAGE_HEIGHT,
+  HOME_RAIL_IMAGE_SIZES,
+  HOME_RAIL_PRODUCT_TEXT_HEIGHT,
+} from "./homeRailStyles";
 
 export type HomeProductCardItem = {
   id: string;
+  productId: string;
   slug: string;
   title: string;
   image: string;
   price: number;
   discountedPrice?: number | null;
+  averageRating?: number | null;
+  reviewCount?: number;
 };
+
+type Props = {
+  item: HomeProductCardItem;
+  priority?: boolean;
+  showNewBadge?: boolean;
+  showSaleBadge?: boolean;
+};
+
+function discountPercent(price: number, sale: number) {
+  if (price <= 0 || sale >= price) return 0;
+  return Math.round(((price - sale) / price) * 100);
+}
 
 export default function HomeProductCard({
   item,
   priority = false,
-}: {
-  item: HomeProductCardItem;
-  priority?: boolean;
-}) {
+  showNewBadge = false,
+  showSaleBadge = false,
+}: Props) {
+  const onSale = item.discountedPrice != null && item.discountedPrice < item.price;
+  const salePrice = onSale ? item.discountedPrice! : item.price;
+  const discount = onSale ? discountPercent(item.price, salePrice) : 0;
+
   return (
-    <Link
-      href={`/shop/${item.slug}`}
-      prefetch={shouldPrefetchHref(`/shop/${item.slug}`)}
-      className="group block h-full overflow-hidden rounded-2xl border border-gray-3 bg-white transition-transform duration-200 hover:-translate-y-1 hover:border-blue/40 hover:shadow-lg"
+    <div
+      className={`${HOME_RAIL_CARD_WIDTH} snap-start rounded-2xl ${HOME_RAIL_CARD_SHADOW} ${HOME_RAIL_CARD_SHADOW_HOVER}`}
     >
-      <div className="relative aspect-square overflow-hidden bg-gray-2">
-        <Image
-          src={item.image}
-          alt={productImageAlt(item.title)}
-          fill
-          sizes={HOME_PRODUCT_CARD_SIZES}
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-          quality={85}
-          priority={priority}
-          loading={priority ? undefined : "lazy"}
-        />
-      </div>
-      <div className="p-3">
-        <h3 className="line-clamp-2 text-sm font-semibold text-dark">{item.title}</h3>
-        <div className="mt-2 flex items-center gap-2">
-          {item.discountedPrice != null ? (
-            <>
-              <span className="text-sm font-semibold text-blue">
-                {formatPrice(item.discountedPrice)}
-              </span>
-              <span className="text-xs line-through text-meta-4">{formatPrice(item.price)}</span>
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-dark">{formatPrice(item.price)}</span>
-          )}
+      <Link
+        href={`/shop/${item.slug}`}
+        prefetch={shouldPrefetchHref(`/shop/${item.slug}`)}
+        className="group relative flex flex-col overflow-hidden rounded-2xl bg-white"
+      >
+        <div className={`relative ${HOME_RAIL_IMAGE_HEIGHT} w-full overflow-hidden bg-white`}>
+          {showNewBadge ? (
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              New
+            </span>
+          ) : null}
+          {showSaleBadge && onSale && discount > 0 ? (
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-red px-2 py-0.5 text-[10px] font-semibold text-white">
+              -{discount}%
+            </span>
+          ) : null}
+          <HomeProductWishlistButton
+            productId={item.productId}
+            slug={item.slug}
+            title={item.title}
+            image={item.image}
+            price={salePrice}
+          />
+          <Image
+            src={item.image}
+            alt={productImageAlt(item.title)}
+            fill
+            sizes={HOME_RAIL_IMAGE_SIZES}
+            className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
+            quality={85}
+            priority={priority}
+            loading={priority ? undefined : "lazy"}
+          />
         </div>
-      </div>
-    </Link>
+        <div className={`flex ${HOME_RAIL_PRODUCT_TEXT_HEIGHT} shrink-0 flex-col justify-center gap-1 px-3`}>
+          <h3 className="line-clamp-2 text-sm font-medium leading-snug text-dark md:text-[0.9375rem]">
+            {item.title}
+          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-dark">{formatPrice(salePrice)}</span>
+            {onSale ? (
+              <>
+                <span className="text-xs line-through text-meta-4">{formatPrice(item.price)}</span>
+                {discount > 0 && !showSaleBadge ? (
+                  <span className="text-xs font-semibold text-red">-{discount}%</span>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+      </Link>
+    </div>
   );
 }

@@ -8,7 +8,7 @@ import { validatePassword } from "@/lib/validation/rules";
 import PasswordInput from "@/components/Auth/PasswordInput";
 import RecaptchaWidget, { type RecaptchaWidgetRef } from "@/components/Auth/RecaptchaWidget";
 import { isRecaptchaEnabled } from "@/lib/security/recaptchaPublic";
-import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
+import { AUTH_CHANGED_EVENT, markPendingLoginWelcome } from "@/lib/auth/clientSession";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -127,9 +127,11 @@ export default function LoginClient() {
           return;
         }
         toast.success("Account created!");
+        markPendingLoginWelcome();
         window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       } else {
         toast.success("Welcome back!");
+        markPendingLoginWelcome();
         window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       }
       router.push("/");
@@ -256,6 +258,7 @@ export default function LoginClient() {
       setPendingUserId(null);
       setOtp("");
       setDevOtpHint(null);
+      markPendingLoginWelcome();
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       router.push("/");
       router.refresh();

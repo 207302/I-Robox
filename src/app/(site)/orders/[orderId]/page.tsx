@@ -6,6 +6,13 @@ import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { formatPrice } from "@/utils/formatePrice";
 import { formatOrderReference } from "@/utils/orderNumber";
 import OrderTracking from "@/components/OrderTracking";
+import RetryPaymentButton from "@/components/orders/RetryPaymentButton";
+import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
+import {
+  formatCustomerOrderStatus,
+  formatCustomerPaymentStatus,
+  orderEligibleForPaymentRetry,
+} from "@/lib/orders/paymentRetry";
 import { resolveOrderTrackingStatus, syncShipmozoTrackingForOrder, syncShipmozoAwbForOrder } from "@/lib/shipping/shipmozoTracking";
 
 type Props = {
@@ -26,6 +33,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
       customer_id: true,
       status: true,
       payment_status: true,
+      payment_retry_attempts: true,
       subtotal_amount: true,
       discount_amount: true,
       total_amount: true,
@@ -53,6 +61,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
           country: true,
         },
       },
+      customers: { select: { email: true } },
     },
   });
 
@@ -87,6 +96,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
       customer_id: true,
       status: true,
       payment_status: true,
+      payment_retry_attempts: true,
       subtotal_amount: true,
       discount_amount: true,
       total_amount: true,
@@ -114,6 +124,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
           country: true,
         },
       },
+      customers: { select: { email: true } },
     },
   });
   if (refreshed) {
@@ -128,6 +139,12 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
   });
   const trackingAwb = order.awb_number ?? order.shipments?.tracking_number ?? null;
   const trackingCarrier = order.carrier ?? order.shipments?.carrier ?? null;
+  const canRetryPayment = orderEligibleForPaymentRetry({
+    status: String(order.status),
+    paymentStatus: String(order.payment_status),
+    paymentRetryAttempts: order.payment_retry_attempts,
+  });
+  const customerEmail = displayEmailForCustomer(order.customers?.email ?? null);
 
   return (
     <section className="overflow-x-hidden pt-36 pb-16">
@@ -145,11 +162,22 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
               <div className="text-sm text-meta-3">Order</div>
               <div className="font-semibold text-dark">{formatOrderReference(order)}</div>
               <div className="mt-3 flex flex-wrap gap-3 text-sm">
-                <span className="rounded-full bg-gray-1 px-3 py-1 border border-gray-3">
-                  Status: <b>{String(order.status)}</b>
+                <span
+                  className={`rounded-full px-3 py-1 border border-gray-3 ${
+                    order.payment_status === "FAILED" ? "bg-red-50" : "bg-gray-1"
+                  }`}
+                >
+                  Status:{" "}
+                  <b>
+                    {formatCustomerOrderStatus(String(order.status), String(order.payment_status))}
+                  </b>
                 </span>
-                <span className="rounded-full bg-gray-1 px-3 py-1 border border-gray-3">
-                  Payment: <b>{String(order.payment_status)}</b>
+                <span
+                  className={`rounded-full px-3 py-1 border border-gray-3 ${
+                    order.payment_status === "FAILED" ? "bg-red-50" : "bg-gray-1"
+                  }`}
+                >
+                  Payment: <b>{formatCustomerPaymentStatus(String(order.payment_status))}</b>
                 </span>
               </div>
             </div>
@@ -172,6 +200,25 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
           </div>
 
           <aside className="min-w-0 space-y-6">
+            {order.payment_status === "FAILED" ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50/60 p-5">
+                <h2 className="text-lg font-semibold text-dark">Payment failed</h2>
+                <p className="mt-2 text-sm text-meta-3">
+                  This order was not paid. You can retry payment up to 3 times.
+                </p>
+                <RetryPaymentButton
+                  className="mt-4"
+                  orderId={order.id}
+                  accessToken={access ?? null}
+                  paymentRetryAttempts={order.payment_retry_attempts}
+                  canRetry={canRetryPayment}
+                  customerName={order.addresses_orders_shipping_address_idToaddresses?.full_name}
+                  customerEmail={customerEmail}
+                  customerPhone={order.addresses_orders_shipping_address_idToaddresses?.phone}
+                />
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-gray-3 bg-white p-5">
               <h2 className="text-lg font-semibold text-dark">Totals</h2>
               <div className="mt-4 space-y-2 text-sm">

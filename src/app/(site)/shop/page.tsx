@@ -6,7 +6,10 @@ import { getShopListingForApi } from "@/lib/shop/shopListingCache";
 import type { ShopListingData } from "@/lib/shop/shopListing";
 import { listingSearchParamsFromRecord } from "@/lib/shop/shopListingParams";
 import { getShopListingLcpImageUrl } from "@/lib/shop/productCardImage";
+import { parseShopQueryString } from "@/lib/shop/shopQuery";
+import { shopListingRedirectTarget } from "@/lib/shop/shopListingRedirect";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { JsonLdScript } from "@/lib/seo/jsonLd";
 import { absoluteSeoUrl, buildSocialMetadata, truncateMetaDescription } from "@/lib/seo/metadata";
 import { categoryListingMetaDescription } from "@/lib/seo/categoryMetadata";
@@ -75,6 +78,8 @@ export default async function ShopPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const listingParams = listingSearchParamsFromRecord(sp);
   const initialQueryString = listingParams.toString();
+  const redirectTarget = shopListingRedirectTarget(parseShopQueryString(initialQueryString));
+  if (redirectTarget) redirect(redirectTarget);
 
   const [listingEnvelope, allCategories, allBrands] = await Promise.all([
     getShopListingForApi(listingParams),

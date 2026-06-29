@@ -7,9 +7,15 @@ type Props = {
   onChange: (html: string) => void;
   /** Remount editor when switching page (avoids stale iframe state). */
   editorKey: string;
+  height?: number;
 };
 
-export default function QuickLinkHtmlEditor({ value, onChange, editorKey }: Props) {
+export default function QuickLinkHtmlEditor({
+  value,
+  onChange,
+  editorKey,
+  height = 380,
+}: Props) {
   return (
     <div className="mt-1 overflow-hidden rounded-lg border border-gray-3 [&_.tox-tinymce]:rounded-lg">
       <Editor
@@ -19,7 +25,7 @@ export default function QuickLinkHtmlEditor({ value, onChange, editorKey }: Prop
         value={value}
         onEditorChange={(html) => onChange(html)}
         init={{
-          height: 380,
+          height,
           menubar: false,
           branding: false,
           promotion: false,

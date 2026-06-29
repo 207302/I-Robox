@@ -59,14 +59,19 @@ export default function Footer({
 }) {
   const footerBgStyle = chromeBgStyle(chromeColors?.footerBg);
   const { textStyle, linkStyle, iconFill } = footerColorStyles(chromeColors);
+  const onCustomFooterBg = Boolean(chromeColors?.footerBg?.trim());
   return (
     <footer
-      className={`overflow-hidden border-t border-gray-3 ${footerBgStyle ? "" : "bg-white"}`}
+      className={`overflow-hidden ${onCustomFooterBg ? "border-t border-white/10" : "border-t border-gray-3 bg-white"}`}
       style={footerBgStyle}
     >
       <div className="px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
         {/* <!-- footer menu start --> */}
-        <div className="flex flex-wrap xl:flex-nowrap gap-10 xl:gap-19 xl:justify-between pt-17.5 xl:pt-22.5 pb-10 xl:pb-20">
+        <div
+          className={`flex flex-wrap xl:flex-nowrap gap-10 xl:gap-19 xl:justify-between pb-10 xl:pb-20 ${
+            onCustomFooterBg ? "pt-6 xl:pt-6" : "pt-17.5 xl:pt-22.5"
+          }`}
+        >
           <div className="max-w-[330px] w-full">
             <h2
               className={`mb-7.5 text-xl font-semibold ${textStyle ? "" : "text-dark"}`}

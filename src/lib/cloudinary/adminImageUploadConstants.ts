@@ -5,6 +5,7 @@ export const CLOUDINARY_ADMIN_IMAGE_FOLDERS = [
   { id: "irobox/homepage-highlights", label: "Homepage highlights" },
   { id: "irobox/homepage-category-tiles", label: "Category tiles" },
   { id: "irobox/homepage-brand-rail", label: "Brand rail" },
+  { id: "irobox/page-banners", label: "Brand & category page banners" },
   { id: "irobox/marketing-popups", label: "Marketing popups" },
 ] as const;
 

@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
   
     const eventName = String(event.event ?? "").trim();
     const paymentId = String(event.payload?.payment?.entity?.id ?? "").trim();
+    const razorpayOrderId = String(event.payload?.payment?.entity?.order_id ?? "").trim();
     const paymentStatus = String(event.payload?.payment?.entity?.status ?? "").trim();
   
     // We create orders only after successful verification in checkout flow.
@@ -62,22 +63,35 @@ export async function POST(req: NextRequest) {
           newValues: { event: eventName, paymentStatus, provider: "razorpay" },
         });
       }
-    } else if (eventName === "payment.failed" && paymentId) {
-      const order = await prisma.orders.findFirst({
-        where: { external_payment_id: paymentId, payment_provider: "razorpay" },
-        select: { id: true, payment_status: true, status: true },
-      });
+    } else if (eventName === "payment.failed" && (paymentId || razorpayOrderId)) {
+      let order =
+        paymentId
+          ? await prisma.orders.findFirst({
+              where: { external_payment_id: paymentId, payment_provider: "razorpay" },
+              select: { id: true, payment_status: true, status: true },
+            })
+          : null;
+
+      if (!order && razorpayOrderId) {
+        order = await prisma.orders.findFirst({
+          where: { razorpay_checkout_order_id: razorpayOrderId },
+          select: { id: true, payment_status: true, status: true },
+        });
+      }
+
       // If already succeeded, do not move it backwards.
       if (order && order.payment_status !== "SUCCEEDED") {
-        await prisma.orders.update({
-          where: { id: order.id },
-          data: { payment_status: "FAILED", status: "PAYMENT_FAILED" },
-        });
+        if (order.status !== "PAYMENT_FAILED" || order.payment_status !== "FAILED") {
+          await prisma.orders.update({
+            where: { id: order.id },
+            data: { payment_status: "FAILED", status: "PAYMENT_FAILED" },
+          });
+        }
         await writeAuditLog({
           entityType: "ORDER",
           entityId: order.id,
           action: "PAYMENT_FAILED_WEBHOOK",
-          newValues: { event: eventName, paymentStatus, provider: "razorpay" },
+          newValues: { event: eventName, paymentStatus, provider: "razorpay", razorpayOrderId },
         });
       }
     } else if (eventName === "order.paid") {

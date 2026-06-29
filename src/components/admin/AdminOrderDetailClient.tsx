@@ -391,82 +391,89 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
             <dt className="text-meta-3">Phone</dt>
             <dd className="mt-0.5 font-medium text-dark">{data.customer?.phone ?? "—"}</dd>
           </div>
-          <div className="sm:col-span-2">
-            <dt className="text-meta-3">Email</dt>
-            <dd className="mt-0.5 font-medium text-dark break-all">
-              {data.customer?.email ?? "Guest"}
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-meta-3">Address</dt>
-            <dd className="mt-0.5 font-medium text-dark max-w-xs break-words">
-              {data.shippingAddress ? (
-                <span className="block space-y-0.5">
-                  <span className="block">
-                    {data.shippingAddress.line1}
-                    {data.shippingAddress.line2 ? `, ${data.shippingAddress.line2}` : ""}
-                  </span>
-                  <span className="block text-meta-3">
-                    {data.shippingAddress.city}, {data.shippingAddress.state}{" "}
-                    {data.shippingAddress.postalCode}
-                  </span>
-                </span>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-meta-3">Gift wrapping</dt>
-            <dd className="mt-0.5 font-medium text-dark">
-              {data.isGift ? "Yes" : "No"}
-              {data.isGift && data.giftMessage ? (
-                <span className="block text-meta-3 font-normal mt-1">
-                  Message: {data.giftMessage}
-                </span>
-              ) : null}
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-meta-3">Payment</dt>
-            <dd className="mt-0.5 space-y-3 font-medium text-dark">
-              <div>{data.paymentMethod ?? "—"}</div>
-              {isRazorpayPayment && data.paymentStatus === "SUCCEEDED" ? (
-                <p className="text-sm font-medium text-green-700">Razorpay payment succeeded</p>
-              ) : null}
+          <div className="sm:col-span-2 grid gap-6 sm:grid-cols-2">
+            <div className="space-y-4">
               <div>
-                <div className="text-meta-3 text-xs font-normal">Payment status</div>
-                <div className="mt-0.5">{data.paymentStatus ?? "—"}</div>
+                <dt className="text-meta-3">Email</dt>
+                <dd className="mt-0.5 font-medium text-dark break-all">
+                  {data.customer?.email ?? "Guest"}
+                </dd>
               </div>
-              {(data.razorpayPaymentId || data.refundTransactionId) ? (
-                <div className="space-y-2">
-                  <div className="text-meta-3 text-xs font-normal">Transaction ID</div>
-                  {data.razorpayPaymentId ? (
-                    <div>
-                      <div className="text-xs text-meta-3 font-normal mb-1">Payment</div>
-                      <CopyableTransactionId value={data.razorpayPaymentId} />
-                    </div>
+              <div>
+                <dt className="text-meta-3">Address</dt>
+                <dd className="mt-0.5 font-medium text-dark max-w-xs break-words">
+                  {data.shippingAddress ? (
+                    <span className="block space-y-0.5">
+                      <span className="block">
+                        {data.shippingAddress.line1}
+                        {data.shippingAddress.line2 ? `, ${data.shippingAddress.line2}` : ""}
+                      </span>
+                      <span className="block text-meta-3">
+                        {data.shippingAddress.city}, {data.shippingAddress.state}{" "}
+                        {data.shippingAddress.postalCode}
+                      </span>
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-meta-3">Gift wrapping</dt>
+                <dd className="mt-0.5 font-medium text-dark">
+                  {data.isGift ? "Yes" : "No"}
+                  {data.isGift && data.giftMessage ? (
+                    <span className="block text-meta-3 font-normal mt-1">
+                      Message: {data.giftMessage}
+                    </span>
                   ) : null}
-                  {data.refundTransactionId ? (
-                    <div>
-                      <div className="text-xs text-meta-3 font-normal mb-1">Refund</div>
-                      <CopyableTransactionId value={data.refundTransactionId} />
+                </dd>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <dt className="text-meta-3">Payment</dt>
+                <dd className="mt-0.5 font-medium text-dark">{data.paymentMethod ?? "—"}</dd>
+                {isRazorpayPayment && data.paymentStatus === "SUCCEEDED" ? (
+                  <p className="mt-2 text-sm font-medium text-green-700">Razorpay payment succeeded</p>
+                ) : null}
+              </div>
+              <div>
+                <dt className="text-meta-3">Payment status</dt>
+                <dd className="mt-0.5 font-medium text-dark">{data.paymentStatus ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-meta-3">Transaction ID</dt>
+                <dd className="mt-0.5 font-medium text-dark">
+                  {data.razorpayPaymentId || data.refundTransactionId ? (
+                    <div className="space-y-2">
+                      {data.razorpayPaymentId ? (
+                        <div>
+                          <div className="text-xs text-meta-3 font-normal mb-1">Payment</div>
+                          <CopyableTransactionId value={data.razorpayPaymentId} />
+                        </div>
+                      ) : null}
+                      {data.refundTransactionId ? (
+                        <div>
+                          <div className="text-xs text-meta-3 font-normal mb-1">Refund</div>
+                          <CopyableTransactionId value={data.refundTransactionId} />
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div>
-                  <div className="text-meta-3 text-xs font-normal">Transaction ID</div>
-                  <div className="mt-0.5 text-meta-3 font-normal">—</div>
-                </div>
-              )}
+                  ) : (
+                    <span className="text-meta-3 font-normal">—</span>
+                  )}
+                </dd>
+              </div>
               {isRefunded && typeof data.refundedAmount === "number" ? (
                 <div>
-                  <div className="text-meta-3 text-xs font-normal">Refunded amount</div>
-                  <div className="mt-0.5">{formatPrice(data.refundedAmount / 100)}</div>
+                  <dt className="text-meta-3">Refunded amount</dt>
+                  <dd className="mt-0.5 font-medium text-dark">
+                    {formatPrice(data.refundedAmount / 100)}
+                  </dd>
                 </div>
               ) : null}
-            </dd>
+            </div>
           </div>
           <div>
             <dt className="text-meta-3">Total</dt>

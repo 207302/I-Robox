@@ -7,6 +7,11 @@ import {
   type CustomerOrderRow,
 } from "@/components/orders/CustomerOrdersList";
 import { formatOrderReference } from "@/utils/orderNumber";
+import {
+  formatCustomerOrderStatus,
+  formatCustomerPaymentStatus,
+  orderEligibleForPaymentRetry,
+} from "@/lib/orders/paymentRetry";
 
 export const metadata = {
   title: "Orders | i-Robox",
@@ -58,6 +63,7 @@ export default async function OrdersPage() {
       order_number: true,
       status: true,
       payment_status: true,
+      payment_retry_attempts: true,
       total_amount: true,
       addresses_orders_shipping_address_idToaddresses: {
         select: { line1: true, line2: true, city: true, state: true, postal_code: true },
@@ -105,7 +111,15 @@ export default async function OrdersPage() {
       id: o.id,
       orderRef: formatOrderReference(o),
       status: String(o.status),
+      statusLabel: formatCustomerOrderStatus(String(o.status), String(o.payment_status)),
       paymentStatus: String(o.payment_status),
+      paymentStatusLabel: formatCustomerPaymentStatus(String(o.payment_status)),
+      paymentRetryAttempts: o.payment_retry_attempts,
+      canRetryPayment: orderEligibleForPaymentRetry({
+        status: String(o.status),
+        paymentStatus: String(o.payment_status),
+        paymentRetryAttempts: o.payment_retry_attempts,
+      }),
       totalAmount: Number(o.total_amount),
       shippingLine: formatShippingLine(o.addresses_orders_shipping_address_idToaddresses),
       products: [...productMap.values()],

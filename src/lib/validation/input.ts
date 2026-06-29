@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { sanitizeQuickLinkHtml } from "@/lib/sanitizeQuickLinkHtml";
 
 export type FieldErrors = Record<string, string>;
 
@@ -22,6 +23,15 @@ export function cleanOptionalText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return null;
   const cleaned = cleanText(value, maxLength);
   return cleaned.length ? cleaned : null;
+}
+
+/** Rich-text fields (TinyMCE): sanitize HTML, preserve markup, strip dangerous content. */
+export function cleanOptionalHtml(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return null;
+  let s = value.replace(/\u0000/g, "").replace(/\u007F/g, "");
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
+  s = sanitizeQuickLinkHtml(s.trim()).slice(0, maxLength);
+  return s.length ? s : null;
 }
 
 /** Optional `#rgb` or `#rrggbb` for CMS color fields; empty/null clears the override. */

@@ -14,6 +14,7 @@ import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { AppDispatch, useAppSelector } from "@/redux/store";
 import { formatPrice } from "@/utils/formatePrice";
 import { productImageAlt } from "@/lib/seo/metadata";
+import { htmlToPlainText } from "@/lib/htmlPlainText";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -375,7 +376,9 @@ const QuickViewModal = () => {
                   </div>
 
                   <p className="text-base line-clamp-3 text-dark-3">
-                    {product?.shortDescription}
+                    {product?.shortDescription
+                      ? htmlToPlainText(product.shortDescription)
+                      : null}
                   </p>
                   {product.diecastScale ? (
                     <p className="mt-3 text-sm text-meta-3">

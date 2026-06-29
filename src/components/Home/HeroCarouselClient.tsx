@@ -14,6 +14,7 @@ import HeroSlideImage from "./HeroSlideImage";
 import type { HeroSlide } from "./heroTypes";
 import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
 import { DEFAULT_HERO_CAROUSEL_INTERVAL_MS } from "@/lib/marketing/heroCarousel";
+import { HERO_MIN_HEIGHT_CLASS } from "./heroLayout";
 
 const SWIPE_THRESHOLD = 50;
 
@@ -30,6 +31,7 @@ export default function HeroCarouselClient({
   const slideCount = slides.length;
   const slidesKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const [mobileControlsActive, setMobileControlsActive] = useState(false);
@@ -64,18 +66,12 @@ export default function HeroCarouselClient({
   }, [slidesKey]);
 
   useEffect(() => {
-    if (slideCount <= 1) return undefined;
-    let intervalId: number | undefined;
-    const delayId = window.setTimeout(() => {
-      intervalId = window.setInterval(() => {
-        goToNext();
-      }, autoRotateIntervalMs);
-    }, 6000);
-    return () => {
-      window.clearTimeout(delayId);
-      if (intervalId != null) window.clearInterval(intervalId);
-    };
-  }, [goToNext, slideCount, autoRotateIntervalMs]);
+    if (slideCount <= 1 || paused) return undefined;
+    const intervalId = window.setInterval(() => {
+      goToNext();
+    }, autoRotateIntervalMs);
+    return () => window.clearInterval(intervalId);
+  }, [goToNext, slideCount, autoRotateIntervalMs, paused]);
 
   useEffect(() => {
     return () => {
@@ -104,11 +100,13 @@ export default function HeroCarouselClient({
 
   return (
     <div
-      className="relative w-full touch-pan-y overflow-hidden aspect-[7/5] lg:aspect-[16/5.5]"
+      className={`relative w-full touch-pan-y overflow-hidden ${HERO_MIN_HEIGHT_CLASS}`}
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
     >
       <div className="absolute inset-0 overflow-hidden bg-gray-2">
         <div

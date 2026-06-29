@@ -46,7 +46,7 @@ const getCachedNavBrands = unstable_cache(
 
 /**
  * Primary nav: all categories and all brands (alphabetical).
- * Shop links use `/shop?category=…` and `/shop?brand=…`.
+ * Shop links use `/category/…` and `/brand/…` landing pages.
  */
 function dedupeNavItems(items: HeaderNavItem[]): HeaderNavItem[] {
   const seen = new Set<string>();

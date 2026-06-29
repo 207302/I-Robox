@@ -40,6 +40,9 @@ export type SiteHeaderData = {
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo.png";
 
+const MOBILE_UTILITY_BAR_MESSAGE =
+  "Welcome to i-Robox! Your World of Fun Starts Here";
+
 /** Static files in /public — skip `next/image` optimizer (same as favicon; avoids 404/broken on some hosts). */
 function isLocalPublicImage(src: string) {
   return src.startsWith("/images/");
@@ -233,7 +236,10 @@ const MainHeader = ({
         >
           <div className="px-4 mx-auto max-w-7xl sm:px-6 xl:px-0" suppressHydrationWarning>
             <div className="flex items-center justify-between gap-3" suppressHydrationWarning>
-              <p className="text-xs sm:text-sm font-medium text-white">
+              <p className="w-full text-center text-xs font-medium text-white md:hidden">
+                {MOBILE_UTILITY_BAR_MESSAGE}
+              </p>
+              <p className="hidden text-xs font-medium text-white sm:text-sm md:block">
                 {utilityAnnouncement?.body ? (
                   utilityAnnouncement.linkUrl ? (
                     <Link
@@ -258,16 +264,19 @@ const MainHeader = ({
                   </>
                 ) : null}
               </p>
-              <div className="flex min-w-[80px] shrink-0 items-center justify-end text-right" suppressHydrationWarning>
+              <div
+                className="hidden min-w-[80px] shrink-0 items-center justify-end text-right md:flex"
+                suppressHydrationWarning
+              >
                 {userName ? (
-                  <span className="text-xs sm:text-sm font-medium text-white">
+                  <span className="text-xs font-medium text-white sm:text-sm">
                     Welcome, {userName}!
                   </span>
                 ) : (
                   <Link
                     href="/login"
                     prefetch={false}
-                    className="text-xs sm:text-sm font-semibold text-white underline-offset-2 hover:underline"
+                    className="text-xs font-semibold text-white underline-offset-2 hover:underline sm:text-sm"
                   >
                     Sign in
                   </Link>

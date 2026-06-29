@@ -670,6 +670,10 @@ input[type="search"]::-webkit-search-results-decoration {
   .shop-mobile-filters-wrap {
     display: none !important;
   }
+
+  .shop-mobile-grid-toggle-wrap {
+    display: none !important;
+  }
 }
 
 .shop-desktop-filters-aside {

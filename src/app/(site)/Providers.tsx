@@ -12,12 +12,16 @@ import dynamic from "next/dynamic";
 
 import PopupWrapper from "@/components/Marketing/PopupWrapper";
 import LaunchNotifyPopupDeferred from "@/components/Marketing/LaunchNotifyPopupDeferred";
+import { Suspense } from "react";
 
 const QuickViewModal = dynamic(() => import("@/components/Common/QuickViewModal"), { ssr: false });
 const CartSidebarModal = dynamic(() => import("@/components/Common/CartSidebarModal"), {
   ssr: false,
 });
 const PreviewSliderModal = dynamic(() => import("@/components/Common/PreviewSlider"), {
+  ssr: false,
+});
+const LoginWelcomePopup = dynamic(() => import("@/components/Auth/LoginWelcomePopup"), {
   ssr: false,
 });
 
@@ -38,6 +42,9 @@ const Providers = ({ children, initialMarketing }: ProvidersProps) => {
               <PreviewSliderProvider>
                 <PopupWrapper />
                 <LaunchNotifyPopupDeferred />
+                <Suspense fallback={null}>
+                  <LoginWelcomePopup />
+                </Suspense>
                 {children}
                 <QuickViewModal />
                 <CartSidebarModal />

@@ -1,15 +1,21 @@
+import {
+  shopProductGridClassName,
+  type ShopMobileGridColumns,
+} from "@/lib/shop/shopGridLayout";
+
 const SKELETON_COUNT = 12;
 
 type Props = {
   count?: number;
+  mobileColumns?: ShopMobileGridColumns;
 };
 
-export default function ShopProductGridSkeleton({ count = SKELETON_COUNT }: Props) {
+export default function ShopProductGridSkeleton({
+  count = SKELETON_COUNT,
+  mobileColumns = 1,
+}: Props) {
   return (
-    <div
-      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-7.5 gap-y-9"
-      aria-hidden
-    >
+    <div className={shopProductGridClassName(mobileColumns)} aria-hidden>
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}

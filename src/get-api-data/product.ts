@@ -17,12 +17,24 @@ const pickDefaultImage = (product: {
 const getInventoryQuantity = (inventory: { available_quantity: number }[] = []) =>
   inventory.reduce((sum, row) => sum + Number(row.available_quantity || 0), 0);
 
+const approvedReviewsSelect = {
+  where: { is_approved: true },
+  select: { rating: true },
+} as const;
+
+function reviewStatsFromRows(reviews: { rating: number }[] | undefined) {
+  const rows = reviews ?? [];
+  if (rows.length === 0) return { averageRating: null as number | null, reviewCount: 0 };
+  const total = rows.reduce((sum, row) => sum + row.rating, 0);
+  return { averageRating: total / rows.length, reviewCount: rows.length };
+}
+
 // get new arrival products (homepage)
 export const getNewArrivalsProduct = unstable_cache(
   onCacheMiss("new-arrivals-products", async () => {
     const products = await prisma.products.findMany({
       where: { is_active: true },
-      orderBy: { updated_at: "desc" },
+      orderBy: { created_at: "desc" },
       select: {
         id: true,
         name: true,
@@ -31,6 +43,7 @@ export const getNewArrivalsProduct = unstable_cache(
         discounted_price: true,
         slug: true,
         diecast_scales: { select: { ratio: true } },
+        created_at: true,
         updated_at: true,
         product_variants: {
           select: {
@@ -48,14 +61,17 @@ export const getNewArrivalsProduct = unstable_cache(
         },
         inventory: { select: { available_quantity: true } },
         product_images: { select: { url: true, sort_order: true } },
+        reviews: approvedReviewsSelect,
         sku: true,
         shipping_per_unit: true,
         max_order_quantity: true,
         brand_id: true,
       },
-      take: 24
+      take: 10
     });
-    return products.map((item) => ({
+    return products.map((item) => {
+      const { averageRating, reviewCount } = reviewStatsFromRows(item.reviews);
+      return {
       id: item.id,
       title: item.name,
       shortDescription: item.short_description ?? "",
@@ -82,10 +98,13 @@ export const getNewArrivalsProduct = unstable_cache(
         size: v.size ?? "",
         isDefault: v.is_default,
       })),
-      reviews: 0,
-    }));
+      reviews: reviewCount,
+      averageRating,
+      reviewCount,
+    };
+    });
   }),
-  ["new-arrivals-products", "v2"],
+  ["new-arrivals-products", "v3"],
   { revalidate: 300, tags: [PRODUCT_CATALOG_TAG] }
 );
 
@@ -118,13 +137,16 @@ const bestSellerProductSelect = {
   shipping_per_unit: true,
   max_order_quantity: true,
   brand_id: true,
+  reviews: approvedReviewsSelect,
 } satisfies Prisma.productsSelect;
 
 type BestSellerProductRow = Prisma.productsGetPayload<{
   select: typeof bestSellerProductSelect;
 }>;
 
-const mapProductToHomeCard = (item: BestSellerProductRow) => ({
+const mapProductToHomeCard = (item: BestSellerProductRow) => {
+  const { averageRating, reviewCount } = reviewStatsFromRows(item.reviews);
+  return {
   id: item.id,
   title: item.name,
   shortDescription: item.short_description ?? "",
@@ -151,8 +173,11 @@ const mapProductToHomeCard = (item: BestSellerProductRow) => ({
     size: v.size ?? "",
     isDefault: v.is_default,
   })),
-  reviews: 0,
-});
+  reviews: reviewCount,
+  averageRating,
+  reviewCount,
+};
+};
 
 // get best selling products (by total quantity on payment-succeeded orders)
 export const getBestSellingProducts = unstable_cache(
@@ -173,7 +198,7 @@ export const getBestSellingProducts = unstable_cache(
           AND o.status NOT IN ('CANCELLED', 'PAYMENT_FAILED', 'REFUNDED')
         GROUP BY oi.product_id
         ORDER BY qty DESC
-        LIMIT 24
+        LIMIT 8
       `
     );
 
@@ -190,7 +215,7 @@ export const getBestSellingProducts = unstable_cache(
         where: { is_active: true },
         select: bestSellerProductSelect,
         orderBy: { updated_at: "desc" },
-        take: 6,
+        take: 8,
       });
       return fallback.map(mapProductToHomeCard);
     }
@@ -203,11 +228,11 @@ export const getBestSellingProducts = unstable_cache(
     const ordered = rankedIds
       .map((id) => byId.get(id))
       .filter((p): p is NonNullable<typeof p> => p != null)
-      .slice(0, 6);
+      .slice(0, 8);
 
     return ordered.map(mapProductToHomeCard);
   }),
-  ["best-selling-products", "v2"],
+  ["best-selling-products", "v3"],
   { revalidate: 300, tags: [PRODUCT_CATALOG_TAG, ORDERS_TAG] }
 );
 

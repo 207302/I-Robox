@@ -160,7 +160,7 @@ export type HomePageRawBundle = Awaited<ReturnType<typeof loadHomePageRawBundle>
  */
 export const getHomePageData = unstable_cache(
   onCacheMiss("home-page-bundle", loadHomePageRawBundle),
-  ["home-page-bundle", "v1"],
+  ["home-page-bundle", "v2"],
   {
     revalidate: HOME_PAGE_REVALIDATE_SECONDS,
     tags: [

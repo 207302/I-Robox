@@ -20,6 +20,7 @@ import {
   readJsonBody,
 } from "@/lib/validation/input";
 import { notifyCustomerOrderOrShipmentUpdate } from "@/lib/orders/customerOrderNotifications";
+import { maybeSendReviewRequestEmail } from "@/lib/orders/maybeSendReviewRequestEmail";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
 import {
@@ -485,6 +486,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         });
       } catch (err) {
         console.error("[admin orders PUT] customer notify email failed", err);
+      }
+    }
+
+    if (!skipShipmentNotify) {
+      try {
+        await maybeSendReviewRequestEmail({
+          orderId: id,
+          previousOrderStatus: prevStatus,
+          nextOrderStatus: nextOrderStatusForNotify,
+        });
+      } catch (err) {
+        console.error("[admin orders PUT] review request email failed", err);
       }
     }
   

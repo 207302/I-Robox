@@ -18,7 +18,11 @@ export type CustomerOrderRow = {
   id: string;
   orderRef: string;
   status: string;
+  statusLabel: string;
   paymentStatus: string;
+  paymentStatusLabel: string;
+  paymentRetryAttempts: number;
+  canRetryPayment: boolean;
   totalAmount: number;
   shippingLine: string | null;
   products: CustomerOrderProductThumb[];
@@ -84,13 +88,30 @@ export function CustomerOrdersList({ orders }: CustomerOrdersListProps) {
                   </div>
                   <div className="text-sm">
                     <div className="text-meta-3">Status</div>
-                    <div className="font-semibold text-dark">{o.status}</div>
+                    <div
+                      className={`font-semibold ${
+                        o.paymentStatus === "FAILED" ? "text-red-600" : "text-dark"
+                      }`}
+                    >
+                      {o.statusLabel}
+                    </div>
                   </div>
                   <div className="text-sm">
                     <div className="text-meta-3">Payment</div>
-                    <div className="font-semibold text-dark">{o.paymentStatus}</div>
+                    <div
+                      className={`font-semibold ${
+                        o.paymentStatus === "FAILED" ? "text-red-600" : "text-dark"
+                      }`}
+                    >
+                      {o.paymentStatusLabel}
+                    </div>
                   </div>
                 </div>
+                {o.canRetryPayment ? (
+                  <p className="mt-3 text-sm font-medium text-blue">Retry payment available</p>
+                ) : o.paymentStatus === "FAILED" ? (
+                  <p className="mt-3 text-sm text-meta-3">Payment retry limit reached</p>
+                ) : null}
               </Link>
             </div>
             {expanded ? (

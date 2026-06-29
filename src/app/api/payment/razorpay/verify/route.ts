@@ -5,8 +5,12 @@ import { getSession } from "@/lib/auth/session";
 import { createOrderAccessToken } from "@/lib/security/orderAccess";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
-import { cleanText, readJsonBody } from "@/lib/validation/input";
+import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { buildCheckoutContext, type CheckoutContext } from "@/lib/checkout/buildCheckoutContext";
+import { buildCheckoutContextFromOrder } from "@/lib/orders/buildCheckoutContextFromOrder";
+import { confirmReservedInventoryAsSold } from "@/lib/orders/createFailedOrderFromCheckoutContext";
+import { orderEligibleForPaymentRetry } from "@/lib/orders/paymentRetry";
+import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { unsealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, verifyRazorpayPaymentSignature } from "@/lib/payments/razorpay";
 import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
@@ -153,6 +157,129 @@ export async function POST(req: NextRequest) {
         const accessToken = createOrderAccessToken(existing.id);
         return NextResponse.json(
           { ok: true, orderId: existing.id, accessToken, alreadyProcessed: true },
+          { status: 200 }
+        );
+      }
+
+      const retryOrderId = cleanText(body.retryOrderId, 64);
+      if (retryOrderId && isUuid(retryOrderId)) {
+        const retryOrder = await prisma.orders.findUnique({
+          where: { id: retryOrderId },
+          select: {
+            id: true,
+            customer_id: true,
+            order_number: true,
+            status: true,
+            payment_status: true,
+            payment_retry_attempts: true,
+            total_amount: true,
+            razorpay_checkout_order_id: true,
+            coupon_id: true,
+          },
+        });
+        if (!retryOrder) {
+          return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        }
+        const isOwner = Boolean(
+          session?.sub && retryOrder.customer_id && retryOrder.customer_id === session.sub
+        );
+        const accessToken = cleanText(body.accessToken, 2048);
+        const hasCheckoutAccess =
+          Boolean(accessToken) && verifyOrderAccessToken(accessToken, retryOrderId);
+        if (!isOwner && !hasCheckoutAccess) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        if (retryOrder.payment_status === "SUCCEEDED") {
+          const token = createOrderAccessToken(retryOrder.id);
+          return NextResponse.json({
+            ok: true,
+            orderId: retryOrder.id,
+            accessToken: token,
+            alreadyProcessed: true,
+          });
+        }
+        if (
+          !orderEligibleForPaymentRetry({
+            status: String(retryOrder.status),
+            paymentStatus: String(retryOrder.payment_status),
+            paymentRetryAttempts: retryOrder.payment_retry_attempts,
+          })
+        ) {
+          return NextResponse.json({ error: "Order is not eligible for payment retry" }, { status: 400 });
+        }
+        if (retryOrder.razorpay_checkout_order_id !== razorpayOrderId) {
+          return NextResponse.json({ error: "Payment session mismatch" }, { status: 400 });
+        }
+        const expectedRetryPaise = Math.round(Number(retryOrder.total_amount) * 100);
+        if (Number(payment.amount) !== expectedRetryPaise) {
+          return NextResponse.json({ error: "Payment amount mismatch" }, { status: 400 });
+        }
+
+        const retryCtx = await buildCheckoutContextFromOrder(retryOrderId);
+        if (!retryCtx) {
+          return NextResponse.json({ error: "Order details are incomplete" }, { status: 400 });
+        }
+
+        await prisma.$transaction(async (tx) => {
+          await confirmReservedInventoryAsSold(retryOrderId, tx);
+          await tx.orders.update({
+            where: { id: retryOrderId },
+            data: {
+              payment_status: "SUCCEEDED",
+              status: "CONFIRMED",
+              external_payment_id: razorpayPaymentId,
+              payment_provider: "razorpay",
+            },
+          });
+          if (retryOrder.coupon_id) {
+            const usageCount = await tx.coupon_usages.count({
+              where: { order_id: retryOrderId, coupon_id: retryOrder.coupon_id },
+            });
+            if (usageCount === 0) {
+              await tx.coupon_usages.create({
+                data: {
+                  coupon_id: retryOrder.coupon_id,
+                  customer_id: retryOrder.customer_id,
+                  order_id: retryOrderId,
+                },
+              });
+            }
+          }
+        }, PRISMA_TRANSACTION_OPTIONS);
+
+        const accessTokenOut = createOrderAccessToken(retryOrderId);
+        const productIds = retryCtx.lineItems.map((li) => li.productId);
+
+        after(async () => {
+          try {
+            await runPostOrderFulfillment({
+              orderId: retryOrderId,
+              productIds,
+              checkoutFormEmail: retryCtx.address.email,
+              accountEmail: retryCtx.accountEmail,
+              newAccountPasswordSetup: retryCtx.newAccountPasswordSetup,
+              audit: {
+                customerId: retryCtx.checkoutUserId,
+                ipAddress: req.ip ?? null,
+                userAgent: req.headers.get("user-agent"),
+              },
+            });
+          } catch (fulfillmentErr) {
+            console.error("[razorpay/verify] retry fulfillment failed", {
+              orderId: retryOrderId,
+              fulfillmentErr,
+            });
+          }
+        });
+
+        return NextResponse.json(
+          {
+            ok: true,
+            orderId: retryOrderId,
+            orderNumber: retryOrder.order_number,
+            accessToken: accessTokenOut,
+            retried: true,
+          },
           { status: 200 }
         );
       }

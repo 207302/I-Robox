@@ -41,13 +41,10 @@ export async function POST(req: NextRequest) {
     const phoneRaw = normalizePhone(body.phone);
     const email = normalizeEmail(body.email);
 
-    if (!full_name || hasSuspiciousInput(full_name)) {
-      return NextResponse.json({ error: "Please enter your name" }, { status: 400 });
-    }
-    const phone = normalizeIndiaMobile(phoneRaw);
-    if (!phone) {
-      return NextResponse.json({ error: "Enter a valid 10-digit mobile number" }, { status: 400 });
-    }
+    const hasName = Boolean(full_name);
+    const hasPhone = Boolean(phoneRaw);
+    const emailOnly = !hasName && !hasPhone;
+
     if (!email || !validateEmail(email)) {
       return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
     }
@@ -56,6 +53,26 @@ export async function POST(req: NextRequest) {
         { error: "Use a common email provider (Gmail, Yahoo, Outlook, etc.)" },
         { status: 400 }
       );
+    }
+
+    if (emailOnly) {
+      await prisma.marketing_notify_signups.upsert({
+        where: { email },
+        create: { full_name: "Newsletter Subscriber", phone: "0000000000", email },
+        update: { updated_at: new Date() },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!full_name || hasSuspiciousInput(full_name)) {
+      return NextResponse.json({ error: "Please enter your name" }, { status: 400 });
+    }
+    const phone = normalizeIndiaMobile(phoneRaw);
+    if (!phone) {
+      return NextResponse.json({ error: "Enter a valid 10-digit mobile number" }, { status: 400 });
+    }
+    if (hasSuspiciousInput(email)) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
 
     await prisma.marketing_notify_signups.upsert({

@@ -374,6 +374,8 @@ export default function CheckoutPage() {
       if (!createRes.ok) throw new Error(createData?.error || "Could not initiate payment");
       const checkoutSeal =
         typeof createData?.checkoutSeal === "string" ? createData.checkoutSeal : "";
+      const razorpayOrderId =
+        typeof createData?.razorpayOrderId === "string" ? createData.razorpayOrderId : "";
 
       const prefillEmail = address.email.trim();
       const prefillContact = toRazorpayPrefillContact(address.phone);
@@ -387,7 +389,7 @@ export default function CheckoutPage() {
         key: createData.keyId,
         amount: createData.amount,
         currency: createData.currency || "INR",
-        order_id: createData.razorpayOrderId,
+        order_id: razorpayOrderId || createData.razorpayOrderId,
         name: "i-Robox",
         description: "Order payment",
         ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
@@ -428,12 +430,48 @@ export default function CheckoutPage() {
           }
         },
         modal: {
-          ondismiss: () => {
+          ondismiss: async () => {
             setLoading(false);
+            try {
+              const res = await fetch("/api/payment/razorpay/record-failure", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ checkoutSeal, razorpayOrderId }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (res.ok && typeof data?.orderId === "string") {
+                toast.error("Payment cancelled. You can retry from your orders.");
+                router.replace(`/orders/${data.orderId}`);
+                return;
+              }
+            } catch {
+              /* fall through */
+            }
             toast.error("Payment cancelled");
           },
         },
       });
+
+      rz.on("payment.failed", async () => {
+        setLoading(false);
+        try {
+          const res = await fetch("/api/payment/razorpay/record-failure", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ checkoutSeal, razorpayOrderId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && typeof data?.orderId === "string") {
+            toast.error("Payment failed. You can retry from your orders.");
+            router.replace(`/orders/${data.orderId}`);
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+        toast.error("Payment failed");
+      });
+
       rz.open();
     } catch (e: any) {
       toast.error(e?.message || "Checkout failed");

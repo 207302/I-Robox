@@ -1,4 +1,5 @@
 import type { LatestDropEmailProduct } from "@/lib/marketing/fetchLatestDropEmailProducts";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 
 function escapeHtmlAttr(s: string) {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -50,7 +51,7 @@ export function latestDropBroadcastEmailHtml(input: {
   const productsHtml = latestDropProductsTableHtml(input.products);
 
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">Fresh arrivals at i-Robox</h2>
     <p style="margin:0 0 1em">${greeting} here are our latest drops — hand-picked new products just added to the shop.</p>
     ${productsHtml}

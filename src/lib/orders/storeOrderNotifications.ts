@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { formatPrice } from "@/utils/formatePrice";
@@ -115,7 +116,7 @@ export async function notifyStoreNewOrder(orderId: string) {
       : "";
 
   const html = `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">New order received</h2>
     <p style="margin:0 0 1em">A customer order was confirmed and is ready to fulfil.</p>
     <p style="margin:0.35em 0"><strong>Order:</strong> ${escapeHtml(orderRef)}</p>

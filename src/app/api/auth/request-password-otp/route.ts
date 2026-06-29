@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { validateCommonEmailProvider, validateEmail } from "@/lib/validateEmai";
 import { getSession } from "@/lib/auth/session";
 import {
@@ -164,7 +165,7 @@ export async function POST(req: NextRequest) {
       to: otpDeliveryEmail,
       subject: "Your password reset OTP code",
       html: `
-        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
+        <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5">
           <h2>Password reset verification</h2>
           <p>Your OTP code is:</p>
           <p style="font-size:24px;font-weight:700;letter-spacing:2px;">${otpCode}</p>

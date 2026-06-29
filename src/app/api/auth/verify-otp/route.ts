@@ -6,6 +6,7 @@ import { getAuthSecret, setSessionCookie } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
       to: user.email,
       subject: "Welcome to i-Robox!",
       html:
-        "<div style=\"font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5\">" +
+        `<div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5">` +
         "<h2>Welcome" +
         (user.name ? ", " + user.name : "") +
         "!</h2>" +

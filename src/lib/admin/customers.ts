@@ -6,6 +6,7 @@ import {
   PASSWORD_SETUP_TTL_MS,
 } from "@/lib/auth/passwordSetupToken";
 import { sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
 
 export type AdminCustomerRow = {
@@ -118,7 +119,7 @@ export function passwordResetInviteEmailHtml(input: { email: string; setupUrl: s
     .replace(/>/g, "&gt;");
   const safeHref = input.setupUrl.replace(/"/g, "&quot;").replace(/</g, "&lt;");
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.6;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.6;color:#111">
     <h2 style="margin:0 0 0.5em">Reset your password</h2>
     <p style="margin:0 0 1em">Use the link below to set a new password for your i-Robox account (<strong>${safeEmail}</strong>).</p>
     <p style="margin:0 0 1em">This link works once and expires in 7 days.</p>

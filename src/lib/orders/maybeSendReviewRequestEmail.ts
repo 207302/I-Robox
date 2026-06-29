@@ -6,6 +6,7 @@ import {
   reviewRequestProductLinesText,
 } from "@/lib/email/reviewRequestEmailLines";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { prisma } from "@/lib/prisma";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
@@ -46,7 +47,7 @@ function reviewRequestEmailHtml(input: {
   const ordersUrl = escapeHtml(input.ordersUrl);
 
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.6;color:#111;max-width:560px;margin:0 auto;">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.6;color:#111;max-width:560px;margin:0 auto;">
     <div style="border-bottom:4px solid ${BRAND_RED};padding-bottom:12px;margin-bottom:20px;">
       <div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.02em;">i-robox</div>
     </div>

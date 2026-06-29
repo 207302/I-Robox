@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { normalizeEmail } from "@/lib/validation/input";
@@ -54,7 +55,7 @@ export async function createEmailChangeOtp(params: {
     to: params.oldEmail,
     subject: "Confirm your email address change",
     html: `
-      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
+      <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5">
         <h2>Email change verification</h2>
         <p>You requested to change the email on your i-Robox account to <strong>${params.newEmail}</strong>.</p>
         <p>Your OTP code is:</p>

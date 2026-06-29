@@ -5,6 +5,7 @@ import { signJwt } from "@/lib/auth/jwt";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { getAuthSecret, setSessionCookie } from "@/lib/auth/session";
 import { validateCommonEmailProvider, validateEmail } from "@/lib/validateEmai";
 import {
@@ -143,7 +144,7 @@ export async function POST(req: NextRequest) {
           to: existing.email,
           subject: "Your i-Robox OTP verification code",
           html: `
-          <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
+          <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5">
             <h2>Verify your email</h2>
             <p>Your OTP code is:</p>
             <p style="font-size:24px;font-weight:700;letter-spacing:2px;">${otpCode}</p>
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
       to: user.email,
       subject: "Your i-Robox OTP verification code",
       html: `
-        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
+        <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5">
           <h2>Verify your email</h2>
           <p>Your OTP code is:</p>
           <p style="font-size:24px;font-weight:700;letter-spacing:2px;">${otpCode}</p>

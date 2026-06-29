@@ -35,7 +35,7 @@ export default function QuickLinkHtmlEditor({
           block_formats: "Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3; Heading 4=h4",
           font_size_formats: "12pt 14pt 16pt 18pt 20pt 24pt",
           content_style:
-            "body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; line-height: 1.6; }",
+            "@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap'); body { font-family: 'Clash Display', ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; line-height: 1.6; } h1, h2, h3, h4 { font-weight: 600; }",
           relative_urls: false,
           convert_urls: true,
         }}

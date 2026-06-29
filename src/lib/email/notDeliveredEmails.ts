@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 import { isEmailConfigured, orderEmailTemplate, sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { STORE_ORDER_NOTIFICATION_EMAIL } from "@/lib/orders/storeOrderNotifications";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
@@ -137,7 +138,7 @@ export async function sendNotDeliveredStoreAlert(orderId: string) {
   const adminUrl = `${getSiteBaseUrl()}/admin/orders/${order.id}`;
 
   const html = `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">ND Alert — shipment not delivered</h2>
     <p style="margin:0.35em 0"><strong>Order ID:</strong> ${escapeHtml(orderRef)}</p>
     <p style="margin:0.35em 0"><strong>Customer name:</strong> ${escapeHtml(customerName)}</p>

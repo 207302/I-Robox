@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import type { AbandonedCartReminderLine } from "@/lib/email/abandonedCartReminder";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import {
   emailProductLinesTableHtml,
   emailProductLinesText,
@@ -168,7 +169,7 @@ export function orderEmailTemplate(input: {
 }) {
   const itemsHtml = input.lines?.length ? emailProductLinesTableHtml(input.lines) : "";
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5;color:#111">
     <h2 style="margin:0 0 0.5em">${escapeHtmlText(input.heading)}</h2>
     <p style="margin:0 0 1em">${escapeHtmlText(input.message)}</p>
     <p style="margin:0 0 0.5em"><b>Order:</b> ${escapeHtmlText(input.orderId)}</p>
@@ -212,7 +213,7 @@ export function orderUpdateCustomerEmailHtml(input: {
   const safeUrl = escapeHtmlAttr(input.orderUrl);
   const safeTrackUrl = input.trackUrl?.trim() ? escapeHtmlAttr(input.trackUrl.trim()) : "";
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">Order update</h2>
     <p style="margin:0 0 1em">Your order <strong>${safeOrder}</strong> has an update.</p>
     ${input.blocksHtml.join("\n")}
@@ -244,7 +245,7 @@ export function abandonedCartReminderEmailHtml(input: {
   const safeUrl = escapeHtmlAttr(input.shopUrl);
   const itemsHtml = input.lines.length > 0 ? emailProductLinesTableHtml(input.lines) : "";
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.55;color:#111">
     <h2 style="margin:0 0 0.5em">Still interested?</h2>
     <p style="margin:0 0 1em">You left items in your cart at i-Robox. Come back when you’re ready to check out.</p>
     ${itemsHtml}
@@ -328,7 +329,7 @@ export function newGuestAccountPasswordEmailHtml(input: {
   const safeLogin = escapeHtmlAttr(input.loginUrl);
   const safeOrderId = escapeHtmlText(input.orderId);
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.6;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.6;color:#111">
     <h2 style="margin:0 0 0.5em">Set your password to view your orders</h2>
     <p style="margin:0 0 1em">Thanks for shopping at i-Robox. We created an account for <strong>${safeEmail}</strong> when you checked out — no sign-up form needed.</p>
     <p style="margin:0 0 1em">Your order <strong>${safeOrderId}</strong> is confirmed. To sign in anytime and view your order history, set a password using the button below.</p>
@@ -370,7 +371,7 @@ export function passwordSetupInviteEmailHtml(input: { email: string; setupUrl: s
     .replace(/>/g, "&gt;");
   const safeHref = input.setupUrl.replace(/"/g, "&quot;").replace(/</g, "&lt;");
   return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.6;color:#111">
+  <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.6;color:#111">
     <h2 style="margin:0 0 0.5em">Choose your password</h2>
     <p style="margin:0 0 1em">We created an account for <strong>${safeEmail}</strong> so you can track orders and sign in later.</p>
     <p style="margin:0 0 1em">Use the button below to set a password. This link works once and expires in 7 days.</p>

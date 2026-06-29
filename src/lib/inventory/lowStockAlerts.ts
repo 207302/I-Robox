@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 
 async function adminRecipients(): Promise<string[]> {
   const rows = await prisma.admin_users.findMany({
@@ -65,7 +66,7 @@ export async function syncLowStockAlertsByProductIds(productIds: string[]) {
     to: recipients.join(","),
     subject: `Low stock alert (${toAlert.length}) | i-Robox`,
     html: `
-      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.55">
+      <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.55">
         <h2>Low stock alert</h2>
         <p>The following products are at or below threshold:</p>
         <ul>${lines}</ul>

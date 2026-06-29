@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
 import { displayEmailForCustomer } from "@/lib/auth/phoneAccount";
 import { isSyntheticPhoneSignupEmail } from "@/lib/auth/signupIdentifier";
 
@@ -52,7 +53,7 @@ export async function createPhoneChangeOtp(params: {
     to: params.email,
     subject: "Confirm your mobile number change",
     html: `
-      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5">
+      <div style="font-family:${EMAIL_FONT_FAMILY};line-height:1.5">
         <h2>Mobile number change verification</h2>
         <p>You requested to update the mobile number on your i-Robox account to <strong>${params.newPhone}</strong>.</p>
         <p>Your OTP code is:</p>

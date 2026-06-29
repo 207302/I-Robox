@@ -10,7 +10,15 @@ const config = {
   darkMode: "class",
   theme: {
     fontFamily: {
-      body: ["DM Sans", "sans-serif"],
+      sans: ["Clash Display", "ui-sans-serif", "system-ui", "sans-serif"],
+      body: ["Clash Display", "ui-sans-serif", "system-ui", "sans-serif"],
+    },
+    fontWeight: {
+      normal: "500",
+      medium: "500",
+      semibold: "600",
+      bold: "700",
+      extrabold: "700",
     },
     container: {
       center: true,

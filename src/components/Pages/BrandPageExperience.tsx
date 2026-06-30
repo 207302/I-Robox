@@ -316,7 +316,7 @@ export default function BrandPageExperience({ page, initialListing }: Props) {
             {refreshing ? (
               <p className="py-8 text-center text-sm text-meta-3">Updating products…</p>
             ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:gap-6">
+              <div className="brand-product-grid grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:gap-6">
                 {productGrid}
               </div>
             )}

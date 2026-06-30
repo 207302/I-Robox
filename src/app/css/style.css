@@ -717,6 +717,10 @@ input[type="search"]::-webkit-search-results-decoration {
   .shop-product-grid-mobile-2 .product-item-card-actions {
     display: none;
   }
+
+  .brand-product-grid .product-item-card-actions {
+    display: none;
+  }
 }
 
 .shop-desktop-filters-aside {

@@ -713,6 +713,12 @@ input[type="search"]::-webkit-search-results-decoration {
   }
 }
 
+@media (max-width: 1023px) {
+  .shop-product-grid-mobile-2 .product-item-card-actions {
+    display: none;
+  }
+}
+
 .shop-desktop-filters-aside {
   display: none;
 }

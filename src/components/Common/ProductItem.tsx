@@ -209,7 +209,7 @@ function ProductItemInner({
           )}
         </div>
 
-        <div className="absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full flex items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0">
+        <div className="product-item-card-actions absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full flex items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0">
           <Tooltip content="Quick View" placement="top">
             <button
               type="button"

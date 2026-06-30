@@ -2,8 +2,8 @@ import { RefreshCw, Star, ThumbsUp, Truck, Users } from "lucide-react";
 import { chromeBgStyle, chromeTextStyle } from "@/lib/marketing/chromeColors";
 
 const STATS = [
-  { Icon: Users, value: "10,000+", label: "Happy Customers" },
-  { Icon: ThumbsUp, value: "500+", label: "Premium Brands" },
+  { Icon: Users, value: "1,000+", label: "Happy Customers" },
+  { Icon: ThumbsUp, value: "20+", label: "Premium Brands" },
   { Icon: Star, value: "4.8", label: "Average Rating" },
   { Icon: Truck, value: "Pan India", label: "Shipping" },
   { Icon: RefreshCw, value: "7 Days", label: "Easy Returns" },

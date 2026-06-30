@@ -23,6 +23,11 @@ import {
   listingFilterFingerprintFromState,
 } from "@/lib/shop/shopListingParams";
 import {
+  resolveShopFilterApplyDestination,
+  shopQueryToFilterDraft,
+  type ShopFilterDraft,
+} from "@/lib/shop/resolveShopFilterApplyDestination";
+import {
   SHOP_QUERY_EVENT,
   applyShopQuery,
   buildListingQueryString,
@@ -238,11 +243,8 @@ export default function ShopLiveExperience({
   listingRef.current = listing;
   const prevPageScrollRef = useRef(parseShopQueryString(queryStringFromWindow(initialQueryString)).page);
   const clientQueryRef = useRef(queryStringFromWindow(initialQueryString || urlQueryString));
-  const [minPriceInput, setMinPriceInput] = useState(
-    () => parseShopQueryString(queryStringFromWindow(initialQueryString)).minPrice
-  );
-  const [maxPriceInput, setMaxPriceInput] = useState(
-    () => parseShopQueryString(queryStringFromWindow(initialQueryString)).maxPrice
+  const [pendingFilters, setPendingFilters] = useState<ShopFilterDraft>(() =>
+    shopQueryToFilterDraft(parseShopQueryString(queryStringFromWindow(initialQueryString)))
   );
   const [searchIndex, setSearchIndex] = useState<ProductSearchItem[]>([]);
   const filterProductsRef = useRef<
@@ -364,9 +366,8 @@ export default function ShopLiveExperience({
   }, [queryString]);
 
   useEffect(() => {
-    setMinPriceInput(query.minPrice);
-    setMaxPriceInput(query.maxPrice);
-  }, [query.minPrice, query.maxPrice]);
+    setPendingFilters(shopQueryToFilterDraft(parseShopQueryString(queryString)));
+  }, [queryString]);
 
   const commitQuery = useCallback(
     (next: ShopQueryState) => {
@@ -378,59 +379,57 @@ export default function ShopLiveExperience({
     [pathname]
   );
 
-  const toggleFilter = useCallback(
-    (key: ShopListFilterKey, value: string) => {
-      commitQuery({
-        ...query,
-        q: searchInput,
-        page: 1,
-        [key]: toggleListValue(query[key], value),
-      });
-    },
-    [commitQuery, query, searchInput]
-  );
+  const togglePendingFilter = useCallback((key: ShopListFilterKey, value: string) => {
+    setPendingFilters((prev) => ({
+      ...prev,
+      [key]: toggleListValue(prev[key], value),
+    }));
+  }, []);
 
-  const toggleCategory = useCallback(
-    (slug: string) => {
-      if (!query.categorySlugs.includes(slug)) {
-        router.push(`/category/${encodeURIComponent(slug)}`);
-        return;
-      }
-      const prevSig = [...query.categorySlugs].sort().join("|");
-      const nextCategories = toggleListValue(query.categorySlugs, slug);
+  const togglePendingCategory = useCallback((slug: string) => {
+    setPendingFilters((prev) => {
+      const prevSig = [...prev.categorySlugs].sort().join("|");
+      const nextCategories = toggleListValue(prev.categorySlugs, slug);
       const nextSig = [...nextCategories].sort().join("|");
       const categorySetChanged = prevSig !== nextSig;
-      commitQuery({
-        ...query,
-        q: searchInput,
-        page: 1,
+      return {
+        ...prev,
         categorySlugs: nextCategories,
         ...(categorySetChanged ? { brands: [], subtypes: [], collections: [] } : {}),
-      });
-    },
-    [commitQuery, query, router, searchInput]
-  );
-
-  const toggleBrand = useCallback(
-    (slug: string) => {
-      if (!query.brands.includes(slug)) {
-        router.push(`/brand/${encodeURIComponent(slug)}`);
-        return;
-      }
-      toggleFilter("brands", slug);
-    },
-    [query.brands, router, toggleFilter]
-  );
-
-  const commitPriceFilters = useCallback(() => {
-    commitQuery({
-      ...query,
-      q: searchInput,
-      page: 1,
-      minPrice: minPriceInput.trim(),
-      maxPrice: maxPriceInput.trim(),
+      };
     });
-  }, [commitQuery, maxPriceInput, minPriceInput, query, searchInput]);
+  }, []);
+
+  const togglePendingBrand = useCallback((slug: string) => {
+    togglePendingFilter("brands", slug);
+  }, [togglePendingFilter]);
+
+  const filtersDraftDirty = useMemo(() => {
+    const committed = shopQueryToFilterDraft(parseShopQueryString(queryString));
+    return (
+      listingFilterFingerprintFromState({ ...pendingFilters, q: "", page: 1 }) !==
+      listingFilterFingerprintFromState({ ...committed, q: "", page: 1 })
+    );
+  }, [pendingFilters, queryString]);
+
+  const applyPendingFilters = useCallback(() => {
+    const draft: ShopFilterDraft = {
+      ...pendingFilters,
+      minPrice: pendingFilters.minPrice.trim(),
+      maxPrice: pendingFilters.maxPrice.trim(),
+    };
+    const dest = resolveShopFilterApplyDestination(draft, searchInput);
+    setMobileFiltersOpen(false);
+    if (dest.type === "brand") {
+      router.push(`/brand/${encodeURIComponent(dest.slug)}`);
+      return;
+    }
+    if (dest.type === "category") {
+      router.push(`/category/${encodeURIComponent(dest.slug)}`);
+      return;
+    }
+    commitQuery(dest.state);
+  }, [commitQuery, pendingFilters, router, searchInput]);
   /** Debounce for URL sync when index not ready (server search fallback). */
   const debouncedSearchInput = useDebounce(searchInput, SEARCH_DEBOUNCE_MS);
 
@@ -471,12 +470,7 @@ export default function ShopLiveExperience({
   const searchPending =
     searchInput !== debouncedSearchInput ||
     (clientFuzzyIds === null && effectiveQueryString !== debouncedFetchQs);
-  const priceFiltersPending =
-    minPriceInput.trim() !== query.minPrice.trim() ||
-    maxPriceInput.trim() !== query.maxPrice.trim();
-  const filtersPending =
-    priceFiltersPending ||
-    filterFpExclQ !== debouncedFilterFpExclQ;
+  const filtersPending = filterFpExclQ !== debouncedFilterFpExclQ;
   const gridBusy = searchPending || filtersPending || isLoading;
 
   const fetchListing = useCallback(async (qs: string) => {
@@ -742,8 +736,20 @@ export default function ShopLiveExperience({
 
   const clearFilters = useCallback(() => {
     setSearchInput("");
-    setMinPriceInput("");
-    setMaxPriceInput("");
+    const emptyDraft: ShopFilterDraft = {
+      categorySlugs: [],
+      brands: [],
+      ageGroups: [],
+      diecastScales: [],
+      subtypes: [],
+      collections: [],
+      discounts: [],
+      minPrice: "",
+      maxPrice: "",
+      available: "",
+      sort: "",
+    };
+    setPendingFilters(emptyDraft);
     clientQueryRef.current = "";
     setQueryString("");
     applyShopQuery(pathname, "");
@@ -776,10 +782,9 @@ export default function ShopLiveExperience({
   const productSubtypes = listing.productSubtypes ?? [];
   const productCollections = listing.productCollections ?? [];
   const discountBuckets = listing.discountBuckets ?? [];
-  const hasCategorySelection = query.categorySlugs.length > 0;
   const selectedCategoryNames = new Set(
     allCategories
-      .filter((cat) => query.categorySlugs.includes(cat.slug))
+      .filter((cat) => pendingFilters.categorySlugs.includes(cat.slug))
       .map((cat) => (cat.name ?? cat.title ?? "").trim().toLowerCase())
   );
   const showScales = selectedCategoryNames.has(DIECAST_ONLY_CATEGORY);
@@ -895,17 +900,43 @@ export default function ShopLiveExperience({
 
   useEffect(() => bindShopFilterScrollbarReveal(shopSectionRef.current), []);
 
+  const pendingQueryString = useMemo(
+    () =>
+      buildListingQueryString({
+        ...pendingFilters,
+        q: debouncedSearchInput,
+        page: 1,
+      }),
+    [pendingFilters, debouncedSearchInput]
+  );
+
   const filterHoverHandlers = useCallback(
     (fieldName: string, value: string, isChecked: boolean) => ({
       onMouseEnter: () => {
         if (isChecked) return;
         scheduleHoverPrefetch(
-          buildToggledFilterQueryString(queryString, debouncedSearchInput, fieldName, value)
+          buildToggledFilterQueryString(
+            pendingQueryString,
+            debouncedSearchInput,
+            fieldName,
+            value
+          )
         );
       },
       onMouseLeave: cancelHoverPrefetch,
     }),
-    [queryString, debouncedSearchInput, scheduleHoverPrefetch, cancelHoverPrefetch]
+    [pendingQueryString, debouncedSearchInput, scheduleHoverPrefetch, cancelHoverPrefetch]
+  );
+
+  const renderApplyFiltersButton = () => (
+    <button
+      type="button"
+      onClick={applyPendingFilters}
+      disabled={!filtersDraftDirty}
+      className="block w-full rounded-lg bg-blue px-4 py-2 text-center text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      Apply filters
+    </button>
   );
 
   const renderFilters = (formId: string, expandSections = false) => {
@@ -915,18 +946,21 @@ export default function ShopLiveExperience({
     <div className="rounded-xl border border-gray-3 bg-white p-5">
       <h2 className="sr-only">Filter products</h2>
       <form id={formId} className="mb-5 space-y-3" onSubmit={(e) => e.preventDefault()}>
+        {renderApplyFiltersButton()}
         <div className="grid grid-cols-2 gap-2">
           <input
-            value={minPriceInput}
-            onChange={(e) => setMinPriceInput(e.target.value)}
-            onBlur={commitPriceFilters}
+            value={pendingFilters.minPrice}
+            onChange={(e) =>
+              setPendingFilters((prev) => ({ ...prev, minPrice: e.target.value }))
+            }
             placeholder="Min ₹"
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
           <input
-            value={maxPriceInput}
-            onChange={(e) => setMaxPriceInput(e.target.value)}
-            onBlur={commitPriceFilters}
+            value={pendingFilters.maxPrice}
+            onChange={(e) =>
+              setPendingFilters((prev) => ({ ...prev, maxPrice: e.target.value }))
+            }
             placeholder="Max ₹"
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
@@ -942,12 +976,12 @@ export default function ShopLiveExperience({
               <li key={group}>
                 <label
                   className="flex items-center gap-2 text-sm text-dark-4"
-                  {...filterHoverHandlers("ageGroup", group, query.ageGroups.includes(group))}
+                  {...filterHoverHandlers("ageGroup", group, pendingFilters.ageGroups.includes(group))}
                 >
                   <input
                     type="checkbox"
-                    checked={query.ageGroups.includes(group)}
-                    onChange={() => toggleFilter("ageGroups", group)}
+                    checked={pendingFilters.ageGroups.includes(group)}
+                    onChange={() => togglePendingFilter("ageGroups", group)}
                   />
                   {group}
                 </label>
@@ -969,13 +1003,13 @@ export default function ShopLiveExperience({
                     {...filterHoverHandlers(
                       "category",
                       cat.slug,
-                      query.categorySlugs.includes(cat.slug)
+                      pendingFilters.categorySlugs.includes(cat.slug)
                     )}
                   >
                     <input
                       type="checkbox"
-                      checked={query.categorySlugs.includes(cat.slug)}
-                      onChange={() => toggleCategory(cat.slug)}
+                      checked={pendingFilters.categorySlugs.includes(cat.slug)}
+                      onChange={() => togglePendingCategory(cat.slug)}
                       className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                     />
                     <span className="leading-snug">{cat.name ?? cat.title ?? cat.slug}</span>
@@ -998,12 +1032,12 @@ export default function ShopLiveExperience({
                 <li key={b.slug}>
                   <label
                     className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
-                    {...filterHoverHandlers("brand", b.slug, query.brands.includes(b.slug))}
+                    {...filterHoverHandlers("brand", b.slug, pendingFilters.brands.includes(b.slug))}
                   >
                     <input
                       type="checkbox"
-                      checked={query.brands.includes(b.slug)}
-                      onChange={() => toggleBrand(b.slug)}
+                      checked={pendingFilters.brands.includes(b.slug)}
+                      onChange={() => togglePendingBrand(b.slug)}
                       className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                     />
                     <span className="leading-snug">
@@ -1027,12 +1061,12 @@ export default function ShopLiveExperience({
               <li key={s.slug}>
                 <label
                   className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
-                  {...filterHoverHandlers("subtype", s.slug, query.subtypes.includes(s.slug))}
+                  {...filterHoverHandlers("subtype", s.slug, pendingFilters.subtypes.includes(s.slug))}
                 >
                   <input
                     type="checkbox"
-                    checked={query.subtypes.includes(s.slug)}
-                    onChange={() => toggleFilter("subtypes", s.slug)}
+                    checked={pendingFilters.subtypes.includes(s.slug)}
+                    onChange={() => togglePendingFilter("subtypes", s.slug)}
                     className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                   />
                   <span className="leading-snug">
@@ -1056,12 +1090,12 @@ export default function ShopLiveExperience({
               <li key={c.slug}>
                 <label
                   className="flex cursor-pointer items-start gap-2 text-sm text-dark-4 hover:text-blue"
-                  {...filterHoverHandlers("collection", c.slug, query.collections.includes(c.slug))}
+                  {...filterHoverHandlers("collection", c.slug, pendingFilters.collections.includes(c.slug))}
                 >
                   <input
                     type="checkbox"
-                    checked={query.collections.includes(c.slug)}
-                    onChange={() => toggleFilter("collections", c.slug)}
+                    checked={pendingFilters.collections.includes(c.slug)}
+                    onChange={() => togglePendingFilter("collections", c.slug)}
                     className="mt-0.5 rounded border-gray-3 text-blue focus:ring-blue"
                   />
                   <span className="leading-snug">
@@ -1085,12 +1119,12 @@ export default function ShopLiveExperience({
               <li key={d.id}>
                 <label
                   className="flex items-center gap-2 text-sm text-dark-4"
-                  {...filterHoverHandlers("discount", d.id, query.discounts.includes(d.id))}
+                  {...filterHoverHandlers("discount", d.id, pendingFilters.discounts.includes(d.id))}
                 >
                   <input
                     type="checkbox"
-                    checked={query.discounts.includes(d.id)}
-                    onChange={() => toggleFilter("discounts", d.id)}
+                    checked={pendingFilters.discounts.includes(d.id)}
+                    onChange={() => togglePendingFilter("discounts", d.id)}
                   />
                   {d.label} ({d.count})
                 </label>
@@ -1109,12 +1143,12 @@ export default function ShopLiveExperience({
                 <li key={s}>
                   <label
                     className="flex items-center gap-2 text-sm text-dark-4"
-                    {...filterHoverHandlers("diecastScale", s, query.diecastScales.includes(s))}
+                    {...filterHoverHandlers("diecastScale", s, pendingFilters.diecastScales.includes(s))}
                   >
                     <input
                       type="checkbox"
-                      checked={query.diecastScales.includes(s)}
-                      onChange={() => toggleFilter("diecastScales", s)}
+                      checked={pendingFilters.diecastScales.includes(s)}
+                      onChange={() => togglePendingFilter("diecastScales", s)}
                     />
                     {s}
                   </label>
@@ -1128,14 +1162,12 @@ export default function ShopLiveExperience({
         <label className="flex items-center gap-2 text-sm text-meta-3">
           <input
             type="checkbox"
-            checked={query.available === "true"}
+            checked={pendingFilters.available === "true"}
             onChange={(e) =>
-              commitQuery({
-                ...query,
-                q: searchInput,
-                page: 1,
+              setPendingFilters((prev) => ({
+                ...prev,
                 available: e.target.checked ? "true" : "",
-              })
+              }))
             }
           />
           In stock only
@@ -1144,14 +1176,9 @@ export default function ShopLiveExperience({
         <div>
           <label className="mb-1 block text-sm font-semibold text-dark">Sort by</label>
           <select
-            value={query.sort}
+            value={pendingFilters.sort}
             onChange={(e) =>
-              commitQuery({
-                ...query,
-                q: searchInput,
-                page: 1,
-                sort: e.target.value,
-              })
+              setPendingFilters((prev) => ({ ...prev, sort: e.target.value }))
             }
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           >
@@ -1168,6 +1195,8 @@ export default function ShopLiveExperience({
         >
           Clear filters
         </button>
+
+        {renderApplyFiltersButton()}
       </form>
     </div>
     );

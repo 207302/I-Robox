@@ -37,6 +37,11 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
         ? (d.lastAwbDiscovery as Record<string, unknown>)
         : null;
     const discoveryError = lastDiscovery ? String(lastDiscovery.error ?? "") : "";
+    const duplicateCount = lastDiscovery ? Number(lastDiscovery.duplicateCount ?? d.duplicatePanelOrders ?? 0) : 0;
+    const panelOrders =
+      lastDiscovery && Array.isArray(lastDiscovery.panelOrders)
+        ? (lastDiscovery.panelOrders as Array<Record<string, unknown>>)
+        : [];
     const triedIds =
       lastDiscovery && Array.isArray(lastDiscovery.triedIds)
         ? lastDiscovery.triedIds.map((id) => String(id)).join(", ")
@@ -90,6 +95,17 @@ function ShipmozoShipmentNote({ shipment }: { shipment: any }) {
       validWarehouses && `Valid ShipMozo warehouses: ${validWarehouses}`,
       pushOk === false && !pushMessage && !reason && "Push failed: check ShipMozo API keys and warehouse env vars",
       discoveryError && `AWB sync: ${discoveryError}`,
+      duplicateCount > 0 &&
+        `${panelOrders.length} ShipMozo order(s) found for this ref (${duplicateCount} duplicate)`,
+      panelOrders.length > 0 &&
+        `Panel orders: ${panelOrders
+          .map((row) => {
+            const id = String(row.shipmozo_order_id ?? "");
+            const awb = String(row.awb_number ?? "").trim();
+            const status = String(row.status ?? "").trim();
+            return awb ? `${id} (AWB ${awb})` : status ? `${id} (${status})` : id;
+          })
+          .join("; ")}`,
       triedIds && `Tried ShipMozo ids: ${triedIds}`,
       rmk && `Shipmozo: ${rmk}`,
       lastRequestAt && `Last request: ${lastRequestAt}`,
@@ -165,6 +181,7 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   const [deleting, setDeleting] = useState(false);
   const [syncingShipment, setSyncingShipment] = useState(false);
   const [pushingShipmozo, setPushingShipmozo] = useState(false);
+  const [refreshingShipmozo, setRefreshingShipmozo] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("PENDING");
 
   function resolveStatusSelection(order: { status?: string; paymentStatus?: string }): string {
@@ -243,6 +260,24 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
     SHIPMOZO_TRACKING_STEPS.includes(data.shipment.trackingStatus as ShipmozoTrackingStatus)
       ? (data.shipment.trackingStatus as ShipmozoTrackingStatus)
       : "ORDER_PLACED";
+
+  async function refreshFromShipmozo() {
+    setRefreshingShipmozo(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/shipmozo-refresh`, { method: "POST" });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out?.error || "Could not refresh from ShipMozo");
+      toast.success(out?.message || "Refreshed from ShipMozo");
+      const refresh = await fetch(`/api/admin/orders/${id}`);
+      const json = await refresh.json().catch(() => null);
+      if (refresh.ok && json) setData(json);
+      router.refresh();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "ShipMozo refresh failed");
+    } finally {
+      setRefreshingShipmozo(false);
+    }
+  }
 
   async function pushToShipmozo() {
     setPushingShipmozo(true);
@@ -521,7 +556,15 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={pushingShipmozo || saving}
+              disabled={refreshingShipmozo || pushingShipmozo || saving}
+              onClick={() => void refreshFromShipmozo()}
+              className="rounded-lg border border-gray-3 bg-white px-3 py-1.5 text-sm font-medium text-dark hover:bg-gray-1 transition disabled:opacity-60"
+            >
+              {refreshingShipmozo ? "Refreshing…" : "Refresh from ShipMozo"}
+            </button>
+            <button
+              type="button"
+              disabled={pushingShipmozo || refreshingShipmozo || saving}
               onClick={() => void pushToShipmozo()}
               className="rounded-lg border border-blue/30 bg-blue/5 px-3 py-1.5 text-sm font-medium text-blue hover:bg-blue/10 transition disabled:opacity-60"
             >

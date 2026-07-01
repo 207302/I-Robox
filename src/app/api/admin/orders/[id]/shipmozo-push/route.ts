@@ -5,7 +5,7 @@ import { rateLimitStrict } from "@/lib/security/rateLimit";
 import { isUuid } from "@/lib/validation/input";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { bookShipmozoShipmentForOrder } from "@/lib/shipping/shipmozo";
-import { syncShipmozoAwbForOrder } from "@/lib/shipping/shipmozoTracking";
+import { refreshShipmozoOrderFromPanel } from "@/lib/shipping/shipmozoTracking";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runAdminApiRoute(
@@ -26,8 +26,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       const { id } = await ctx.params;
       if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-      const result = await bookShipmozoShipmentForOrder(id, { force: true });
-      await syncShipmozoAwbForOrder(id, { force: true });
+      const refresh = await refreshShipmozoOrderFromPanel(id);
+      if (refresh.ok && refresh.reason === "awb_synced") {
+        return NextResponse.json({
+          ok: true,
+          reason: "awb_synced",
+          message: `AWB already in ShipMozo and synced: ${refresh.awb}.`,
+          panelOrders: refresh.panelOrders,
+          duplicateCount: refresh.duplicateCount,
+        });
+      }
+
+      if (refresh.ok && refresh.panelOrders.length > 0) {
+        return NextResponse.json({
+          ok: true,
+          reason: "order_already_in_shipmozo_panel",
+          message:
+            refresh.duplicateCount > 0
+              ? `${refresh.panelOrders.length} ShipMozo orders already exist for this ref. Assign a courier on the scheduled shipment or cancel duplicates in the panel.`
+              : "Order is already in ShipMozo. Assign a courier in the panel if AWB is still empty.",
+          panelOrders: refresh.panelOrders,
+          duplicateCount: refresh.duplicateCount,
+        });
+      }
+
+      const result = await bookShipmozoShipmentForOrder(id, { force: false });
 
       if (!result.ok) {
         return NextResponse.json(

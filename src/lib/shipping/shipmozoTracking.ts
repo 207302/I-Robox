@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { isUuid } from "@/lib/validation/input";
-import { fetchShipmozoTrackOrder, fetchShipmozoOrderDetailWithCandidates, collectShipmozoLookupIds, appendShipmozoMetadata } from "@/lib/shipping/shipmozo";
+import {
+  fetchShipmozoTrackOrder,
+  discoverShipmozoOrdersForRef,
+  appendShipmozoMetadata,
+} from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
   sendNotDeliveredCustomerEmail,
@@ -579,43 +583,53 @@ export async function syncShipmozoAwbForOrder(
       return { ok: true as const, skipped: true as const, reason: "no_shipmozo_ref" as const };
     }
 
-    const detail = await fetchShipmozoOrderDetailWithCandidates(lookupIds);
+    const customerRef = shipmozoOrderRef(order);
+    const discovery = await discoverShipmozoOrdersForRef({ lookupIds, customerRef });
+    const panelIds = discovery.panelOrders.map((row) => row.shipmozo_order_id);
+
     await appendShipmozoMetadata(orderId, {
       lastAwbDiscoveryAt: new Date().toISOString(),
       lastAwbDiscovery: {
-        ok: detail.ok,
-        awb: detail.awb_number ?? null,
-        error: detail.error ?? null,
-        triedIds: lookupIds,
-        lookup_id: detail.lookup_id ?? null,
+        ok: discovery.ok,
+        awb: discovery.awb_number ?? null,
+        error: discovery.error ?? null,
+        triedIds: discovery.triedIds,
+        lookup_id: discovery.lookup_id ?? null,
+        panelOrders: discovery.panelOrders,
+        duplicateCount: discovery.duplicateCount,
+        refreshedAt: new Date().toISOString(),
       },
-      ...(detail.shipmozo_order_id ? { shipmozo_order_id: detail.shipmozo_order_id } : {}),
+      ...(discovery.shipmozo_order_id ? { shipmozo_order_id: discovery.shipmozo_order_id } : {}),
+      ...(panelIds.length > 0 ? { shipmozo_order_ids: panelIds } : {}),
+      duplicatePanelOrders: discovery.duplicateCount,
     });
 
-    if (!detail.ok || !detail.awb_number) {
+    if (discovery.ok && discovery.awb_number) {
+      const result = await applyShipmozoWebhookUpdate({
+        awb: discovery.awb_number,
+        order_id: orderId,
+        status: discovery.status ?? "PICKUP_GENERATED",
+        carrier: discovery.courier,
+        timestamp: new Date().toISOString(),
+      });
+      if (!result.ok) return result;
       return {
         ok: true as const,
-        skipped: true as const,
-        reason: "no_awb_yet" as const,
-        error: detail.error,
+        orderId,
+        awb: discovery.awb_number,
+        mappedStatus: result.mappedStatus,
+        panelOrders: discovery.panelOrders,
+        duplicateCount: discovery.duplicateCount,
       };
     }
 
-    const result = await applyShipmozoWebhookUpdate({
-      awb: detail.awb_number,
-      order_id: orderId,
-      status: detail.status ?? "PICKUP_GENERATED",
-      carrier: detail.courier,
-      timestamp: new Date().toISOString(),
-    });
-
-    if (!result.ok) return result;
-
     return {
       ok: true as const,
-      orderId,
-      awb: detail.awb_number,
-      mappedStatus: result.mappedStatus,
+      skipped: true as const,
+      reason: "no_awb_yet" as const,
+      error: discovery.error,
+      panelOrders: discovery.panelOrders,
+      duplicateCount: discovery.duplicateCount,
     };
   } catch (err) {
     console.error("[shipmozo-awb-discovery] unhandled error", { orderId, err });
@@ -655,6 +669,56 @@ export async function runShipmozoAwbDiscoverySync() {
   }
 
   return { scanned: orders.length, discovered, skipped, failed };
+}
+
+/** Re-scan ShipMozo for all orders matching this i-robox ref; sync AWB/tracking when found. */
+export async function refreshShipmozoOrderFromPanel(orderId: string) {
+  const awbResult = await syncShipmozoAwbForOrder(orderId, { force: true });
+  const order = await prisma.orders.findUnique({
+    where: { id: orderId },
+    select: { awb_number: true, shipments: { select: { tracking_number: true } } },
+  });
+  const awb = (order?.awb_number ?? order?.shipments?.tracking_number ?? "").trim();
+
+  let trackingResult: Awaited<ReturnType<typeof syncShipmozoTrackingForOrder>> | null = null;
+  if (awb) {
+    trackingResult = await syncShipmozoTrackingForOrder(orderId, { force: true });
+  }
+
+  const panelOrders =
+    awbResult.ok && "panelOrders" in awbResult && Array.isArray(awbResult.panelOrders)
+      ? awbResult.panelOrders
+      : [];
+  const duplicateCount =
+    awbResult.ok && "duplicateCount" in awbResult ? Number(awbResult.duplicateCount ?? 0) : 0;
+
+  if (awbResult.ok && "awb" in awbResult && awbResult.awb) {
+    return {
+      ok: true as const,
+      reason: "awb_synced" as const,
+      awb: awbResult.awb,
+      panelOrders,
+      duplicateCount,
+      tracking: trackingResult,
+    };
+  }
+
+  if (awbResult.ok && "skipped" in awbResult && awbResult.skipped) {
+    return {
+      ok: true as const,
+      reason: awbResult.reason ?? "no_awb_yet",
+      panelOrders,
+      duplicateCount,
+      error: "error" in awbResult ? awbResult.error : undefined,
+    };
+  }
+
+  return {
+    ok: false as const,
+    error: "error" in awbResult ? awbResult.error : "refresh_failed",
+    panelOrders,
+    duplicateCount,
+  };
 }
 
 export async function syncShipmozoTrackingForOrder(

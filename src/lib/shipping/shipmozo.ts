@@ -208,7 +208,329 @@ export type ShipmozoOrderDetailResult = {
   shipmozo_order_id?: string;
   lookup_id?: string;
   error?: string;
+  panelOrders?: ShipmozoPanelOrderSummary[];
+  duplicateCount?: number;
 };
+
+export type ShipmozoPanelOrderSummary = {
+  shipmozo_order_id: string;
+  reference_id?: string;
+  awb_number?: string;
+  courier?: string;
+  status?: string;
+  lookup_id: string;
+};
+
+export type ShipmozoDiscoveryResult = ShipmozoOrderDetailResult & {
+  panelOrders: ShipmozoPanelOrderSummary[];
+  duplicateCount: number;
+  triedIds: string[];
+};
+
+const SHIPMOZO_LINKED_ORDER_ID_KEYS = [
+  "shipment_order_id",
+  "scheduled_order_id",
+  "linked_order_id",
+  "sm_order_id",
+  "forward_order_id",
+] as const;
+
+export function normalizeShipmozoCustomerRef(ref: string): string {
+  return String(ref).replace(/-/g, "").trim().toUpperCase();
+}
+
+function looksLikeShipmozoPanelOrderId(value: string): boolean {
+  return /^50232[A-Z]{2}\d+$/i.test(value.trim());
+}
+
+function rankPanelOrder(summary: ShipmozoPanelOrderSummary): number {
+  let score = 0;
+  if (summary.awb_number) score += 100;
+  if (/SM/i.test(summary.shipmozo_order_id)) score += 20;
+  if (/scheduled|transit|deliver|pickup complete/i.test(summary.status ?? "")) score += 10;
+  if (/AP/i.test(summary.shipmozo_order_id)) score -= 5;
+  return score;
+}
+
+function pickBestPanelOrder(orders: ShipmozoPanelOrderSummary[]): ShipmozoPanelOrderSummary | null {
+  if (orders.length === 0) return null;
+  return [...orders].sort((a, b) => rankPanelOrder(b) - rankPanelOrder(a))[0] ?? null;
+}
+
+function mergePanelOrderMaps(
+  target: Map<string, ShipmozoPanelOrderSummary>,
+  incoming: ShipmozoPanelOrderSummary[]
+) {
+  for (const row of incoming) {
+    const id = normalizeShipmozoOrderIdRef(row.shipmozo_order_id);
+    if (!id) continue;
+    const prev = target.get(id);
+    target.set(id, {
+      shipmozo_order_id: id,
+      lookup_id: row.lookup_id,
+      reference_id: row.reference_id ?? prev?.reference_id,
+      awb_number: row.awb_number ?? prev?.awb_number,
+      courier: row.courier ?? prev?.courier,
+      status: row.status ?? prev?.status,
+    });
+  }
+}
+
+function extractPanelOrdersFromShipmozoData(
+  data: unknown,
+  lookupId: string,
+  customerRefNorm: string
+): ShipmozoPanelOrderSummary[] {
+  const byId = new Map<string, ShipmozoPanelOrderSummary>();
+
+  const visit = (node: unknown) => {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    if (typeof node !== "object") return;
+
+    const d = node as Record<string, unknown>;
+    const orderId = readStringField(d, ["order_id", "id", "shipmozo_order_id"]);
+    const referenceId = readStringField(d, ["reference_id", "order_ref", "customer_order_id"]);
+    const awb = readStringField(d, AWB_FIELD_KEYS);
+    const courier = readStringField(d, COURIER_FIELD_KEYS) || undefined;
+    const status = readStringField(d, STATUS_FIELD_KEYS) || undefined;
+
+    const refNorm = referenceId ? normalizeShipmozoCustomerRef(referenceId) : "";
+    const orderNorm = orderId ? normalizeShipmozoCustomerRef(orderId) : "";
+    const matchesRef =
+      refNorm === customerRefNorm ||
+      orderNorm === customerRefNorm ||
+      (Boolean(orderId) && normalizeShipmozoOrderIdRef(orderId) === customerRefNorm);
+
+    if (orderId && (matchesRef || (looksLikeShipmozoPanelOrderId(orderId) && refNorm === customerRefNorm))) {
+      const id = normalizeShipmozoOrderIdRef(orderId);
+      const prev = byId.get(id);
+      byId.set(id, {
+        shipmozo_order_id: id,
+        lookup_id: lookupId,
+        reference_id: referenceId || prev?.reference_id,
+        awb_number: awb && looksLikeAwb(awb) ? awb : prev?.awb_number,
+        courier: courier || prev?.courier,
+        status: status || prev?.status,
+      });
+    }
+
+    for (const key of SHIPMOZO_LINKED_ORDER_ID_KEYS) {
+      const linked = readStringField(d, [key]);
+      if (linked && looksLikeShipmozoPanelOrderId(linked)) {
+        const id = normalizeShipmozoOrderIdRef(linked);
+        const prev = byId.get(id);
+        byId.set(id, {
+          shipmozo_order_id: id,
+          lookup_id: lookupId,
+          reference_id: referenceId || prev?.reference_id,
+          awb_number: prev?.awb_number,
+          courier: prev?.courier,
+          status: prev?.status,
+        });
+      }
+    }
+
+    for (const value of Object.values(d)) visit(value);
+  };
+
+  visit(data);
+  return [...byId.values()];
+}
+
+function collectLinkedLookupIds(data: unknown): string[] {
+  const ids = new Set<string>();
+  const visit = (node: unknown) => {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const d = node as Record<string, unknown>;
+    for (const key of ["order_id", "id", ...SHIPMOZO_LINKED_ORDER_ID_KEYS]) {
+      const value = readStringField(d, [key]);
+      if (value && looksLikeShipmozoPanelOrderId(value)) {
+        ids.add(normalizeShipmozoOrderIdRef(value));
+      }
+    }
+    for (const value of Object.values(d)) visit(value);
+  };
+  visit(data);
+  return [...ids];
+}
+
+async function searchShipmozoOrdersByReference(customerRef: string): Promise<ShipmozoPanelOrderSummary[]> {
+  const ref = normalizeShipmozoOrderIdRef(customerRef);
+  const refNorm = normalizeShipmozoCustomerRef(ref);
+  const getEndpoints = [
+    `/get-orders?reference_id=${encodeURIComponent(ref)}`,
+    `/get-orders?order_id=${encodeURIComponent(ref)}`,
+    `/get-orders?search=${encodeURIComponent(ref)}`,
+    `/get-order-list?reference_id=${encodeURIComponent(ref)}`,
+    `/get-order-detail?reference_id=${encodeURIComponent(ref)}`,
+  ];
+
+  const found: ShipmozoPanelOrderSummary[] = [];
+  for (const endpoint of getEndpoints) {
+    const res = await callShipmozo(endpoint, "GET");
+    if (!res.ok) continue;
+    const data = shipmozoResponseData(res.parsed);
+    const rows = extractPanelOrdersFromShipmozoData(data, ref, refNorm);
+    if (rows.length > 0) {
+      found.push(...rows);
+      break;
+    }
+  }
+
+  if (found.length === 0) {
+    const postRes = await callShipmozo("/get-orders", "POST", {
+      reference_id: ref,
+      order_id: ref,
+      search: ref,
+    });
+    if (postRes.ok) {
+      const data = shipmozoResponseData(postRes.parsed);
+      found.push(...extractPanelOrdersFromShipmozoData(data, ref, refNorm));
+    }
+  }
+
+  return found;
+}
+
+/** Scan ShipMozo for every order matching an i-robox ref; prefer records that already have an AWB. */
+export async function discoverShipmozoOrdersForRef(input: {
+  lookupIds: string[];
+  customerRef: string;
+}): Promise<ShipmozoDiscoveryResult> {
+  const customerRef = normalizeShipmozoOrderIdRef(input.customerRef);
+  const customerRefNorm = normalizeShipmozoCustomerRef(customerRef);
+  const tried = new Set<string>();
+  const panelById = new Map<string, ShipmozoPanelOrderSummary>();
+  const queue = [
+    ...new Set(
+      [...input.lookupIds, customerRef]
+        .map((id) => normalizeShipmozoOrderIdRef(id))
+        .filter(Boolean)
+    ),
+  ];
+
+  if (queue.length === 0) {
+    return { ok: false, error: "missing_order_id", panelOrders: [], duplicateCount: 0, triedIds: [] };
+  }
+  if (!isShipmozoConfigured()) {
+    return { ok: false, error: "shipmozo_not_configured", panelOrders: [], duplicateCount: 0, triedIds: [] };
+  }
+
+  const searchHits = await searchShipmozoOrdersByReference(customerRef);
+  mergePanelOrderMaps(panelById, searchHits);
+  for (const row of searchHits) {
+    queue.push(row.shipmozo_order_id);
+  }
+
+  let lastError = "get_order_detail_failed";
+  const maxFetches = 24;
+
+  while (queue.length > 0 && tried.size < maxFetches) {
+    const id = queue.shift()!;
+    if (tried.has(id)) continue;
+    tried.add(id);
+
+    const res = await callShipmozo(`/get-order-detail/${encodeURIComponent(id)}`, "GET");
+    if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
+      lastError = "get_order_detail_failed";
+      continue;
+    }
+
+    const data = shipmozoResponseData(res.parsed);
+    mergePanelOrderMaps(panelById, extractPanelOrdersFromShipmozoData(data, id, customerRefNorm));
+
+    for (const linkedId of collectLinkedLookupIds(data)) {
+      if (!tried.has(linkedId)) queue.push(linkedId);
+    }
+
+    const parsed = parseShipmozoOrderDetailData(data);
+    if (parsed?.awb_number) {
+      mergePanelOrderMaps(panelById, [
+        {
+          shipmozo_order_id: normalizeShipmozoOrderIdRef(parsed.shipmozo_order_id ?? id),
+          reference_id: customerRef,
+          awb_number: parsed.awb_number,
+          courier: parsed.courier,
+          status: parsed.status,
+          lookup_id: id,
+        },
+      ]);
+    }
+  }
+
+  const panelOrders = [...panelById.values()];
+  const duplicateCount = panelOrders.length > 1 ? panelOrders.length - 1 : 0;
+
+  const best = pickBestPanelOrder(panelOrders);
+  if (best?.awb_number) {
+    return {
+      ok: true,
+      awb_number: best.awb_number,
+      courier: best.courier,
+      status: best.status,
+      shipmozo_order_id: best.shipmozo_order_id,
+      lookup_id: best.lookup_id,
+      panelOrders,
+      duplicateCount: Math.max(0, panelOrders.length - 1),
+      triedIds: [...tried],
+    };
+  }
+
+  if (best) {
+    return {
+      ok: false,
+      error: "no_awb_on_shipmozo_order",
+      shipmozo_order_id: best.shipmozo_order_id,
+      lookup_id: best.lookup_id,
+      status: best.status,
+      panelOrders,
+      duplicateCount: Math.max(0, panelOrders.length - 1),
+      triedIds: [...tried],
+    };
+  }
+
+  return {
+    ok: false,
+    error: lastError,
+    panelOrders,
+    duplicateCount: Math.max(0, panelOrders.length - 1),
+    triedIds: [...tried],
+  };
+}
+
+export function shipmozoPanelOrderIdsFromMetadata(metadata?: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+  const add = (value: unknown) => {
+    const normalized = normalizeShipmozoOrderIdRef(String(value ?? ""));
+    if (normalized) ids.add(normalized);
+  };
+
+  if (!metadata) return [];
+  add(metadata.shipmozo_order_id);
+  if (Array.isArray(metadata.shipmozo_order_ids)) {
+    for (const id of metadata.shipmozo_order_ids) add(id);
+  }
+
+  const discovery = metadata.lastAwbDiscovery;
+  if (discovery && typeof discovery === "object" && Array.isArray((discovery as Record<string, unknown>).panelOrders)) {
+    for (const row of (discovery as Record<string, unknown>).panelOrders as unknown[]) {
+      if (row && typeof row === "object") {
+        add((row as Record<string, unknown>).shipmozo_order_id);
+      }
+    }
+  }
+
+  return [...ids];
+}
 
 const AWB_FIELD_KEYS = [
   "awb_number",
@@ -344,6 +666,7 @@ export function collectShipmozoLookupIds(input: {
   if (input.metadata) {
     add(input.metadata.reference_id);
     add(input.metadata.shipmozo_order_id);
+    for (const id of shipmozoPanelOrderIdsFromMetadata(input.metadata)) add(id);
 
     const pushOrder = input.metadata.pushOrder;
     if (pushOrder && typeof pushOrder === "object") {
@@ -372,46 +695,15 @@ export function collectShipmozoLookupIds(input: {
 
 /** Fetch ShipMozo order detail, trying multiple order ids until AWB is found. */
 export async function fetchShipmozoOrderDetailWithCandidates(
-  lookupIds: string[]
+  lookupIds: string[],
+  customerRef?: string
 ): Promise<ShipmozoOrderDetailResult> {
-  const unique = [...new Set(lookupIds.map((id) => normalizeShipmozoOrderIdRef(id)).filter(Boolean))];
-
-  if (unique.length === 0) return { ok: false, error: "missing_order_id" };
-  if (!isShipmozoConfigured()) return { ok: false, error: "shipmozo_not_configured" };
-
-  let lastError = "get_order_detail_failed";
-  let panelWithoutAwb: ShipmozoOrderDetailResult | null = null;
-
-  for (const id of unique) {
-    const res = await callShipmozo(`/get-order-detail/${encodeURIComponent(id)}`, "GET");
-    if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
-      lastError = "get_order_detail_failed";
-      continue;
-    }
-
-    const data = shipmozoResponseData(res.parsed);
-    const parsed = parseShipmozoOrderDetailData(data);
-    if (parsed?.awb_number) {
-      return { ok: true, ...parsed, lookup_id: id };
-    }
-
-    const panel = parseShipmozoPanelOrder(data);
-    if (panel?.shipmozo_order_id && !panelWithoutAwb) {
-      panelWithoutAwb = {
-        ok: false,
-        error: "no_awb_on_shipmozo_order",
-        shipmozo_order_id: panel.shipmozo_order_id,
-        lookup_id: id,
-        status: panel.status,
-      };
-    }
-
-    lastError = "no_awb_on_shipmozo_order";
-  }
-
-  if (panelWithoutAwb) return panelWithoutAwb;
-
-  return { ok: false, error: lastError };
+  const ref =
+    customerRef ??
+    lookupIds.find((id) => /^IRX/i.test(normalizeShipmozoOrderIdRef(id))) ??
+    lookupIds[0] ??
+    "";
+  return discoverShipmozoOrdersForRef({ lookupIds, customerRef: ref });
 }
 
 /** Fetch ShipMozo order by panel/API order id (e.g. IRx10001) — used when AWB is assigned manually. */
@@ -488,8 +780,9 @@ export async function runShipmozoPendingOrderPush() {
     }
 
     const hadPriorAttempt = Boolean(row.shipments?.metadata);
-    const result = await bookShipmozoShipmentForOrder(row.id, { force: hadPriorAttempt });
+    const result = await bookShipmozoShipmentForOrder(row.id, { force: false });
     if (result.ok) pushed += 1;
+    else if (hadPriorAttempt && result.reason === "order_already_in_shipmozo_panel") skipped += 1;
     else failed += 1;
 
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -639,6 +932,89 @@ export async function appendShipmozoMetadata(orderId: string, patch: Record<stri
   });
 }
 
+export async function applyDiscoveredShipmozoAwb(
+  orderId: string,
+  discovery: ShipmozoDiscoveryResult,
+  customerRef: string
+): Promise<boolean> {
+  if (!discovery.ok || !discovery.awb_number) return false;
+
+  const awbFromPanel = discovery.awb_number;
+  const courierFromPanel = discovery.courier ?? "Shipmozo";
+  const panelIds = discovery.panelOrders.map((row) => row.shipmozo_order_id);
+
+  await prisma.shipments.updateMany({
+    where: { order_id: orderId },
+    data: {
+      carrier: courierFromPanel,
+      tracking_number: awbFromPanel,
+      status: "CREATED",
+    },
+  });
+  await prisma.orders.update({
+    where: { id: orderId },
+    data: {
+      awb_number: awbFromPanel,
+      carrier: courierFromPanel,
+      shipment_status: "PICKUP_GENERATED",
+      shipment_updated_at: new Date(),
+    },
+  });
+  await appendShipmozoMetadata(orderId, {
+    status: "booked",
+    awb_number: awbFromPanel,
+    courier: courierFromPanel,
+    reference_id: customerRef,
+    reason: "awb_synced_from_shipmozo_panel",
+    shipmozo_order_id: discovery.shipmozo_order_id,
+    shipmozo_order_ids: panelIds,
+    duplicatePanelOrders: discovery.duplicateCount,
+    lastAwbDiscovery: {
+      ok: true,
+      awb: awbFromPanel,
+      error: null,
+      triedIds: discovery.triedIds,
+      lookup_id: discovery.lookup_id ?? null,
+      panelOrders: discovery.panelOrders,
+      duplicateCount: discovery.duplicateCount,
+      refreshedAt: new Date().toISOString(),
+    },
+  });
+  try {
+    await sendPickupEmail(orderId);
+  } catch (emailErr) {
+    console.error("[shipmozo-booking] pickup email failed", { orderId, emailErr });
+  }
+  return true;
+}
+
+async function recordShipmozoPanelDiscovery(
+  orderId: string,
+  customerRef: string,
+  discovery: ShipmozoDiscoveryResult,
+  extra?: Record<string, unknown>
+) {
+  const panelIds = discovery.panelOrders.map((row) => row.shipmozo_order_id);
+  const bestId = discovery.shipmozo_order_id ?? panelIds[0];
+  await appendShipmozoMetadata(orderId, {
+    reference_id: customerRef,
+    ...(bestId && bestId !== customerRef ? { shipmozo_order_id: bestId } : {}),
+    ...(panelIds.length > 0 ? { shipmozo_order_ids: panelIds } : {}),
+    duplicatePanelOrders: discovery.duplicateCount,
+    lastAwbDiscovery: {
+      ok: discovery.ok,
+      awb: discovery.awb_number ?? null,
+      error: discovery.error ?? null,
+      triedIds: discovery.triedIds,
+      lookup_id: discovery.lookup_id ?? null,
+      panelOrders: discovery.panelOrders,
+      duplicateCount: discovery.duplicateCount,
+      refreshedAt: new Date().toISOString(),
+    },
+    ...extra,
+  });
+}
+
 export async function bookShipmozoShipmentForOrder(
   orderId: string,
   options?: { force?: boolean }
@@ -749,57 +1125,29 @@ export async function bookShipmozoShipmentForOrder(
   const lookupIds = collectShipmozoLookupIds({ customerRef, metadata: priorMeta });
   let skipPushOrder = alreadyPushed;
 
-  if (!skipPushOrder) {
-    const panelState = await fetchShipmozoOrderDetailWithCandidates(
-      lookupIds.length > 0 ? lookupIds : [customerRef, createdOrderId]
+  const discovery = await discoverShipmozoOrdersForRef({
+    lookupIds: lookupIds.length > 0 ? lookupIds : [customerRef, createdOrderId],
+    customerRef,
+  });
+
+  if (discovery.ok && discovery.awb_number) {
+    await applyDiscoveredShipmozoAwb(orderId, discovery, customerRef);
+    return { ok: true, reason: "booked" };
+  }
+
+  if (discovery.panelOrders.length > 0) {
+    skipPushOrder = true;
+    createdOrderId = normalizeShipmozoOrderIdRef(
+      discovery.shipmozo_order_id ?? discovery.panelOrders[0]?.shipmozo_order_id ?? createdOrderId
     );
-    if (panelState.ok && panelState.awb_number) {
-      const awbFromPanel = panelState.awb_number;
-      const courierFromPanel = panelState.courier ?? "Shipmozo";
-      await prisma.shipments.updateMany({
-        where: { order_id: orderId },
-        data: {
-          carrier: courierFromPanel,
-          tracking_number: awbFromPanel,
-          status: "CREATED",
-        },
-      });
-      await prisma.orders.update({
-        where: { id: orderId },
-        data: {
-          awb_number: awbFromPanel,
-          carrier: courierFromPanel,
-          shipment_status: "PICKUP_GENERATED",
-          shipment_updated_at: new Date(),
-        },
-      });
-      await appendShipmozoMetadata(orderId, {
-        status: "booked",
-        awb_number: awbFromPanel,
-        courier: courierFromPanel,
-        reference_id: customerRef,
-        reason: "awb_synced_from_shipmozo_panel",
-      });
-      try {
-        await sendPickupEmail(orderId);
-      } catch (emailErr) {
-        console.error("[shipmozo-booking] pickup email failed", { orderId, emailErr });
-      }
-      return { ok: true, reason: "booked" };
-    }
-    if (panelState.error === "no_awb_on_shipmozo_order") {
-      skipPushOrder = true;
-      createdOrderId = normalizeShipmozoOrderIdRef(
-        panelState.shipmozo_order_id ?? panelState.lookup_id ?? createdOrderId
-      );
-      await appendShipmozoMetadata(orderId, {
-        status: "awaiting_shipment",
-        reason: "order_already_in_shipmozo_panel",
-        message: "Order is in ShipMozo — assign a courier in the panel to generate AWB.",
-        reference_id: customerRef,
-        ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
-      });
-    }
+    await recordShipmozoPanelDiscovery(orderId, customerRef, discovery, {
+      status: "awaiting_shipment",
+      reason: "order_already_in_shipmozo_panel",
+      message:
+        discovery.duplicateCount > 0
+          ? `${discovery.panelOrders.length} ShipMozo orders found for ${customerRef}. Assign a courier on the scheduled shipment or cancel duplicates in the panel.`
+          : "Order is in ShipMozo — assign a courier in the panel to generate AWB.",
+    });
   }
 
   if (!skipPushOrder) {
@@ -852,18 +1200,26 @@ export async function bookShipmozoShipmentForOrder(
     });
 
     if (!push.ok) {
-      const existingInPanel = await fetchShipmozoOrderDetailWithCandidates([customerRef, createdOrderId]);
-      if (existingInPanel.error === "no_awb_on_shipmozo_order") {
+      const existingInPanel = await discoverShipmozoOrdersForRef({
+        lookupIds: [customerRef, createdOrderId],
+        customerRef,
+      });
+      if (existingInPanel.panelOrders.length > 0) {
+        if (existingInPanel.ok && existingInPanel.awb_number) {
+          await applyDiscoveredShipmozoAwb(orderId, existingInPanel, customerRef);
+          return { ok: true, reason: "booked" };
+        }
         createdOrderId = normalizeShipmozoOrderIdRef(
-          existingInPanel.shipmozo_order_id ?? existingInPanel.lookup_id ?? customerRef
+          existingInPanel.shipmozo_order_id ??
+            existingInPanel.panelOrders[0]?.shipmozo_order_id ??
+            customerRef
         );
-        await appendShipmozoMetadata(orderId, {
+        await recordShipmozoPanelDiscovery(orderId, customerRef, existingInPanel, {
           status: "awaiting_shipment",
           reason: "order_already_in_shipmozo_panel",
           message: "Push returned an error but order exists in ShipMozo — assign courier in panel.",
-          reference_id: customerRef,
-          ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
         });
+        skipPushOrder = true;
       } else {
         console.error("[shipmozo-booking] push-order failed", { orderId, message: pushMessage, status: push.status });
         await appendShipmozoMetadata(orderId, {
@@ -879,13 +1235,13 @@ export async function bookShipmozoShipmentForOrder(
           ? String((push.parsed as ShipmozoResponse).data?.order_id ?? pushPayload.order_id)
           : String(pushPayload.order_id)
       );
+      await appendShipmozoMetadata(orderId, {
+        reference_id: customerRef,
+        ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
+        shipmozo_order_ids: [createdOrderId],
+        status: "awaiting_shipment",
+      });
     }
-
-    await appendShipmozoMetadata(orderId, {
-      reference_id: customerRef,
-      ...(createdOrderId !== customerRef ? { shipmozo_order_id: createdOrderId } : {}),
-      status: "awaiting_shipment",
-    });
   }
 
   let awb = "";
@@ -924,7 +1280,17 @@ export async function bookShipmozoShipmentForOrder(
   }
 
   if (!awb) {
-    const detail = await fetchShipmozoOrderDetailWithCandidates([createdOrderId, customerRef]);
+    const detail = await fetchShipmozoOrderDetailWithCandidates(
+      collectShipmozoLookupIds({
+        customerRef,
+        metadata: {
+          reference_id: customerRef,
+          shipmozo_order_id: createdOrderId,
+          shipmozo_order_ids: [createdOrderId],
+        },
+      }),
+      customerRef
+    );
     await appendShipmozoMetadata(orderId, {
       orderDetail: { ok: detail.ok, awb: detail.awb_number ?? null, error: detail.error ?? null },
     });

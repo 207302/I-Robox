@@ -9,30 +9,22 @@ type Props = {
 export default function PageHero({ title, heroImage, centered = false }: Props) {
   if (heroImage) {
     return (
-      <div className="relative h-[200px] w-full md:h-[320px]">
+      <div className="relative h-[168px] w-full md:h-[400px]">
         <Image
           src={heroImage}
-          alt=""
+          alt={title}
           fill
           priority
           sizes="100vw"
           className="object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-        <div
-          className={`absolute inset-x-0 bottom-0 p-4 md:p-8 ${
-            centered ? "text-center" : "text-left"
-          }`}
-        >
-          <h1 className="text-2xl font-bold text-white md:text-4xl">{title}</h1>
-        </div>
       </div>
     );
   }
 
   return (
     <div
-      className={`relative flex h-[200px] w-full items-center bg-gradient-to-r from-blue to-blue-dark md:h-[320px] ${
+      className={`relative flex h-[168px] w-full items-center bg-gradient-to-r from-blue to-blue-dark md:h-[400px] ${
         centered ? "justify-center text-center" : "justify-start"
       }`}
     >

@@ -148,7 +148,11 @@ export default function BrandPageExperience({ page, initialListing }: Props) {
               ) : null}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-bold text-dark md:text-2xl">{brand.name}</h2>
+                  {heroImage ? (
+                    <h1 className="text-xl font-bold text-dark md:text-2xl">{brand.name}</h1>
+                  ) : (
+                    <h2 className="text-xl font-bold text-dark md:text-2xl">{brand.name}</h2>
+                  )}
                   <BadgeCheck className="size-5 text-blue" aria-label="Verified brand" />
                 </div>
                 {brand.description?.trim() ? (
@@ -165,7 +169,7 @@ export default function BrandPageExperience({ page, initialListing }: Props) {
                     <span className="font-semibold">{stats.rating ?? "—"}</span> Rating
                   </li>
                   <li>
-                    <span className="font-semibold">10K+</span> Happy Customers
+                    <span className="font-semibold">1K+</span> Happy Customers
                   </li>
                 </ul>
               </div>

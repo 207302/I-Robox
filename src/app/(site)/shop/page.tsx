@@ -50,13 +50,10 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     );
   }
 
-  const query = listingSearchParamsFromRecord(sp).toString();
-  const path = query ? `/shop?${query}` : "/shop";
-
   return {
     title,
     description,
-    ...buildSocialMetadata({ title, description, path }),
+    ...buildSocialMetadata({ title, description, path: "/shop" }),
   };
 }
 

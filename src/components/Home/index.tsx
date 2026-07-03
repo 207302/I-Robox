@@ -111,7 +111,7 @@ const Home = ({
       <FadeInSection>
         <section className={HOME_SECTION_SHELL}>
           <div className={HOME_SECTION_INNER}>
-            <HomeSectionHeader title="New Arrivals" viewAllHref="/shop?sort=newest" />
+            <HomeSectionHeader title="New Arrivals" viewAllHref="/shop" />
             <HomeProductRail
               railId="home-new-arrivals-rail"
               items={newArrivals ?? []}
@@ -137,7 +137,7 @@ const Home = ({
       <FadeInSection>
         <section className={`${HOME_SECTION_SHELL} pb-4 md:pb-6`}>
           <div className={HOME_SECTION_INNER}>
-            <HomeSectionHeader title="Best Sellers" viewAllHref="/shop?sort=bestsellers" />
+            <HomeSectionHeader title="Best Sellers" viewAllHref="/shop" />
             <HomeProductRail
               railId="home-best-sellers-rail"
               items={bestSellers ?? []}

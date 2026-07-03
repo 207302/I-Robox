@@ -15,6 +15,7 @@ import {
 
 export const metadata = {
   title: "Orders | i-Robox",
+  robots: { index: false, follow: false },
 };
 
 function formatShippingLine(

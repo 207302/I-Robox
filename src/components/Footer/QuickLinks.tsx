@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 
 const customerServiceLinks = [
-  { id: 1, label: "Track Order", href: "/orders" },
+  { id: 1, label: "Track Order", href: "/login?next=/orders" },
   { id: 2, label: "Shipping Policy", href: "/shipping-policy" },
   { id: 3, label: "Return & Cancellation", href: "/return-cancellation" },
   { id: 4, label: "FAQ", href: "/faq" },

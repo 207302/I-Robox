@@ -136,7 +136,28 @@ const nextConfig = {
     ];
   },
   redirects: async () => {
+    /** Legacy root-level product URLs (pre-/shop/ permalinks). Checked against Neon 2026-06-28 — none exist; all → /shop. */
+    const legacyRootProductSlugs = [
+      "suzuki-hayabusa-2022",
+      "aston-martin-vulcan-sports",
+      "model-luxury-car",
+      "yellow-toy-car",
+      "rc-off-road-car",
+      "toy-suv-car-model",
+    ];
+    const legacyProductRedirects = legacyRootProductSlugs.map((slug) => ({
+      source: `/${slug}`,
+      destination: "/shop",
+      permanent: true,
+    }));
+
     return [
+      {
+        source: "/about",
+        destination: "/about-us",
+        permanent: true,
+      },
+      ...legacyProductRedirects,
       {
         source: "/:path*",
         has: [{ type: "header", key: "x-forwarded-proto", value: "http" }],

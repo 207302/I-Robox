@@ -251,6 +251,7 @@ async function loadProductBySlug(slug: string) {
       age_group: true,
       diecast_scales: { select: { ratio: true } },
       slug: true,
+      is_active: true,
       updated_at: true,
       brand_id: true,
       categories: {
@@ -298,7 +299,7 @@ async function loadProductBySlug(slug: string) {
       max_order_quantity: true,
     },
   });
-  if (!product) return null;
+  if (!product || !product.is_active) return null;
   const flash = await prisma.flash_sale_products.findFirst({
     where: { product_id: product.id, is_active: true },
     select: { sale_price: true, is_active: true, active_from: true, active_until: true },

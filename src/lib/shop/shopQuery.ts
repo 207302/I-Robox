@@ -65,6 +65,11 @@ export function applyShopQuery(pathname: string, queryString: string) {
   );
 }
 
+/** `/shop` listing only — not PDP routes like `/shop/some-product-slug`. */
+export function isShopListingPath(pathname: string): boolean {
+  return pathname === "/shop";
+}
+
 export function paginationItems(current: number, total: number): (number | "ellipsis")[] {
   if (total <= 1) return [];
   const clamped = Math.max(1, Math.min(total, current));

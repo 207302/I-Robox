@@ -47,13 +47,14 @@ export function orderShippingBreakdownFromLines(args: {
   let chargeableUnits = 0;
 
   for (const line of args.lines) {
+    if (line.quantity <= 0) continue;
+
     const isExcluded = Boolean(line.brandId && excluded.has(line.brandId));
+    /** At/above threshold, only excluded brands pay shipping; others are free (incl. explicit per-unit rates). */
+    if (qualifiesForFreeShipping && !isExcluded) continue;
+
     const rate = Math.max(0, Number(line.shippingPerUnit ?? 0));
     const hasExplicitRate = rate > 0;
-    /** Explicit per-product shipping always stacks; zero-rate lines follow threshold / exclusion rules. */
-    const chargeShipping = isExcluded || hasExplicitRate || !qualifiesForFreeShipping;
-    if (!chargeShipping || line.quantity <= 0) continue;
-
     const unitRateInr = hasExplicitRate ? rate : DEFAULT_FLAT_SHIPPING_PER_UNIT_INR;
     const lineShippingInr = line.quantity * unitRateInr;
     totalInr += lineShippingInr;
@@ -94,8 +95,8 @@ export function shouldChargeShippingForLine(
 ): boolean {
   const excluded = new Set(args.freeShippingExcludedBrandIds ?? []);
   const isExcluded = Boolean(line.brandId && excluded.has(line.brandId));
-  const hasExplicitRate = Math.max(0, Number(line.shippingPerUnit ?? 0)) > 0;
-  return isExcluded || hasExplicitRate || !args.qualifiesForFreeShipping;
+  if (args.qualifiesForFreeShipping && !isExcluded) return false;
+  return true;
 }
 
 /**

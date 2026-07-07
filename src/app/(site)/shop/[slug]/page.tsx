@@ -138,6 +138,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
               brandId: product.brandId ?? null,
               maxOrderQuantity: product.maxOrderQuantity,
               category: product.category,
+              brand: product.brand
+                ? { name: product.brand.name, slug: product.brand.slug }
+                : null,
             }}
             galleryImages={galleryImagesSafe}
             galleryId={galleryId}

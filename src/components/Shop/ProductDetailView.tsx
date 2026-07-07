@@ -37,6 +37,7 @@ export type ProductDetailViewProps = {
     brandId: string | null;
     maxOrderQuantity: number;
     category: { title: string; slug: string } | null;
+    brand: { name: string; slug: string } | null;
     showNewBadge?: boolean;
   };
   galleryImages: string[];
@@ -115,6 +116,9 @@ export default function ProductDetailView({
   const categoryHref = product.category
     ? `/category/${encodeURIComponent(product.category.slug)}`
     : "/shop";
+  const brandHref = product.brand
+    ? `/brand/${encodeURIComponent(product.brand.slug)}`
+    : null;
 
   function toggleSection(key: AccordionKey) {
     setOpenSection((prev) => (prev === key ? null : key));
@@ -156,6 +160,20 @@ export default function ProductDetailView({
                   {categoryLabel}
                 </Link>
               </li>
+              {product.brand && brandHref ? (
+                <>
+                  <li aria-hidden>&gt;</li>
+                  <li>
+                    <Link
+                      href={brandHref}
+                      prefetch={shouldPrefetchHref(brandHref)}
+                      className="hover:text-blue"
+                    >
+                      {product.brand.name}
+                    </Link>
+                  </li>
+                </>
+              ) : null}
               <li aria-hidden>&gt;</li>
               <li className="text-gray-700">{product.title}</li>
             </ol>
@@ -167,7 +185,23 @@ export default function ProductDetailView({
             </span>
           ) : null}
 
-          <h1 className="mt-3 text-2xl font-bold text-dark">{product.title}</h1>
+          {product.brand && brandHref ? (
+            <Link
+              href={brandHref}
+              prefetch={shouldPrefetchHref(brandHref)}
+              className={`${product.showNewBadge ? "mt-3" : "mt-4"} inline-block text-sm font-semibold text-blue hover:underline`}
+            >
+              {product.brand.name}
+            </Link>
+          ) : null}
+
+          <h1
+            className={`${
+              product.brand || product.showNewBadge ? "mt-2" : "mt-3"
+            } text-2xl font-bold text-dark`}
+          >
+            {product.title}
+          </h1>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {reviewCount > 0 && averageRating != null ? (

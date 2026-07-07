@@ -30,7 +30,7 @@ const SiteSearchPreloader = dynamic(
 );
 import { setSearchProgress, startSearchProgress } from "@/lib/shop/searchProgress";
 import { chromeBgStyle, type SiteChromeColors } from "@/lib/marketing/chromeColors";
-import { SHOP_QUERY_EVENT, applyShopQuery } from "@/lib/shop/shopQuery";
+import { SHOP_QUERY_EVENT, applyShopQuery, isShopListingPath } from "@/lib/shop/shopQuery";
 import { AUTH_CHANGED_EVENT } from "@/lib/auth/clientSession";
 import { useSession } from "@/hooks/useSession";
 
@@ -144,7 +144,7 @@ const MainHeader = ({
 
   // Keep header search in sync with /shop?q=… (client URL updates + back/forward)
   useEffect(() => {
-    if (!pathname.startsWith("/shop")) return;
+    if (!isShopListingPath(pathname)) return;
 
     const syncFromUrl = () => {
       const q = new URLSearchParams(window.location.search).get("q")?.trim() ?? "";
@@ -165,7 +165,7 @@ const MainHeader = ({
 
   // Live search on shop — debounced URL updates (no full page navigation)
   useEffect(() => {
-    if (!pathname.startsWith("/shop")) return;
+    if (!isShopListingPath(pathname)) return;
     const q = debouncedSearchQuery.trim();
     const usp = new URLSearchParams(window.location.search);
     const current = usp.get("q")?.trim() ?? "";
@@ -178,7 +178,7 @@ const MainHeader = ({
 
   useEffect(() => {
     if (!searchPreloaderOpen) return;
-    if (pathname.startsWith("/shop")) {
+    if (isShopListingPath(pathname)) {
       setSearchProgress(38);
     }
   }, [pathname, searchPreloaderOpen]);
@@ -189,7 +189,7 @@ const MainHeader = ({
     setNavigationOpen(false);
     startSearchProgress();
     setSearchPreloaderOpen(true);
-    if (pathname.startsWith("/shop")) {
+    if (isShopListingPath(pathname)) {
       const usp = new URLSearchParams(window.location.search);
       if (q) usp.set("q", q);
       else usp.delete("q");

@@ -6,6 +6,7 @@ import {
   getFreeShippingExcludedBrandIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
+import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimit } from "@/lib/security/rateLimit";
 import { isUuid, readJsonBody } from "@/lib/validation/input";
@@ -81,15 +82,20 @@ export async function POST(req: NextRequest) {
       },
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
+    const flashMap = await flashSalePriceMap(productIds);
 
     const lines = items.map((item) => {
       const p = productMap.get(item.productId);
-      const unitPrice =
+      const catalogUnit =
         p?.discounted_price != null
           ? Number(p.discounted_price)
           : p?.base_price != null
             ? Number(p.base_price)
             : Math.max(0, Number(item.price ?? 0));
+      const unitPrice =
+        p != null
+          ? unitPriceWithFlashSale(catalogUnit, p.id, flashMap)
+          : catalogUnit;
       return {
         productId: item.productId,
         quantity: item.quantity,

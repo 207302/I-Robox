@@ -81,6 +81,7 @@ model brands {
   homepage_highlights homepage_highlights[]
   homepage_brand_rail homepage_brand_rail[]
   coupon_brands coupon_brands[]
+  flash_sale_brands flash_sale_brands[]
   free_shipping_excluded_brands free_shipping_excluded_brands?
   brand_pages brand_pages?
 }
@@ -138,6 +139,7 @@ model categories {
   other_categories categories[] @relation("categoriesTocategories")
   products         products[]
   coupon_categories coupon_categories[]
+  flash_sale_categories flash_sale_categories[]
   homepage_highlights homepage_highlights[]
   homepage_category_tiles homepage_category_tiles[]
   product_types     product_types[]
@@ -468,7 +470,7 @@ model products {
   reviews                reviews[]
   wishlist_items         wishlist_items[]
   homepage_highlights    homepage_highlights[]
-  flash_sale_products    flash_sale_products?
+  flash_sale_products    flash_sale_products[]
   coupon_products        coupon_products[]
 
   @@index([age_group], map: "idx_products_age_group")
@@ -865,20 +867,55 @@ model marketing_popups {
   @@index([is_active, sort_priority], map: "idx_marketing_popups_active_priority")
 }
 
-model flash_sale_products {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  product_id   String    @unique @db.Uuid
-  sale_price   Decimal   @db.Decimal(10, 2)
-  is_active    Boolean   @default(true)
-  active_from  DateTime? @db.Timestamptz(6)
-  active_until DateTime? @db.Timestamptz(6)
-  created_at   DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
-  products     products  @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+model flash_sales {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String?   @db.VarChar(120)
+  discount_type  String    @db.VarChar(20)
+  discount_value Decimal   @db.Decimal(10, 2)
+  is_active      Boolean   @default(true)
+  active_from    DateTime? @db.Timestamptz(6)
+  active_until   DateTime? @db.Timestamptz(6)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  products       flash_sale_products[]
+  categories     flash_sale_categories[]
+  brands         flash_sale_brands[]
 
-  @@index([is_active], map: "idx_flash_sale_is_active")
-  @@index([active_until], map: "idx_flash_sale_active_until")
-  @@index([is_active, product_id], map: "idx_flash_sale_active_product")
+  @@index([is_active], map: "idx_flash_sales_is_active")
+  @@index([active_until], map: "idx_flash_sales_active_until")
+}
+
+/// Products included in a flash sale rule (many per campaign).
+model flash_sale_products {
+  flash_sale_id String      @db.Uuid
+  product_id    String      @db.Uuid
+  flash_sales   flash_sales @relation(fields: [flash_sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products      products    @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([flash_sale_id, product_id])
+  @@index([product_id], map: "idx_flash_sale_products_product_id")
+}
+
+/// Categories included in a flash sale rule.
+model flash_sale_categories {
+  flash_sale_id String      @db.Uuid
+  category_id   String      @db.Uuid
+  flash_sales   flash_sales @relation(fields: [flash_sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  categories    categories  @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([flash_sale_id, category_id])
+  @@index([category_id], map: "idx_flash_sale_categories_category_id")
+}
+
+/// Brands included in a flash sale rule.
+model flash_sale_brands {
+  flash_sale_id String      @db.Uuid
+  brand_id      String      @db.Uuid
+  flash_sales   flash_sales @relation(fields: [flash_sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  brands        brands      @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([flash_sale_id, brand_id])
+  @@index([brand_id], map: "idx_flash_sale_brands_brand_id")
 }
 
 /// Singleton-style settings row (use fixed id in app / seed).

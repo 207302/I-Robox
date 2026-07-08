@@ -4,6 +4,10 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { EMPTY_CHROME_COLORS, type SiteChromeColors } from "@/lib/marketing/chromeColors";
 import { SITE_MARKETING_SETTINGS_ID } from "@/lib/marketing/siteSettingsId";
+import {
+  flashSaleAdminInclude,
+  serializeFlashSaleRow,
+} from "@/lib/admin/flashSaleBody";
 import { FLASH_SALES_TAG, MARKETING_TAG, POPUPS_TAG } from "@/lib/cache/tags";
 
 export const getSiteMarketingSettings = unstable_cache(
@@ -37,11 +41,11 @@ export const getMarketingPopups = unstable_cache(
 export const getFlashSaleProducts = unstable_cache(
   async () => {
     try {
-      return await prisma.flash_sale_products.findMany({
-        where: { is_active: true },
+      const rows = await prisma.flash_sales.findMany({
         orderBy: { updated_at: "desc" },
-        include: { products: { select: { name: true, slug: true } } },
+        include: flashSaleAdminInclude,
       });
+      return rows.map(serializeFlashSaleRow);
     } catch {
       return [];
     }

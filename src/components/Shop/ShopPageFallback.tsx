@@ -1,5 +1,5 @@
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
-import { ToyLoader } from "@/components/ui/ToyLoader";
+import ShopPageFallbackLoader from "@/components/Shop/ShopPageFallbackLoader";
 
 /** Suspense fallback — reserves grid space to limit CLS while shop shell streams. */
 export default function ShopPageFallback() {
@@ -16,8 +16,8 @@ export default function ShopPageFallback() {
             <div className="h-[min(70vh,720px)] rounded-xl border border-gray-3 bg-gray-1 animate-pulse" />
           </div>
           <div className="min-w-0 flex-1 min-h-[min(70vh,720px)]">
-            <div className="mb-6 h-11 shrink-0">
-              <ToyLoader aria-label="Loading products" />
+            <div className="mb-6 shrink-0">
+              <ShopPageFallbackLoader />
             </div>
             <ShopProductGridSkeleton />
           </div>

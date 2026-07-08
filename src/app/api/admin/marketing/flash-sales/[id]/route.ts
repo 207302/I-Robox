@@ -7,6 +7,12 @@ import { isUuid, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidateFlashSales } from "@/lib/cache/revalidate";
+import {
+  flashSaleAdminInclude,
+  parseFlashSaleBody,
+  replaceFlashSaleScope,
+  serializeFlashSaleRow,
+} from "@/lib/admin/flashSaleBody";
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runApiRoute(async () => {
@@ -19,40 +25,99 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       }
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
-  
+
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  
+
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    const body = parsed.body;
-    const current = await prisma.flash_sale_products.findUnique({
-      where: { id },
-      select: { product_id: true },
-    });
-    if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  
-    const data: Record<string, unknown> = {};
-    if (body.sale_price !== undefined) {
-      const n = Number(body.sale_price);
-      if (!Number.isFinite(n) || n <= 0) {
-        return NextResponse.json({ error: "Invalid sale_price" }, { status: 400 });
+    const body = parsed.body as Record<string, unknown>;
+
+    const existing = await prisma.flash_sales.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const hasScopeUpdate =
+      body.product_ids !== undefined ||
+      body.category_ids !== undefined ||
+      body.brand_ids !== undefined;
+
+    if (
+      body.discount_type !== undefined ||
+      body.discount_value !== undefined ||
+      hasScopeUpdate
+    ) {
+      const merged = {
+        name: body.name !== undefined ? body.name : existing.name,
+        discount_type: body.discount_type ?? existing.discount_type,
+        discount_value: body.discount_value ?? existing.discount_value,
+        is_active: body.is_active !== undefined ? body.is_active : existing.is_active,
+        active_from: body.active_from !== undefined ? body.active_from : existing.active_from,
+        active_until: body.active_until !== undefined ? body.active_until : existing.active_until,
+        product_ids: body.product_ids,
+        category_ids: body.category_ids,
+        brand_ids: body.brand_ids,
+      };
+
+      if (hasScopeUpdate) {
+        const current = await prisma.flash_sales.findUnique({
+          where: { id },
+          include: {
+            products: { select: { product_id: true } },
+            categories: { select: { category_id: true } },
+            brands: { select: { brand_id: true } },
+          },
+        });
+        if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        merged.product_ids = body.product_ids ?? current.products.map((p) => p.product_id);
+        merged.category_ids = body.category_ids ?? current.categories.map((c) => c.category_id);
+        merged.brand_ids = body.brand_ids ?? current.brands.map((b) => b.brand_id);
+      } else {
+        const current = await prisma.flash_sales.findUnique({
+          where: { id },
+          include: {
+            products: { select: { product_id: true } },
+            categories: { select: { category_id: true } },
+            brands: { select: { brand_id: true } },
+          },
+        });
+        merged.product_ids = current?.products.map((p) => p.product_id) ?? [];
+        merged.category_ids = current?.categories.map((c) => c.category_id) ?? [];
+        merged.brand_ids = current?.brands.map((b) => b.brand_id) ?? [];
       }
-      const product = await prisma.products.findUnique({
-        where: { id: current.product_id },
-        select: { base_price: true, discounted_price: true },
+
+      const bodyParsed = parseFlashSaleBody(merged);
+      if (!bodyParsed.ok) return NextResponse.json({ error: bodyParsed.error }, { status: 400 });
+      const data = bodyParsed.data;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.flash_sales.update({
+          where: { id },
+          data: {
+            name: data.name,
+            discount_type: data.discount_type,
+            discount_value: data.discount_value,
+            is_active: data.is_active,
+            active_from: data.active_from,
+            active_until: data.active_until,
+          },
+        });
+        await replaceFlashSaleScope(id, data, tx);
+        return tx.flash_sales.findUniqueOrThrow({
+          where: { id },
+          include: flashSaleAdminInclude,
+        });
       });
-      if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
-      const listedPrice = Number(product.discounted_price ?? product.base_price);
-      if (!(n < listedPrice)) {
-        return NextResponse.json(
-          { error: `Flash sale price must be lower than listed price (₹${listedPrice})` },
-          { status: 400 }
-        );
-      }
-      data.sale_price = n;
+
+      await revalidateFlashSales();
+      return NextResponse.json({ ok: true, item: serializeFlashSaleRow(updated) });
+    }
+
+    const data: Record<string, unknown> = {};
+    if (body.name !== undefined) {
+      const nameRaw = body.name == null ? null : String(body.name).trim();
+      data.name = nameRaw ? nameRaw.slice(0, 120) : null;
     }
     if (typeof body.is_active === "boolean") data.is_active = body.is_active;
     if (body.active_from !== undefined) {
@@ -69,12 +134,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       }
       data.active_until = d ?? null;
     }
-  
-    await prisma.flash_sale_products.update({ where: { id }, data });
-    await revalidateFlashSales({ productId: current.product_id });
+
+    await prisma.flash_sales.update({ where: { id }, data });
+    await revalidateFlashSales();
     return NextResponse.json({ ok: true }, { status: 200 });
-  
-  });}
+  });
+}
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return runApiRoute(async () => {
@@ -87,18 +152,14 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       }
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
-  
+
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const { id } = await ctx.params;
     if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  
-    const row = await prisma.flash_sale_products.findUnique({
-      where: { id },
-      select: { product_id: true },
-    });
-    await prisma.flash_sale_products.delete({ where: { id } });
-    if (row?.product_id) await revalidateFlashSales({ productId: row.product_id });
+
+    await prisma.flash_sales.delete({ where: { id } });
+    await revalidateFlashSales();
     return NextResponse.json({ ok: true }, { status: 200 });
-  
-  });}
+  });
+}

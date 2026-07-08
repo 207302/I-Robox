@@ -57,6 +57,7 @@
     "follow-redirects": "^1.16.0",
     "framer-motion": "^12.40.0",
     "lodash": "^4.17.21",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^1.22.0",
     "next": "^16.2.9",
     "next-share": "^0.27.0",

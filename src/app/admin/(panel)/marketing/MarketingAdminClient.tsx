@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import QuickLinkHtmlEditor from "@/components/admin/QuickLinkHtmlEditor";
+import FlashSalesAdminPanel from "@/app/admin/(panel)/marketing/FlashSalesAdminPanel";
 import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
 import type { MarketingBulkEntity } from "@/lib/admin/marketingBulkDelete";
@@ -383,10 +384,6 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [brandRailUploading, setBrandRailUploading] = useState(false);
   const [categoryGridUploading, setCategoryGridUploading] = useState(false);
   const [popupUploading, setPopupUploading] = useState(false);
-  const [flashSaving, setFlashSaving] = useState(false);
-  const [flashEditingId, setFlashEditingId] = useState<string | null>(null);
-  const [flashEditPrice, setFlashEditPrice] = useState<string>("");
-  const [flashEditActive, setFlashEditActive] = useState<boolean>(true);
 
   const cats = initial.categories;
   const prods = initial.products;
@@ -757,11 +754,6 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     );
   }
 
-  function listedPriceForProduct(productId: string): number | null {
-    const p = prods.find((x) => x.id === productId);
-    if (!p) return null;
-    return Number(p.discounted_price ?? p.base_price);
-  }
 
   return (
     <div className="space-y-6">
@@ -2215,190 +2207,16 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
       ) : null}
 
       {tab === "flash" ? (
-        <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Flash sale prices</h2>
-          <p className="text-sm text-meta-3">
-            Overrides catalog unit price at checkout when active (and in window).
-          </p>
-          {marketingSelectAllBar("flash sale")}
-          <ul className="divide-y divide-gray-3 text-sm">
-            {flashSales.map((row: any) => (
-              <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                {flashEditingId === row.id ? (
-                  <div className="flex w-full flex-wrap items-center gap-2">
-                    <span className="min-w-[180px] font-medium text-dark">
-                      {row.products?.name ?? row.product_id}
-                    </span>
-                    <input
-                      value={flashEditPrice}
-                      onChange={(e) => setFlashEditPrice(e.target.value)}
-                      type="number"
-                      step="0.01"
-                      className="w-32 rounded-lg border border-gray-3 px-3 py-1.5 text-sm"
-                    />
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={flashEditActive}
-                        onChange={(e) => setFlashEditActive(e.target.checked)}
-                      />
-                      Active
-                    </label>
-                    <button
-                      type="button"
-                      className="rounded bg-blue px-3 py-1.5 text-xs font-medium text-white"
-                      onClick={async () => {
-                        const entered = Number(flashEditPrice);
-                        const listed = listedPriceForProduct(row.product_id);
-                        if (!Number.isFinite(entered) || entered <= 0) {
-                          toast.error("Enter valid sale price");
-                          return;
-                        }
-                        if (listed != null && !(entered < listed)) {
-                          toast.error(`Flash sale must be lower than listed price ₹${listed}`);
-                          return;
-                        }
-                        await j(
-                          await fetch(`/api/admin/marketing/flash-sales/${row.id}`, {
-                            method: "PATCH",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({ sale_price: entered, is_active: flashEditActive }),
-                          })
-                        );
-                        setFlashSales((prev: any[]) =>
-                          prev.map((x) =>
-                            x.id === row.id ? { ...x, sale_price: entered, is_active: flashEditActive } : x
-                          )
-                        );
-                        setFlashEditingId(null);
-                        toast.success("Flash sale updated");
-                      }}
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded border border-gray-3 px-3 py-1.5 text-xs"
-                      onClick={() => setFlashEditingId(null)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="flex items-center gap-2 min-w-0">
-                      {marketingRowCheckbox(row.id, row.products?.name ?? row.product_id)}
-                      <span className="truncate">
-                        {row.products?.name ?? row.product_id} — ₹{row.sale_price}
-                      </span>
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="text-blue text-sm"
-                        onClick={() => {
-                          setFlashEditingId(row.id);
-                          setFlashEditPrice(String(row.sale_price));
-                          setFlashEditActive(Boolean(row.is_active));
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="text-red-600 text-sm"
-                        onClick={async () => {
-                          if (!confirm("Delete?")) return;
-                          await j(
-                            await fetch(`/api/admin/marketing/flash-sales/${row.id}`, { method: "DELETE" })
-                          );
-                          toast.success("Deleted");
-                          void refreshFlash();
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-          <form
-            className="grid gap-3 sm:grid-cols-2"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const formEl = e.currentTarget;
-              const fd = new FormData(formEl);
-              setFlashSaving(true);
-              try {
-                const selectedProductId = String(fd.get("product_id") ?? "");
-                const selectedProduct = prods.find((p) => p.id === selectedProductId);
-                const listedPrice = selectedProduct
-                  ? Number(selectedProduct.discounted_price ?? selectedProduct.base_price)
-                  : null;
-                const enteredPrice = Number(fd.get("sale_price"));
-                if (listedPrice != null && !(enteredPrice < listedPrice)) {
-                  toast.error(`Flash sale must be lower than listed price ₹${listedPrice}`);
-                  return;
-                }
-
-                const saved = await j<{ item?: any }>(
-                  await fetch("/api/admin/marketing/flash-sales", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({
-                      product_id: selectedProductId,
-                      sale_price: enteredPrice,
-                      is_active: fd.get("is_active") === "on",
-                    }),
-                  })
-                );
-                toast.success("Flash sale saved (created or updated)");
-                formEl.reset();
-                if (saved?.item) {
-                  setFlashSales((prev: any[]) => {
-                    const exists = prev.some((x) => x.id === saved.item.id);
-                    const next = exists
-                      ? prev.map((x) => (x.id === saved.item.id ? saved.item : x))
-                      : [saved.item, ...prev];
-                    return next;
-                  });
-                }
-                await refreshFlash();
-                router.refresh();
-              } catch (err: any) {
-                toast.error(err?.message || "Failed");
-              } finally {
-                setFlashSaving(false);
-              }
-            }}
-          >
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Product</span>
-              <select name="product_id" required className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm">
-                <option value="">Select…</option>
-                {productOptions}
-              </select>
-            </label>
-            <label>
-              <span className="text-sm font-medium">Sale price (INR)</span>
-              <input name="sale_price" type="number" step="0.01" required className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
-            <label className="flex items-center gap-2 text-sm mt-6">
-              <input name="is_active" type="checkbox" defaultChecked /> Active
-            </label>
-            <div className="sm:col-span-2">
-              <button
-                type="submit"
-                disabled={flashSaving}
-                className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                {flashSaving ? "Saving..." : "Add flash sale"}
-              </button>
-            </div>
-          </form>
-        </section>
+        <FlashSalesAdminPanel
+          flashSales={flashSales as any}
+          setFlashSales={setFlashSales as any}
+          categories={cats}
+          brands={brands}
+          refreshFlash={refreshFlash}
+          marketingSelectAllBar={marketingSelectAllBar}
+          marketingRowCheckbox={marketingRowCheckbox}
+          j={j}
+        />
       ) : null}
 
       {tab === "launchLeads" ? (

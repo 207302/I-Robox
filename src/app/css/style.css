@@ -632,49 +632,6 @@ input[type="search"]::-webkit-search-results-decoration {
   line-height: 1.5;
 }
 
-@keyframes tpw-preloader-progress {
-  from {
-    width: 0%;
-  }
-  to {
-    width: 100%;
-  }
-}
-
-.tpw-preloader-bar-fill {
-  animation-name: tpw-preloader-progress;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-}
-
-.tpw-preloader-bar-fill--indeterminate {
-  width: 40%;
-  animation: tpw-preloader-progress 1.1s ease-in-out infinite alternate;
-}
-
-/* Full-screen search overlay — horizontal progress bar */
-.site-search-progress-track {
-  position: relative;
-  flex-shrink: 0;
-  box-sizing: border-box;
-  width: min(300px, 78vw);
-  max-width: 300px;
-  height: 14px;
-  overflow: hidden;
-  border-radius: 7px;
-  background-color: #e5e7eb;
-  border: 1px solid #9ca3af;
-}
-
-.site-search-progress-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background-color: var(--color-blue, #c41e3a);
-  transition: width 0.35s ease-out;
-}
-
 /* Shop — mobile filters panel + accordion sections */
 @keyframes shop-filters-panel-in {
   from {
@@ -691,7 +648,7 @@ input[type="search"]::-webkit-search-results-decoration {
   animation: shop-filters-panel-in 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Shop — listing loading (search + filters: dim grid while ToyLoader drives) */
+/* Shop — listing loading (search + filters: dim grid while results refresh) */
 .shop-search-results-grid-dim {
   opacity: 0.45;
   pointer-events: none;

@@ -7,6 +7,7 @@ import {
   getCachedGlobalDiscountBuckets,
 } from "@/lib/shop/shopFacets";
 import { categoryIdsForFilterSlugs, slugMatchOrClause } from "@/lib/shop/categoryTree";
+import { productIdsInEffectivePriceRange } from "@/lib/pricing/flashSaleSql";
 import {
   loadListingFacets,
   resolveBrandIdsForSlugs,
@@ -81,53 +82,6 @@ function facetWhereFrom(base: Record<string, unknown>): Prisma.productsWhereInpu
     ...(w as Prisma.productsWhereInput),
     is_active: true,
     inventory: { some: { available_quantity: { gt: 0 } } },
-  };
-}
-
-function effectiveRetailPriceWhere(
-  minP: number | null,
-  maxP: number | null,
-  now: Date
-): Prisma.productsWhereInput {
-  const saleRange: Prisma.DecimalFilter = {};
-  if (minP !== null) saleRange.gte = minP;
-  if (maxP !== null) saleRange.lte = maxP;
-
-  const flashLive: Prisma.flash_sale_productsWhereInput = {
-    is_active: true,
-    AND: [
-      { OR: [{ active_from: null }, { active_from: { lte: now } }] },
-      { OR: [{ active_until: null }, { active_until: { gte: now } }] },
-    ],
-  };
-
-  return {
-    OR: [
-      {
-        flash_sale_products: {
-          is: { ...flashLive, sale_price: saleRange },
-        },
-      },
-      {
-        AND: [
-          {
-            NOT: {
-              flash_sale_products: { is: flashLive },
-            },
-          },
-          {
-            OR: [
-              {
-                AND: [{ discounted_price: { not: null } }, { discounted_price: saleRange }],
-              },
-              {
-                AND: [{ discounted_price: null }, { base_price: saleRange }],
-              },
-            ],
-          },
-        ],
-      },
-    ],
   };
 }
 
@@ -275,8 +229,15 @@ export async function prepareShopListingRequest(
   if (diecastNorms.length) where.diecast_scales = { is: { ratio: { in: diecastNorms } } };
   const now = new Date();
   if (minP !== null || maxP !== null) {
-    const priceClause = effectiveRetailPriceWhere(minP, maxP, now);
-    where.AND = [...((where.AND as unknown[]) ?? []), priceClause];
+    const priceIds = await profiledQuery(profile, "listing.priceRange", () =>
+      productIdsInEffectivePriceRange(minP, maxP)
+    );
+    if (priceIds.length === 0) {
+      const data = emptyListingData(page, pageSize);
+      finishShopListingProfile(profile, { ok: true, total: 0, empty: "price" });
+      return { kind: "complete", data };
+    }
+    where.id = { in: priceIds };
   }
 
   let selectedCategoryIdSet: Set<string> | null = null;

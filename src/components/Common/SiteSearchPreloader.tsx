@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import {
   SEARCH_PROGRESS_EVENT,
@@ -8,7 +8,13 @@ import {
   type SearchProgressDetail,
 } from "@/lib/shop/searchProgress";
 
-const LOGO = "/images/logo/logo.png";
+const ShopSearchCarDriveLoader = dynamic(
+  () =>
+    import("@/components/Common/ShopSearchCarLottie").then((mod) => ({
+      default: mod.ShopSearchCarDriveLoader,
+    })),
+  { ssr: false }
+);
 
 type Props = {
   onDone: () => void;
@@ -46,29 +52,9 @@ export default function SiteSearchPreloader({ onDone }: Props) {
       aria-busy={clamped < 100}
       aria-label="Searching"
     >
-      <Image
-        src={LOGO}
-        alt="i-robox logo"
-        width={88}
-        height={88}
-        quality={90}
-        unoptimized
-        className="mb-10 h-20 w-auto sm:h-24"
-        loading="eager"
-      />
-      <p className="mb-6 text-center text-lg font-semibold text-dark sm:text-xl">Searching....</p>
-
-      <div
-        className="site-search-progress-track"
-        role="progressbar"
-        aria-valuenow={clamped}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <div
-          className="site-search-progress-fill"
-          style={{ width: `${clamped}%` }}
-        />
+      <div className="w-full max-w-md">
+        <p className="mb-4 text-center text-lg font-semibold text-dark sm:text-xl">Searching....</p>
+        <ShopSearchCarDriveLoader progress={clamped} aria-label="Searching" />
       </div>
     </div>
   );

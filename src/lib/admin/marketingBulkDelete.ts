@@ -23,7 +23,7 @@ export type MarketingBulkEntity =
   | "flash-sales";
 
 export type MarketingBulkDeleteResult =
-  | { ok: true; id: string; flashProductId?: string }
+  | { ok: true; id: string }
   | { ok: false; id: string; error: string };
 
 function cloudinaryPublicIdFromUrl(url: string | null | undefined): string | null {
@@ -134,13 +134,13 @@ export async function deleteMarketingEntityById(
         return { ok: true, id };
       }
       case "flash-sales": {
-        const row = await prisma.flash_sale_products.findUnique({
+        const row = await prisma.flash_sales.findUnique({
           where: { id },
-          select: { product_id: true },
+          select: { id: true },
         });
         if (!row) return { ok: false, id, error: "Not found" };
-        await prisma.flash_sale_products.delete({ where: { id } });
-        return { ok: true, id, flashProductId: row.product_id ?? undefined };
+        await prisma.flash_sales.delete({ where: { id } });
+        return { ok: true, id };
       }
       default:
         return { ok: false, id, error: "Unknown entity" };
@@ -150,10 +150,7 @@ export async function deleteMarketingEntityById(
   }
 }
 
-export function revalidateAfterMarketingBulkDelete(
-  entity: MarketingBulkEntity,
-  flashProductIds: string[]
-) {
+export function revalidateAfterMarketingBulkDelete(entity: MarketingBulkEntity) {
   switch (entity) {
     case "hero-slides":
       revalidateHomePage();
@@ -171,9 +168,7 @@ export function revalidateAfterMarketingBulkDelete(
       revalidatePopups();
       break;
     case "flash-sales":
-      for (const productId of [...new Set(flashProductIds)]) {
-        void revalidateFlashSales({ productId });
-      }
+      void revalidateFlashSales();
       break;
   }
 }

@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
+import { effectiveRetailPriceExpr } from "@/lib/pricing/flashSaleSql";
 import { prisma } from "@/lib/prisma";
 import { PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG } from "@/lib/cache/tags";
 
@@ -45,17 +46,8 @@ export const getCachedGlobalDiscountBuckets = unstable_cache(
           SELECT
             p.id,
             p.base_price::float8 AS base_price,
-            CASE
-              WHEN f.id IS NOT NULL
-                AND f.is_active = true
-                AND (f.active_from IS NULL OR f.active_from <= NOW())
-                AND (f.active_until IS NULL OR f.active_until >= NOW())
-              THEN f.sale_price::float8
-              WHEN p.discounted_price IS NOT NULL THEN p.discounted_price::float8
-              ELSE p.base_price::float8
-            END AS eff_price
+            ${effectiveRetailPriceExpr} AS eff_price
           FROM products p
-          LEFT JOIN flash_sale_products f ON f.product_id = p.id
           WHERE p.is_active = true
             AND EXISTS (
               SELECT 1 FROM inventory i
@@ -110,17 +102,8 @@ export async function computeDiscountBucketsForProductIds(
         SELECT
           p.id,
           p.base_price::float8 AS base_price,
-          CASE
-            WHEN f.id IS NOT NULL
-              AND f.is_active = true
-              AND (f.active_from IS NULL OR f.active_from <= NOW())
-              AND (f.active_until IS NULL OR f.active_until >= NOW())
-            THEN f.sale_price::float8
-            WHEN p.discounted_price IS NOT NULL THEN p.discounted_price::float8
-            ELSE p.base_price::float8
-          END AS eff_price
+          ${effectiveRetailPriceExpr} AS eff_price
         FROM products p
-        LEFT JOIN flash_sale_products f ON f.product_id = p.id
         WHERE p.id IN (${Prisma.join(productIds.map((id) => Prisma.sql`${id}::uuid`))})
       ),
       scored AS (
@@ -208,17 +191,8 @@ export async function paginateDiscountFilteredProductIds(input: {
           p.id,
           p.base_price::float8 AS base_price,
           p.updated_at,
-          CASE
-            WHEN f.id IS NOT NULL
-              AND f.is_active = true
-              AND (f.active_from IS NULL OR f.active_from <= NOW())
-              AND (f.active_until IS NULL OR f.active_until >= NOW())
-            THEN f.sale_price::float8
-            WHEN p.discounted_price IS NOT NULL THEN p.discounted_price::float8
-            ELSE p.base_price::float8
-          END AS eff_price
+          ${effectiveRetailPriceExpr} AS eff_price
         FROM products p
-        LEFT JOIN flash_sale_products f ON f.product_id = p.id
         WHERE p.id IN (${Prisma.join(candidateIds.map((id) => Prisma.sql`${id}::uuid`))})
       ),
       scored AS (
@@ -247,17 +221,8 @@ export async function paginateDiscountFilteredProductIds(input: {
           p.id,
           p.base_price::float8 AS base_price,
           p.updated_at,
-          CASE
-            WHEN f.id IS NOT NULL
-              AND f.is_active = true
-              AND (f.active_from IS NULL OR f.active_from <= NOW())
-              AND (f.active_until IS NULL OR f.active_until >= NOW())
-            THEN f.sale_price::float8
-            WHEN p.discounted_price IS NOT NULL THEN p.discounted_price::float8
-            ELSE p.base_price::float8
-          END AS eff_price
+          ${effectiveRetailPriceExpr} AS eff_price
         FROM products p
-        LEFT JOIN flash_sale_products f ON f.product_id = p.id
         WHERE p.id IN (${Prisma.join(candidateIds.map((id) => Prisma.sql`${id}::uuid`))})
       ),
       scored AS (

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
+import { flashSalePriceMap } from "@/lib/pricing/flashSale";
 import { paginateDiscountFilteredProductIds } from "@/lib/shop/shopFacets";
 import { loadListingFacets, type ListingFacetsBundle } from "@/lib/shop/shopListingFacets";
 import {
@@ -367,26 +367,10 @@ async function executeShopListingFromState(
   }
 
   const productIds = products.map((p) => p.id);
-  const flashMap = new Map<string, number>();
-  if (!requestOptions?.skipFlashSales && productIds.length > 0) {
-    const flashRows = await profiledQuery(profile, "listing.flashSales", () =>
-      prisma.flash_sale_products.findMany({
-        where: { product_id: { in: productIds }, is_active: true },
-        select: {
-          product_id: true,
-          sale_price: true,
-          is_active: true,
-          active_from: true,
-          active_until: true,
-        },
-      })
-    );
-    for (const row of flashRows) {
-      if (isActiveInWindow(row.is_active, row.active_from, row.active_until, now)) {
-        flashMap.set(row.product_id, Number(row.sale_price));
-      }
-    }
-  }
+  const flashMap =
+    !requestOptions?.skipFlashSales && productIds.length > 0
+      ? await profiledQuery(profile, "listing.flashSales", () => flashSalePriceMap(productIds))
+      : new Map<string, number>();
 
   const finalItems = mapProductsToItems(products, flashMap);
 

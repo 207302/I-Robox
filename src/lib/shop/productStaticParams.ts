@@ -3,6 +3,8 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
+import { loadActiveFlashSaleRules } from "@/lib/pricing/flashSale";
+import { productMatchesFlashSale } from "@/lib/pricing/flashSaleTypes";
 
 /** Max PDPs pre-rendered at build. All other slugs use ISR on first request (`dynamicParams`). */
 export const STATIC_PDP_BUILD_LIMIT = 10;
@@ -57,25 +59,37 @@ async function highlightProductSlugs(now: Date, take: number): Promise<string[]>
   return out;
 }
 
-/** Active flash-sale PDPs. */
+/** Active flash-sale PDPs (direct product targets + category/brand scope). */
 async function flashSaleSlugs(now: Date, take: number): Promise<string[]> {
-  const rows = await prisma.flash_sale_products.findMany({
-    where: { is_active: true },
-    take,
-    select: {
-      is_active: true,
-      active_from: true,
-      active_until: true,
-      products: { select: { slug: true, is_active: true } },
-    },
+  const rules = await loadActiveFlashSaleRules(now);
+  if (rules.length === 0) return [];
+
+  const productIds = new Set<string>();
+  const categoryIds = new Set<string>();
+  const brandIds = new Set<string>();
+  for (const rule of rules) {
+    rule.product_ids.forEach((id) => productIds.add(id));
+    rule.category_ids.forEach((id) => categoryIds.add(id));
+    rule.brand_ids.forEach((id) => brandIds.add(id));
+  }
+
+  const or: Prisma.productsWhereInput[] = [];
+  if (productIds.size) or.push({ id: { in: [...productIds] } });
+  if (categoryIds.size) or.push({ category_id: { in: [...categoryIds] } });
+  if (brandIds.size) or.push({ brand_id: { in: [...brandIds] } });
+  if (or.length === 0) return [];
+
+  const products = await prisma.products.findMany({
+    where: { is_active: true, OR: or },
+    select: { slug: true, id: true, category_id: true, brand_id: true },
+    take: take * 4,
   });
 
   const out: string[] = [];
-  for (const row of rows) {
-    if (!isActiveInWindow(row.is_active, row.active_from, row.active_until, now)) continue;
-    const slug = row.products?.slug;
-    if (!row.products?.is_active || !slug) continue;
-    out.push(slug);
+  for (const product of products) {
+    const matches = rules.some((rule) => productMatchesFlashSale(product, rule));
+    if (matches && product.slug) out.push(product.slug);
+    if (out.length >= take) break;
   }
   return out;
 }

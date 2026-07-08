@@ -12,10 +12,7 @@ export default async function MarketingDeferredSeeds() {
     getCouponsForAdmin(),
   ]);
 
-  const flashSales = flashSalesRaw.map((row) => ({
-    ...row,
-    sale_price: Number(row.sale_price),
-  }));
+  const flashSales = flashSalesRaw;
 
   const coupons = couponsRaw.map((c) => ({
     ...c,

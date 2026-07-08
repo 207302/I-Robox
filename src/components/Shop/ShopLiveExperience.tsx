@@ -3,7 +3,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import ProductItem from "@/components/Common/ProductItem";
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
-import { ToyLoader } from "@/components/ui/ToyLoader";
+import { ShopSearchCarDriveLoader, useHeaderSearchNavProgress } from "@/components/Common/ShopSearchCarLottie";
+import { useShopLoadProgress } from "@/hooks/useShopLoadProgress";
 import { ChevronDown } from "@/components/Header/icons";
 import { LayoutGrid, LayoutList } from "lucide-react";
 import {
@@ -472,6 +473,13 @@ export default function ShopLiveExperience({
     (clientFuzzyIds === null && effectiveQueryString !== debouncedFetchQs);
   const filtersPending = filterFpExclQ !== debouncedFilterFpExclQ;
   const gridBusy = searchPending || filtersPending || isLoading;
+  const headerNavProgress = useHeaderSearchNavProgress();
+  const { progress: loadProgress, showLoader: showSearchLoader } = useShopLoadProgress(
+    gridBusy && headerNavProgress === null
+  );
+  const searchLoaderProgress = headerNavProgress ?? loadProgress;
+  const showSearchStatusLoader =
+    gridBusy || showSearchLoader || (headerNavProgress !== null && headerNavProgress < 100);
 
   const fetchListing = useCallback(async (qs: string) => {
     if (inflightQsRef.current === qs && abortRef.current && !abortRef.current.signal.aborted) {
@@ -1214,9 +1222,6 @@ export default function ShopLiveExperience({
               </p>
             ) : null}
           </div>
-          {gridResultsLoading ? (
-            <span className="text-xs font-medium text-meta-3 animate-pulse">Updating results…</span>
-          ) : null}
         </div>
 
         <div className="mb-4">
@@ -1230,6 +1235,46 @@ export default function ShopLiveExperience({
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
         </div>
+
+        {query.q.trim() || (showSearchStatusLoader && searchInput.trim()) ? (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            {showSearchStatusLoader ? (
+              <div className="min-w-0 flex-1">
+                <ShopSearchCarDriveLoader
+                  progress={searchLoaderProgress}
+                  aria-label={gridResultsLoading ? "Updating search results" : "Searching products"}
+                />
+                <p className="mt-1 text-sm font-medium text-meta-3">
+                  {gridResultsLoading ? "Updating results…" : "Searching…"}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-dark sm:text-base">
+                {clientMatchCount !== null ? (
+                  <>
+                    Found{" "}
+                    <span className="font-semibold">
+                      {clientMatchCount} match{clientMatchCount !== 1 ? "es" : ""}
+                    </span>{" "}
+                    for &ldquo;{query.q}&rdquo;
+                  </>
+                ) : (
+                  <>
+                    Showing results for{" "}
+                    <span className="font-semibold">&ldquo;{query.q}&rdquo;</span>
+                  </>
+                )}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="shrink-0 self-start text-sm font-medium text-blue underline-offset-2 hover:underline sm:self-center"
+            >
+              Clear search
+            </button>
+          </div>
+        ) : null}
 
         <div className="shop-mobile-filters-wrap">
           <button
@@ -1304,50 +1349,11 @@ export default function ShopLiveExperience({
 
         <div className="shop-page-columns flex flex-col gap-8 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
           <div className="min-w-0 lg:col-start-2 lg:row-start-1">
-            {query.q.trim() ? (
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <p className="text-sm text-dark sm:text-base">
-                  {clientMatchCount !== null ? (
-                    <>
-                      Found{" "}
-                      <span className="font-semibold">
-                        {clientMatchCount} match{clientMatchCount !== 1 ? "es" : ""}
-                      </span>{" "}
-                      for &ldquo;{query.q}&rdquo;
-                    </>
-                  ) : (
-                    <>
-                      Showing results for{" "}
-                      <span className="font-semibold">&ldquo;{query.q}&rdquo;</span>
-                    </>
-                  )}
-                </p>
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="shrink-0 self-start text-sm font-medium text-blue underline-offset-2 hover:underline sm:self-center"
-                >
-                  Clear search
-                </button>
-              </div>
-            ) : null}
-
             <div
               ref={productsPaneRef}
               className="relative scroll-mt-24"
               aria-busy={gridBusy}
             >
-              {gridBusy ? (
-                <div
-                  className={
-                    gridResultsLoading
-                      ? "absolute top-0 left-0 right-0 z-20"
-                      : "mb-6 h-11 shrink-0"
-                  }
-                >
-                  <ToyLoader aria-label="Loading products" />
-                </div>
-              ) : null}
               <div
                 className={
                   gridResultsLoading ? "shop-search-results-grid-dim transition-opacity duration-200" : ""

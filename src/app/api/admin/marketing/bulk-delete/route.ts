@@ -58,20 +58,18 @@ export async function POST(req: NextRequest) {
 
     const deleted: string[] = [];
     const failed: { id: string; error: string }[] = [];
-    const flashProductIds: string[] = [];
 
     for (const id of ids) {
       const result = await deleteMarketingEntityById(entity, id);
       if (result.ok) {
         deleted.push(id);
-        if (result.flashProductId) flashProductIds.push(result.flashProductId);
       } else {
         failed.push({ id: result.id, error: result.error });
       }
     }
 
     if (deleted.length > 0) {
-      revalidateAfterMarketingBulkDelete(entity, flashProductIds);
+      revalidateAfterMarketingBulkDelete(entity);
     }
 
     return NextResponse.json(

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
-import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
+import { flashSaleUnitPriceForProduct } from "@/lib/pricing/flashSale";
 import { Prisma } from "@prisma/client";
 import { PRODUCT_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/constants";
 import { ORDERS_TAG, PRODUCT_CATALOG_TAG, productSlugTag } from "@/lib/cache/tags";
@@ -300,15 +300,7 @@ async function loadProductBySlug(slug: string) {
     },
   });
   if (!product || !product.is_active) return null;
-  const flash = await prisma.flash_sale_products.findFirst({
-    where: { product_id: product.id, is_active: true },
-    select: { sale_price: true, is_active: true, active_from: true, active_until: true },
-  });
-  const now = new Date();
-  const flashPrice =
-    flash && isActiveInWindow(flash.is_active, flash.active_from, flash.active_until, now)
-      ? Number(flash.sale_price)
-      : null;
+  const flashPrice = await flashSaleUnitPriceForProduct(product);
   return {
     id: product.id,
     title: product.name,

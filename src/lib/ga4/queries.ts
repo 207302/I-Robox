@@ -5,6 +5,7 @@ import { dimensionString, metricNumber, runRealtimeReport, runReport } from "./c
 import { formatGaDate } from "./formatters";
 import { getPreviousDateRange } from "./validateDateRange";
 import type {
+  AnalyticsDashboardBundle,
   BehaviourRow,
   DateRange,
   DeviceData,
@@ -22,7 +23,6 @@ import type {
   TrafficAcquisitionData,
   TrafficRow,
   UserBehaviourData,
-  type AnalyticsDashboardBundle,
 } from "./types";
 
 const SUMMARY_METRICS = [

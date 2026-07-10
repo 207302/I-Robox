@@ -22,6 +22,7 @@ import type {
   TrafficAcquisitionData,
   TrafficRow,
   UserBehaviourData,
+  type AnalyticsDashboardBundle,
 } from "./types";
 
 const SUMMARY_METRICS = [
@@ -77,6 +78,42 @@ export async function getExecutiveSummary(range: DateRange): Promise<ExecutiveSu
   ]);
 
   const data = { current, previous };
+  setCached(cacheKey, data);
+  return data;
+}
+
+/** Admin dashboard widget — current period only (one GA4 call vs two). */
+export async function getExecutiveSummaryQuick(
+  range: DateRange
+): Promise<{ current: MetricSnapshot }> {
+  const cacheKey = buildCacheKey("executiveSummaryCurrent", range.startDate, range.endDate);
+  const cached = getCached<{ current: MetricSnapshot }>(cacheKey);
+  if (cached) return cached;
+
+  const current = await fetchMetricSnapshot(range);
+  const data = { current };
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function getAnalyticsDashboardBundle(
+  range: DateRange
+): Promise<AnalyticsDashboardBundle> {
+  const cacheKey = buildCacheKey("dashboardBundle", range.startDate, range.endDate);
+  const cached = getCached<AnalyticsDashboardBundle>(cacheKey);
+  if (cached) return cached;
+
+  const [summary, traffic, ecommerce, pages, geo, devices, behaviour] = await Promise.all([
+    getExecutiveSummary(range),
+    getTrafficAcquisition(range),
+    getEcommercePerformance(range),
+    getLandingPageAnalysis(range),
+    getGeographicData(range),
+    getDeviceData(range),
+    getUserBehaviour(range),
+  ]);
+
+  const data = { summary, traffic, ecommerce, pages, geo, devices, behaviour };
   setCached(cacheKey, data);
   return data;
 }
@@ -340,13 +377,13 @@ export async function getUserBehaviour(range: DateRange): Promise<UserBehaviourD
   return data;
 }
 
-const REALTIME_CACHE_MS = 30_000;
+const REALTIME_CACHE_MS = 2_000;
 
 let realtimeCache: { data: RealtimeUsersData; expiresAt: number } | null = null;
 
-export async function getRealtimeUsers(): Promise<RealtimeUsersData> {
+export async function getRealtimeUsers(options?: { fresh?: boolean }): Promise<RealtimeUsersData> {
   const now = Date.now();
-  if (realtimeCache && realtimeCache.expiresAt > now) {
+  if (!options?.fresh && realtimeCache && realtimeCache.expiresAt > now) {
     return realtimeCache.data;
   }
 

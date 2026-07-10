@@ -187,3 +187,13 @@ export type DashboardExportData = {
   behaviour: UserBehaviourData | null;
   dateRange: DateRange;
 };
+
+export type AnalyticsDashboardBundle = {
+  summary: ExecutiveSummaryData;
+  traffic: TrafficAcquisitionData;
+  ecommerce: EcommercePerformanceData;
+  pages: LandingPageAnalysisData;
+  geo: GeographicData;
+  devices: DeviceData;
+  behaviour: UserBehaviourData;
+};

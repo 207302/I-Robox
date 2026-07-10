@@ -1,13 +1,44 @@
 import "server-only";
 
+import { createPrivateKey } from "node:crypto";
+
 const PEM_BEGIN = "-----BEGIN PRIVATE KEY-----";
 const PEM_END = "-----END PRIVATE KEY-----";
+
+function rewrapPkcs8PrivateKey(key: string): string {
+  const begin = key.indexOf(PEM_BEGIN);
+  const end = key.indexOf(PEM_END);
+  if (begin < 0 || end < 0 || end <= begin) {
+    throw new Error(
+      "GA4_PRIVATE_KEY must include -----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY-----."
+    );
+  }
+
+  const body = key
+    .slice(begin + PEM_BEGIN.length, end)
+    .replace(/\\n/g, "")
+    .replace(/\r/g, "")
+    .replace(/\n/g, "")
+    .replace(/\s+/g, "");
+
+  if (body.length < 500) {
+    throw new Error(
+      "GA4_PRIVATE_KEY looks truncated. Copy the full private_key from your service account JSON."
+    );
+  }
+
+  const lines = [PEM_BEGIN];
+  for (let i = 0; i < body.length; i += 64) {
+    lines.push(body.slice(i, i + 64));
+  }
+  lines.push(PEM_END);
+  return `${lines.join("\n")}\n`;
+}
 
 /** Normalize a service-account PEM from .env (Hostinger, Vercel, local). */
 export function normalizeGa4PrivateKey(raw: string): string {
   let key = raw.trim();
 
-  // Strip surrounding quotes (single or double).
   for (let i = 0; i < 2; i++) {
     if (
       (key.startsWith('"') && key.endsWith('"')) ||
@@ -17,38 +48,23 @@ export function normalizeGa4PrivateKey(raw: string): string {
     }
   }
 
-  // Unescape literal \n sequences (sometimes double-escaped on hosts).
   for (let i = 0; i < 3; i++) {
     const next = key.replace(/\\n/g, "\n");
     if (next === key) break;
     key = next;
   }
 
-  // Collapsed single-line PEM (spaces instead of newlines).
-  if (!key.includes("\n") && key.includes(PEM_BEGIN)) {
-    key = key
-      .replace(`${PEM_BEGIN} `, `${PEM_BEGIN}\n`)
-      .replace(` ${PEM_END}`, `\n${PEM_END}`)
-      .replace(PEM_BEGIN, `${PEM_BEGIN}\n`)
-      .replace(PEM_END, `\n${PEM_END}`);
-  }
+  const pem = rewrapPkcs8PrivateKey(key);
 
-  // Ensure header/footer are on their own lines.
-  if (key.includes(PEM_BEGIN) && !key.startsWith(PEM_BEGIN)) {
-    key = key.replace(PEM_BEGIN, `\n${PEM_BEGIN}`).trim();
-  }
-  if (key.includes(PEM_END) && !key.endsWith(PEM_END)) {
-    key = key.replace(PEM_END, `${PEM_END}\n`).trim();
-  }
-
-  if (!key.includes(PEM_BEGIN) || !key.includes(PEM_END)) {
+  try {
+    createPrivateKey(pem);
+  } catch {
     throw new Error(
-      "GA4_PRIVATE_KEY must include -----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY-----. " +
-        "Copy the private_key value from your Google service account JSON file."
+      "GA4_PRIVATE_KEY is not a valid PEM private key. On Hostinger, use GA4_SERVICE_ACCOUNT_JSON_BASE64 instead."
     );
   }
 
-  return `${key.trim()}\n`;
+  return pem;
 }
 
 export type Ga4Credentials = {
@@ -61,13 +77,41 @@ function stripJsonBom(raw: string): string {
   return raw.replace(/^\uFEFF/, "").trim();
 }
 
+function stripEnvWrappingQuotes(raw: string): string {
+  let value = raw.trim();
+  for (let i = 0; i < 2; i++) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1).trim();
+    }
+  }
+  return value;
+}
+
+function normalizeJsonCandidate(raw: string): string {
+  return stripEnvWrappingQuotes(stripJsonBom(raw))
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
+}
+
 /** Hostinger often breaks multi-line env values; pretty-printed JSON can be fixed by dropping real newlines. */
 function parseServiceAccountJson(raw: string): { client_email?: string; private_key?: string } {
-  const trimmed = stripJsonBom(raw);
-  const attempts = [
+  const trimmed = normalizeJsonCandidate(raw);
+  const attempts = new Set<string>([
     trimmed,
     trimmed.replace(/\r/g, "").replace(/\n/g, ""),
-  ];
+  ]);
+
+  for (const candidate of attempts) {
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start >= 0 && end > start && (start > 0 || end < candidate.length - 1)) {
+      attempts.add(candidate.slice(start, end + 1));
+      attempts.add(candidate.slice(start, end + 1).replace(/\r/g, "").replace(/\n/g, ""));
+    }
+  }
 
   for (const candidate of attempts) {
     if (!candidate) continue;
@@ -128,37 +172,25 @@ export function getGa4ConfigDiagnostics(): Ga4ConfigStatus & {
   };
 }
 
-function hasSplitCredentials(): boolean {
-  return Boolean(process.env.GA4_CLIENT_EMAIL?.trim() && process.env.GA4_PRIVATE_KEY?.trim());
-}
+function credentialsFromJsonEnv(): Ga4Credentials | null {
+  const propertyId = process.env.GA4_PROPERTY_ID?.trim();
+  if (!propertyId) return null;
 
-function tryCredentialsFromJson(): { ok: true } | { ok: false; hint: string } {
-  let jsonRaw: string | null = null;
-  try {
-    jsonRaw = readServiceAccountJsonFromEnv();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, hint: message };
+  const jsonRaw = readServiceAccountJsonFromEnv();
+  if (!jsonRaw) return null;
+
+  const account = parseServiceAccountJson(jsonRaw);
+  const clientEmail = account.client_email?.trim();
+  const privateKeyRaw = account.private_key;
+  if (!clientEmail || !privateKeyRaw) {
+    throw new Error("GA4 service account JSON is missing client_email or private_key.");
   }
 
-  if (!jsonRaw) {
-    return { ok: false, hint: "" };
-  }
-
-  try {
-    const account = parseServiceAccountJson(jsonRaw);
-    if (account.client_email?.trim() && account.private_key?.trim()) {
-      return { ok: true };
-    }
-    return { ok: false, hint: "GA4 JSON is missing client_email or private_key." };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const truncated =
-      jsonRaw.length < 200 && jsonRaw.startsWith("{")
-        ? " Hostinger likely truncated multi-line JSON — delete GA4_SERVICE_ACCOUNT_JSON and use GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY, or minify to one line."
-        : " Minify the JSON to a single line, or set GA4_SERVICE_ACCOUNT_JSON_BASE64.";
-    return { ok: false, hint: message + truncated };
-  }
+  return {
+    clientEmail,
+    privateKey: normalizeGa4PrivateKey(privateKeyRaw),
+    propertyId,
+  };
 }
 
 export function getGa4ConfigStatus(): Ga4ConfigStatus {
@@ -170,31 +202,15 @@ export function getGa4ConfigStatus(): Ga4ConfigStatus {
     };
   }
 
-  const fromJson = tryCredentialsFromJson();
-  if (fromJson.ok) {
+  try {
+    getGa4Credentials();
     return { configured: true, hint: null };
-  }
-
-  if (hasSplitCredentials()) {
-    return { configured: true, hint: null };
-  }
-
-  if (fromJson.hint) {
+  } catch (error) {
     return {
       configured: false,
-      hint:
-        fromJson.hint +
-        (process.env.GA4_SERVICE_ACCOUNT_JSON?.trim()
-          ? " Or delete GA4_SERVICE_ACCOUNT_JSON and set GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY instead."
-          : ""),
+      hint: error instanceof Error ? error.message : String(error),
     };
   }
-
-  return {
-    configured: false,
-    hint:
-      "Set GA4_SERVICE_ACCOUNT_JSON (one-line minified JSON), GA4_SERVICE_ACCOUNT_JSON_BASE64, or GA4_CLIENT_EMAIL + GA4_PRIVATE_KEY.",
-  };
 }
 
 export function getGa4Credentials(): Ga4Credentials {
@@ -205,21 +221,8 @@ export function getGa4Credentials(): Ga4Credentials {
 
   let jsonError: string | null = null;
   try {
-    const jsonRaw = readServiceAccountJsonFromEnv();
-    if (jsonRaw) {
-      const account = parseServiceAccountJson(jsonRaw);
-      const clientEmail = account.client_email?.trim();
-      const privateKeyRaw = account.private_key;
-      if (!clientEmail || !privateKeyRaw) {
-        jsonError = "GA4_SERVICE_ACCOUNT_JSON must include client_email and private_key.";
-      } else {
-        return {
-          clientEmail,
-          privateKey: normalizeGa4PrivateKey(privateKeyRaw),
-          propertyId,
-        };
-      }
-    }
+    const fromJson = credentialsFromJsonEnv();
+    if (fromJson) return fromJson;
   } catch (error) {
     jsonError = error instanceof Error ? error.message : String(error);
   }
@@ -227,17 +230,25 @@ export function getGa4Credentials(): Ga4Credentials {
   const clientEmail = process.env.GA4_CLIENT_EMAIL?.trim();
   const privateKeyRaw = process.env.GA4_PRIVATE_KEY;
   if (clientEmail && privateKeyRaw?.trim()) {
-    return {
-      clientEmail,
-      privateKey: normalizeGa4PrivateKey(privateKeyRaw),
-      propertyId,
-    };
+    try {
+      return {
+        clientEmail,
+        privateKey: normalizeGa4PrivateKey(privateKeyRaw),
+        propertyId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        jsonError
+          ? `${message} (${jsonError})`
+          : `${message} Delete GA4_PRIVATE_KEY and set GA4_SERVICE_ACCOUNT_JSON_BASE64 on Hostinger.`
+      );
+    }
   }
 
   throw new Error(
     jsonError ??
-      "GA4 credentials missing. Set GA4_PROPERTY_ID plus either GA4_SERVICE_ACCOUNT_JSON, " +
-        "GA4_SERVICE_ACCOUNT_JSON_BASE64, or GA4_CLIENT_EMAIL and GA4_PRIVATE_KEY."
+      "GA4 credentials missing. Set GA4_PROPERTY_ID plus GA4_SERVICE_ACCOUNT_JSON_BASE64, GA4_SERVICE_ACCOUNT_JSON, or GA4_CLIENT_EMAIL and GA4_PRIVATE_KEY."
   );
 }
 
@@ -253,9 +264,8 @@ export function formatGa4CredentialError(error: unknown): string {
     message.includes("DECODER routines")
   ) {
     return (
-      "GA4 private key is invalid. In Hostinger, set GA4_PRIVATE_KEY as one line in double quotes " +
-      'with \\n between lines, e.g. GA4_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\nMIIE...\\n-----END PRIVATE KEY-----\\n". ' +
-      "Or paste the full JSON into GA4_SERVICE_ACCOUNT_JSON."
+      "GA4 private key is invalid on the server. On Hostinger: delete GA4_PRIVATE_KEY, set " +
+      "GA4_SERVICE_ACCOUNT_JSON_BASE64 from `node scripts/ga4-hostinger-env.mjs your-key.json`, then redeploy."
     );
   }
   return message;

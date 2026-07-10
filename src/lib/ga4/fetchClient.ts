@@ -1,4 +1,4 @@
-import type { DateRange } from "./types";
+import type { AnalyticsDashboardBundle, DateRange } from "./types";
 
 export async function fetchAnalyticsSection<T>(
   endpoint: string,
@@ -18,5 +18,31 @@ export async function fetchAnalyticsSection<T>(
     return { data: json.data as T, error: null };
   } catch {
     return { data: null, error: `Network error loading ${endpoint}` };
+  }
+}
+
+export async function fetchAnalyticsDashboard(
+  range: DateRange
+): Promise<{ data: AnalyticsDashboardBundle | null; error: string | null; cached: boolean }> {
+  const params = new URLSearchParams({
+    startDate: range.startDate,
+    endDate: range.endDate,
+  });
+
+  try {
+    const response = await fetch(`/api/analytics/dashboard?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const json = await response.json();
+    if (!response.ok) {
+      return { data: null, error: json.error ?? "Failed to load dashboard", cached: false };
+    }
+    return {
+      data: json.data as AnalyticsDashboardBundle,
+      error: null,
+      cached: Boolean(json.cached),
+    };
+  } catch {
+    return { data: null, error: "Network error loading dashboard", cached: false };
   }
 }

@@ -86,7 +86,34 @@ Open: [http://localhost:3000/analytics](http://localhost:3000/analytics)
 
 ---
 
-## 8. Deploy (Vercel)
+## 8. Deploy (Hostinger)
+
+Hostinger often **breaks multi-line** env values. Pasted service-account JSON frequently fails with “not valid JSON”.
+
+### Recommended: split credentials
+
+1. Download your service account JSON from Google Cloud (see step 3).
+2. On your PC, run:
+
+```bash
+node scripts/ga4-hostinger-env.mjs path/to/your-service-account.json
+```
+
+3. In **hPanel → Websites → Node.js → [your app] → Environment variables**:
+   - Keep `GA4_PROPERTY_ID` (numeric ID, not `G-XXXX`)
+   - Set `GA4_CLIENT_EMAIL` and `GA4_PRIVATE_KEY` from the script output
+   - **Delete** `GA4_SERVICE_ACCOUNT_JSON` (broken JSON blocks nothing once split vars are set)
+4. **Redeploy / restart** the Node app.
+
+`GA4_PRIVATE_KEY` must be one line with `\n` between PEM lines, wrapped in double quotes (the script prints this for you).
+
+### Alternative: base64
+
+From the same script, copy `GA4_SERVICE_ACCOUNT_JSON_BASE64`, delete `GA4_SERVICE_ACCOUNT_JSON`, redeploy.
+
+---
+
+## 9. Deploy (Vercel)
 
 Add the same three variables in **Project → Settings → Environment Variables**:
 
@@ -98,7 +125,7 @@ Redeploy after saving.
 
 ---
 
-## 9. Verify it works
+## 10. Verify it works
 
 1. Open `/analytics` and choose **Last 30 days**.
 2. Executive summary KPIs should populate (may take a few seconds on first load).

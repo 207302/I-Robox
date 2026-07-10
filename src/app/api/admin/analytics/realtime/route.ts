@@ -4,6 +4,8 @@ import { formatGa4CredentialError, isGa4Configured } from "@/lib/ga4/credentials
 import { getRealtimeUsers } from "@/lib/ga4/queries";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   return runApiRoute(async () => {
     const auth = await requireAdmin();
@@ -19,7 +21,7 @@ export async function GET() {
     }
 
     try {
-      const data = await getRealtimeUsers();
+      const data = await getRealtimeUsers({ fresh: true });
       return NextResponse.json({ data });
     } catch (error) {
       const message = formatGa4CredentialError(error);

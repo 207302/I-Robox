@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatNumber } from "@/lib/ga4/formatters";
 import type { ExecutiveSummaryData, RealtimeUsersData } from "@/lib/ga4/types";
 
@@ -10,11 +10,38 @@ type Props = {
   ga4ConfigHint?: string | null;
 };
 
-const POLL_MS = 30_000;
+const REALTIME_POLL_MS = 3_000;
+
+type QuickSummary = Pick<ExecutiveSummaryData, "current">;
+
+function LiveUserCount({ value }: { value: number }) {
+  const [display, setDisplay] = useState(value);
+  const [pulse, setPulse] = useState(false);
+  const prev = useRef(value);
+
+  useEffect(() => {
+    if (value === prev.current) return;
+    prev.current = value;
+    setDisplay(value);
+    setPulse(true);
+    const timer = window.setTimeout(() => setPulse(false), 450);
+    return () => window.clearTimeout(timer);
+  }, [value]);
+
+  return (
+    <div
+      className={`mt-2 text-3xl font-semibold text-emerald-900 tabular-nums transition-transform duration-300 ease-out ${
+        pulse ? "scale-110" : "scale-100"
+      }`}
+    >
+      {formatNumber(display)}
+    </div>
+  );
+}
 
 export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }: Props) {
   const [realtime, setRealtime] = useState<RealtimeUsersData | null>(null);
-  const [summary, setSummary] = useState<ExecutiveSummaryData | null>(null);
+  const [summary, setSummary] = useState<QuickSummary | null>(null);
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [loadingRealtime, setLoadingRealtime] = useState(ga4Configured);
@@ -57,9 +84,10 @@ export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }
 
     let cancelled = false;
 
-    async function loadRealtime() {
+    async function loadRealtime(initial = false) {
+      if (initial) setLoadingRealtime(true);
       try {
-        const res = await fetch("/api/admin/analytics/realtime");
+        const res = await fetch("/api/admin/analytics/realtime", { cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
@@ -71,13 +99,13 @@ export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }
       } catch {
         if (!cancelled) setRealtimeError("Could not load live users");
       } finally {
-        if (!cancelled) setLoadingRealtime(false);
+        if (!cancelled && initial) setLoadingRealtime(false);
       }
     }
 
     async function loadSummary() {
       try {
-        const res = await fetch("/api/admin/analytics/summary");
+        const res = await fetch("/api/admin/analytics/summary", { cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
@@ -93,16 +121,22 @@ export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }
       }
     }
 
-    void loadRealtime();
+    void loadRealtime(true);
     void loadSummary();
 
     const timer = window.setInterval(() => {
-      void loadRealtime();
-    }, POLL_MS);
+      if (document.visibilityState === "visible") void loadRealtime(false);
+    }, REALTIME_POLL_MS);
+
+    function onVisible() {
+      if (document.visibilityState === "visible") void loadRealtime(false);
+    }
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [ga4Configured]);
 
@@ -116,30 +150,17 @@ export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }
           <p className="mt-2 text-sm text-meta-3">
             Connect Google Analytics 4 to see live visitors and traffic on this dashboard. Set{" "}
             <code className="text-xs">GA4_PROPERTY_ID</code> and either{" "}
-            <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON</code> (one-line minified JSON) or{" "}
             <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON_BASE64</code>, or{" "}
             <code className="text-xs">GA4_CLIENT_EMAIL</code> +{" "}
             <code className="text-xs">GA4_PRIVATE_KEY</code> in your environment.
           </p>
         )}
-        <p className="mt-3 text-xs text-amber-800">
-          On Hostinger, multi-line JSON in env vars often fails. Delete{" "}
-          <code className="text-xs">GA4_SERVICE_ACCOUNT_JSON</code> and use{" "}
-          <code className="text-xs">GA4_CLIENT_EMAIL</code> +{" "}
-          <code className="text-xs">GA4_PRIVATE_KEY</code> instead (most reliable), or minify JSON to
-          one line / use base64 — then redeploy.
-        </p>
         {configDiag ? (
           <ul className="mt-3 space-y-1 text-xs text-amber-900">
             <li>GA4_PROPERTY_ID: {configDiag.hasPropertyId ? "set" : "missing"}</li>
             <li>
-              GA4_SERVICE_ACCOUNT_JSON:{" "}
-              {configDiag.hasJsonEnv ? `set (${configDiag.jsonLength} chars)` : "not set"}
-              {configDiag.hasJsonEnv && configDiag.jsonLength < 500
-                ? " — likely truncated by Hostinger"
-                : ""}
+              GA4_SERVICE_ACCOUNT_JSON_BASE64: {configDiag.hasBase64Env ? "set" : "not set"}
             </li>
-            <li>GA4_SERVICE_ACCOUNT_JSON_BASE64: {configDiag.hasBase64Env ? "set" : "not set"}</li>
             <li>GA4_CLIENT_EMAIL: {configDiag.hasClientEmail ? "set" : "not set"}</li>
             <li>GA4_PRIVATE_KEY: {configDiag.hasPrivateKey ? "set" : "not set"}</li>
           </ul>
@@ -174,10 +195,8 @@ export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }
             <p className="mt-2 text-sm text-emerald-800">{realtimeError}</p>
           ) : (
             <>
-              <div className="mt-2 text-3xl font-semibold text-emerald-900">
-                {formatNumber(realtime?.activeUsers ?? 0)}
-              </div>
-              <p className="mt-1 text-xs text-emerald-700">Active on site now (GA4 realtime)</p>
+              <LiveUserCount value={realtime?.activeUsers ?? 0} />
+              <p className="mt-1 text-xs text-emerald-700">Updates every 3 seconds</p>
             </>
           )}
         </div>
@@ -212,11 +231,11 @@ export default function AdminDashboardAnalytics({ ga4Configured, ga4ConfigHint }
         <p className="text-sm text-meta-3">{summaryError}</p>
       ) : (
         <p className="text-xs text-meta-3">
-          Live count refreshes every 30 seconds. 7-day stats come from Google Analytics (same data as the{" "}
+          Live count from GA4 realtime. 7-day stats from{" "}
           <Link href="/analytics" className="text-blue hover:underline">
             analytics dashboard
           </Link>
-          ).
+          .
         </p>
       )}
     </div>

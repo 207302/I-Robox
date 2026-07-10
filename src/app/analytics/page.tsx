@@ -1,7 +1,7 @@
 "use client";
 
 import { format, subDays } from "date-fns";
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import DateRangePicker from "@/components/Analytics/DateRangePicker";
 import DeviceAnalysis from "@/components/Analytics/DeviceAnalysis";
 import EcommercePerformance from "@/components/Analytics/EcommercePerformance";
@@ -11,7 +11,7 @@ import GeographicAnalysis from "@/components/Analytics/GeographicAnalysis";
 import LandingPageAnalysis from "@/components/Analytics/LandingPageAnalysis";
 import TrafficAcquisition from "@/components/Analytics/TrafficAcquisition";
 import UserBehaviour from "@/components/Analytics/UserBehaviour";
-import { fetchAnalyticsSection } from "@/lib/ga4/fetchClient";
+import { fetchAnalyticsDashboard } from "@/lib/ga4/fetchClient";
 import type {
   DashboardExportData,
   DateRange,
@@ -85,43 +85,29 @@ export default function AnalyticsDashboardPage() {
     setDevices((s) => ({ ...s, loading: true, error: null }));
     setBehaviour((s) => ({ ...s, loading: true, error: null }));
 
-    const results = await Promise.allSettled([
-      fetchAnalyticsSection<ExecutiveSummaryData>("summary", range),
-      fetchAnalyticsSection<TrafficAcquisitionData>("traffic", range),
-      fetchAnalyticsSection<EcommercePerformanceData>("ecommerce", range),
-      fetchAnalyticsSection<LandingPageAnalysisData>("pages", range),
-      fetchAnalyticsSection<GeographicData>("geo", range),
-      fetchAnalyticsSection<DeviceData>("devices", range),
-      fetchAnalyticsSection<UserBehaviourData>("behaviour", range),
-    ]);
+    const result = await fetchAnalyticsDashboard(range);
+    if (result.error || !result.data) {
+      const error = result.error ?? "Failed to load dashboard";
+      setSummary({ data: null, loading: false, error });
+      setTraffic({ data: null, loading: false, error });
+      setEcommerce({ data: null, loading: false, error });
+      setPages({ data: null, loading: false, error });
+      setGeo({ data: null, loading: false, error });
+      setDevices({ data: null, loading: false, error });
+      setBehaviour({ data: null, loading: false, error });
+      return;
+    }
 
-    const apply = <T,>(
-      index: number,
-      setter: Dispatch<SetStateAction<SectionState<T>>>
-    ) => {
-      const result = results[index];
-      if (result.status === "fulfilled") {
-        setter({
-          data: result.value.data,
-          loading: false,
-          error: result.value.error,
-        });
-      } else {
-        setter({
-          data: null,
-          loading: false,
-          error: "Unexpected error loading section",
-        });
-      }
-    };
+    const { summary: s, traffic: t, ecommerce: e, pages: p, geo: g, devices: d, behaviour: b } =
+      result.data;
 
-    apply(0, setSummary);
-    apply(1, setTraffic);
-    apply(2, setEcommerce);
-    apply(3, setPages);
-    apply(4, setGeo);
-    apply(5, setDevices);
-    apply(6, setBehaviour);
+    setSummary({ data: s, loading: false, error: null });
+    setTraffic({ data: t, loading: false, error: null });
+    setEcommerce({ data: e, loading: false, error: null });
+    setPages({ data: p, loading: false, error: null });
+    setGeo({ data: g, loading: false, error: null });
+    setDevices({ data: d, loading: false, error: null });
+    setBehaviour({ data: b, loading: false, error: null });
   }, []);
 
   useEffect(() => {
@@ -160,7 +146,7 @@ export default function AnalyticsDashboardPage() {
             GA4 Analytics Dashboard
           </h1>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Google Analytics 4 reporting via the Data API. Data refreshes every 5 minutes.
+            Google Analytics 4 reporting via the Data API. Cached responses load instantly; fresh data may take a few seconds.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">

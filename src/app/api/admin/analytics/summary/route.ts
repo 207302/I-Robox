@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin/rbac";
 import { formatGa4CredentialError, isGa4Configured } from "@/lib/ga4/credentials";
-import { defaultDateRangeLast7Days, getExecutiveSummary } from "@/lib/ga4/queries";
+import { defaultDateRangeLast7Days, getExecutiveSummaryQuick } from "@/lib/ga4/queries";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
 export async function GET() {
@@ -20,7 +20,7 @@ export async function GET() {
 
     try {
       const range = defaultDateRangeLast7Days();
-      const data = await getExecutiveSummary(range);
+      const data = await getExecutiveSummaryQuick(range);
       return NextResponse.json({ data, startDate: range.startDate, endDate: range.endDate });
     } catch (error) {
       const message = formatGa4CredentialError(error);

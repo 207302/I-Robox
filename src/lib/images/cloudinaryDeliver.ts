@@ -2,6 +2,12 @@
  * Cloudinary delivery transforms for homepage/catalog images.
  * Next/image still optimizes further; this caps source dimensions at the CDN.
  */
+import {
+  HERO_BANNER_HEIGHT,
+  HERO_BANNER_WIDTH,
+  HERO_MOBILE_DELIVERY_WIDTH,
+  heroBannerHeightForWidth,
+} from "@/lib/images/heroDimensions";
 export function isCloudinaryDeliveryUrl(url: string): boolean {
   return url.includes("res.cloudinary.com") && url.includes("/image/upload/");
 }
@@ -23,7 +29,7 @@ export function cloudinaryDeliverUrl(
     dpr?: number;
     quality?: CloudinaryQuality;
     crop?: "limit" | "fill";
-    gravity?: "auto" | "north";
+    gravity?: "auto" | "north" | "center";
   }
 ): string {
   const trimmed = url?.trim();
@@ -37,7 +43,13 @@ export function cloudinaryDeliverUrl(
   const q = opts?.quality ?? "auto";
   const transforms = [
     opts?.crop === "limit" ? "c_limit" : opts?.crop === "fill" ? "c_fill" : null,
-    opts?.gravity === "auto" ? "g_auto" : opts?.gravity === "north" ? "g_north" : null,
+    opts?.gravity === "auto"
+      ? "g_auto"
+      : opts?.gravity === "north"
+        ? "g_north"
+        : opts?.gravity === "center"
+          ? "g_center"
+          : null,
     "f_auto",
     qualityTransform(q),
     w ? `w_${w}` : null,
@@ -57,14 +69,14 @@ export function cloudinaryHeroUrl(url: string): string {
 
 /** High-quality hero transform — fixed crop with auto gravity per width. */
 function cloudinaryHeroDeliverUrl(url: string, layoutWidth: number): string {
-  const layoutHeight = Math.round((layoutWidth * HERO_HEIGHT_CEILING) / HERO_WIDTH_CEILING);
+  const layoutHeight = heroBannerHeightForWidth(layoutWidth);
   return cloudinaryDeliverUrl(url, {
     width: layoutWidth,
     height: layoutHeight,
     dpr: 2,
     quality: "auto:best",
     crop: "fill",
-    gravity: "north",
+    gravity: "center",
   });
 }
 
@@ -96,12 +108,12 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
  */
 const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 
-/** Desktop hero frame — matches lg:aspect-[16/5.5] (1440 / (16/5.5) ≈ 495). */
-export const HERO_WIDTH_CEILING = 1440;
-export const HERO_HEIGHT_CEILING = 495;
-/** Mobile hero frame — matches aspect-[7/5] (750 × 5/7 = 536). */
-export const HERO_MOBILE_WIDTH = 750;
-export const HERO_MOBILE_HEIGHT = 536;
+/** Desktop hero delivery ceiling — matches 1440×580 banner assets. */
+export const HERO_WIDTH_CEILING = HERO_BANNER_WIDTH;
+export const HERO_HEIGHT_CEILING = HERO_BANNER_HEIGHT;
+/** Mobile hero delivery — same aspect ratio as desktop banners. */
+export const HERO_MOBILE_WIDTH = HERO_MOBILE_DELIVERY_WIDTH;
+export const HERO_MOBILE_HEIGHT = heroBannerHeightForWidth(HERO_MOBILE_DELIVERY_WIDTH);
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).
@@ -111,25 +123,25 @@ export function cloudinaryHeroSourceUrl(url: string): string {
   return cloudinaryHeroSlideUrl(url, true);
 }
 
-/** Hero slide source: fixed crop to desktop banner frame, top-anchored. */
+/** Hero slide source: fixed crop to 1440×580 frame, center-weighted. */
 export function cloudinaryHeroSlideUrl(url: string, isLcp: boolean): string {
   return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(url), {
     width: HERO_WIDTH_CEILING,
     height: HERO_HEIGHT_CEILING,
     quality: isLcp ? "auto:best" : "auto:good",
     crop: "fill",
-    gravity: "north",
+    gravity: "center",
   });
 }
 
-/** Mobile hero source: fixed crop to mobile banner frame, top-anchored. */
+/** Mobile hero source: same aspect ratio as desktop banners. */
 export function cloudinaryHeroMobileUrl(src: string, isLcp: boolean = false): string {
   return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(src), {
     width: HERO_MOBILE_WIDTH,
     height: HERO_MOBILE_HEIGHT,
     quality: isLcp ? "auto:best" : "auto:good",
     crop: "fill",
-    gravity: "north",
+    gravity: "center",
   });
 }
 

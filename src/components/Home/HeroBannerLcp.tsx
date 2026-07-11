@@ -2,7 +2,7 @@ import HeroBannerOverlay, { type HeroOverlayProps } from "./HeroBannerOverlay";
 import HeroSlideImage from "./HeroSlideImage";
 import type { HeroSlide } from "./heroTypes";
 import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
-import { HERO_FRAME_CLASS } from "./heroLayout";
+import { HERO_MIN_HEIGHT_CLASS } from "./heroLayout";
 
 type Props = {
   slide: HeroSlide;
@@ -14,7 +14,7 @@ export default function HeroBannerLcp({ slide, overlay }: Props) {
   const { mobileSrc } = heroSlideImageProps(slide.image_url, true);
   return (
     <div
-      className={HERO_FRAME_CLASS}
+      className={`relative w-full touch-pan-y overflow-hidden ${HERO_MIN_HEIGHT_CLASS}`}
       aria-label="Hero banner"
     >
       <div className="absolute inset-0 overflow-hidden">

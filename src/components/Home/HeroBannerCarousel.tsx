@@ -13,7 +13,7 @@ import {
   type TouchEvent,
 } from "react";
 import { heroOverlayTextStyle } from "@/lib/marketing/heroOverlayColors";
-import { HERO_BANNER_ASPECT_CLASS } from "@/lib/images/heroDimensions";
+
 import { HERO_IMAGE_SIZES } from "@/lib/images/heroLcpImage";
 import type { HeroSlide } from "./heroTypes";
 
@@ -129,7 +129,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
   if (slides.length === 0) {
     return (
       <div
-        className={`relative flex w-full ${HERO_BANNER_ASPECT_CLASS} items-center justify-center bg-gray-1 border-b border-gray-3`}
+        className="relative flex w-full aspect-[7/5] lg:aspect-[2.7/1] items-center justify-center bg-gray-1 border-b border-gray-3"
         aria-label="Hero banner area"
       >
         <p className="max-w-md px-4 text-center text-sm leading-relaxed text-meta-3">
@@ -144,7 +144,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
 
   return (
     <div
-      className={`relative w-full touch-pan-y ${HERO_BANNER_ASPECT_CLASS}`}
+      className="relative w-full touch-pan-y aspect-[7/5] lg:aspect-[2.7/1]"
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}
@@ -166,7 +166,7 @@ const HeroBannerCarousel = ({ slides: slidesProp, overlay }: Props) => {
                   priority={index === 0}
                   fetchPriority={index === 0 ? "high" : "low"}
                   sizes={HERO_IMAGE_SIZES}
-                  className="object-cover object-center"
+                  className="object-cover"
                   loading={index === 0 ? "eager" : "lazy"}
                 />
               </Link>

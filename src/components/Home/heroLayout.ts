@@ -1,7 +1,5 @@
-import { HERO_BANNER_ASPECT_CLASS } from "@/lib/images/heroDimensions";
-
-/** Full-bleed hero frame — matches 1440×580 banner assets. */
-export const HERO_FRAME_CLASS = `relative w-full touch-pan-y overflow-hidden ${HERO_BANNER_ASPECT_CLASS}`;
+/** Shared hero dimensions — full-bleed, edge-to-edge. */
+export const HERO_MIN_HEIGHT_CLASS = "min-h-[360px] md:min-h-[580px] h-[360px] md:h-[580px]";
 
 export const HERO_OVERLAY_TRUST_BADGES = [
   { label: "100% Genuine Products" },

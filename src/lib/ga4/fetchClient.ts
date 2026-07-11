@@ -1,4 +1,4 @@
-import type { AnalyticsDashboardBundle, DateRange } from "./types";
+import type { AnalyticsDashboardResult, DateRange } from "./types";
 
 export async function fetchAnalyticsSection<T>(
   endpoint: string,
@@ -23,7 +23,7 @@ export async function fetchAnalyticsSection<T>(
 
 export async function fetchAnalyticsDashboard(
   range: DateRange
-): Promise<{ data: AnalyticsDashboardBundle | null; error: string | null; cached: boolean }> {
+): Promise<{ data: AnalyticsDashboardResult | null; error: string | null; cached: boolean }> {
   const params = new URLSearchParams({
     startDate: range.startDate,
     endDate: range.endDate,
@@ -38,7 +38,7 @@ export async function fetchAnalyticsDashboard(
       return { data: null, error: json.error ?? "Failed to load dashboard", cached: false };
     }
     return {
-      data: json.data as AnalyticsDashboardBundle,
+      data: json.data as AnalyticsDashboardResult,
       error: null,
       cached: Boolean(json.cached),
     };

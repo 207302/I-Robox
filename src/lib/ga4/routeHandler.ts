@@ -1,6 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { buildCacheKey, getCached } from "./cache";
+import { formatGa4ApiError } from "./client";
 import { parseDateRangeParams } from "./validateDateRange";
 import type { ApiErrorResponse, ApiResponse } from "./types";
 
@@ -42,7 +43,7 @@ export function createAnalyticsRoute<T>(
         endDate,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch analytics data";
+      const message = formatGa4ApiError(error);
       return NextResponse.json<ApiErrorResponse>({ error: message }, { status: 500 });
     }
   };

@@ -67,6 +67,20 @@ export function normalizeGa4PrivateKey(raw: string): string {
   return pem;
 }
 
+function normalizeGa4PropertyId(raw: string): string {
+  let id = stripEnvWrappingQuotes(raw.trim());
+  id = id.replace(/^properties\//i, "");
+  if (/^G-/i.test(id)) {
+    throw new Error("GA4_PROPERTY_ID must be the numeric property ID, not a G-XXXX measurement ID.");
+  }
+  if (!/^\d+$/.test(id)) {
+    throw new Error(
+      `GA4_PROPERTY_ID must be digits only (e.g. 542443804). Check Hostinger env — got "${id.slice(0, 24)}".`
+    );
+  }
+  return id;
+}
+
 export type Ga4Credentials = {
   clientEmail: string;
   privateKey: string;
@@ -173,8 +187,9 @@ export function getGa4ConfigDiagnostics(): Ga4ConfigStatus & {
 }
 
 function credentialsFromJsonEnv(): Ga4Credentials | null {
-  const propertyId = process.env.GA4_PROPERTY_ID?.trim();
-  if (!propertyId) return null;
+  const propertyIdRaw = process.env.GA4_PROPERTY_ID?.trim();
+  if (!propertyIdRaw) return null;
+  const propertyId = normalizeGa4PropertyId(propertyIdRaw);
 
   const jsonRaw = readServiceAccountJsonFromEnv();
   if (!jsonRaw) return null;
@@ -189,7 +204,7 @@ function credentialsFromJsonEnv(): Ga4Credentials | null {
   return {
     clientEmail,
     privateKey: normalizeGa4PrivateKey(privateKeyRaw),
-    propertyId,
+    propertyId: normalizeGa4PropertyId(propertyId),
   };
 }
 
@@ -214,10 +229,11 @@ export function getGa4ConfigStatus(): Ga4ConfigStatus {
 }
 
 export function getGa4Credentials(): Ga4Credentials {
-  const propertyId = process.env.GA4_PROPERTY_ID?.trim();
-  if (!propertyId) {
+  const propertyIdRaw = process.env.GA4_PROPERTY_ID?.trim();
+  if (!propertyIdRaw) {
     throw new Error("GA4_PROPERTY_ID is missing.");
   }
+  const propertyId = normalizeGa4PropertyId(propertyIdRaw);
 
   let jsonError: string | null = null;
   try {

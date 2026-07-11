@@ -98,16 +98,16 @@ export default function AnalyticsDashboardPage() {
       return;
     }
 
-    const { summary: s, traffic: t, ecommerce: e, pages: p, geo: g, devices: d, behaviour: b } =
+    const { summary: s, traffic: t, ecommerce: e, pages: p, geo: g, devices: d, behaviour: b, sectionErrors } =
       result.data;
 
-    setSummary({ data: s, loading: false, error: null });
-    setTraffic({ data: t, loading: false, error: null });
-    setEcommerce({ data: e, loading: false, error: null });
-    setPages({ data: p, loading: false, error: null });
-    setGeo({ data: g, loading: false, error: null });
-    setDevices({ data: d, loading: false, error: null });
-    setBehaviour({ data: b, loading: false, error: null });
+    setSummary({ data: s, loading: false, error: sectionErrors?.summary ?? null });
+    setTraffic({ data: t, loading: false, error: sectionErrors?.traffic ?? null });
+    setEcommerce({ data: e, loading: false, error: sectionErrors?.ecommerce ?? null });
+    setPages({ data: p, loading: false, error: sectionErrors?.pages ?? null });
+    setGeo({ data: g, loading: false, error: sectionErrors?.geo ?? null });
+    setDevices({ data: d, loading: false, error: sectionErrors?.devices ?? null });
+    setBehaviour({ data: b, loading: false, error: sectionErrors?.behaviour ?? null });
   }, []);
 
   useEffect(() => {

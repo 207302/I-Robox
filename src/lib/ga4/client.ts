@@ -53,7 +53,24 @@ export function dimensionString(
 }
 
 function wrapGa4Error(error: unknown, label: string): Error {
-  return new Error(`${label}: ${formatGa4CredentialError(error)}`);
+  const message = formatGa4ApiError(error);
+  return new Error(`${label}: ${message}`);
+}
+
+/** Extract Google's human-readable INVALID_ARGUMENT detail from gRPC errors. */
+export function formatGa4ApiError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  const credential = formatGa4CredentialError(error);
+  if (credential !== message) return credential;
+
+  const invalidArg = message.match(/INVALID_ARGUMENT:\s*(.+)/i);
+  if (invalidArg?.[1]?.trim()) return invalidArg[1].trim();
+
+  const removeHint = message.match(/Please remove .+? To learn more/i);
+  if (removeHint) return removeHint[0].replace(/\s*To learn more.*$/i, ".");
+
+  return message.replace(/^\d+\s+INVALID_ARGUMENT:\s*/i, "").trim() || message;
 }
 
 export async function runReport(request: Omit<RunReportRequest, "property">): Promise<RunReportResponse> {

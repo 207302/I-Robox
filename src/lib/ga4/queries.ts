@@ -1,11 +1,12 @@
 import "server-only";
 import { format, parseISO } from "date-fns";
 import { buildCacheKey, getCached, setCached } from "./cache";
-import { dimensionString, metricNumber, runRealtimeReport, runReport } from "./client";
+import { dimensionString, formatGa4ApiError, metricNumber, runRealtimeReport, runReport } from "./client";
 import { formatGaDate } from "./formatters";
 import { getPreviousDateRange } from "./validateDateRange";
 import type {
   AnalyticsDashboardBundle,
+  AnalyticsDashboardResult,
   BehaviourRow,
   DateRange,
   DeviceData,
@@ -24,6 +25,18 @@ import type {
   TrafficRow,
   UserBehaviourData,
 } from "./types";
+
+const EMPTY_METRIC_SNAPSHOT: MetricSnapshot = {
+  sessions: 0,
+  totalUsers: 0,
+  newUsers: 0,
+  engagedSessions: 0,
+  averageSessionDuration: 0,
+  purchaseRevenue: 0,
+  transactions: 0,
+  conversionRate: 0,
+  averagePurchaseRevenue: 0,
+};
 
 const SUMMARY_METRICS = [
   "sessions",
@@ -98,22 +111,58 @@ export async function getExecutiveSummaryQuick(
 
 export async function getAnalyticsDashboardBundle(
   range: DateRange
-): Promise<AnalyticsDashboardBundle> {
+): Promise<AnalyticsDashboardResult> {
   const cacheKey = buildCacheKey("dashboardBundle", range.startDate, range.endDate);
-  const cached = getCached<AnalyticsDashboardBundle>(cacheKey);
+  const cached = getCached<AnalyticsDashboardResult>(cacheKey);
   if (cached) return cached;
 
-  const [summary, traffic, ecommerce, pages, geo, devices, behaviour] = await Promise.all([
-    getExecutiveSummary(range),
-    getTrafficAcquisition(range),
-    getEcommercePerformance(range),
-    getLandingPageAnalysis(range),
-    getGeographicData(range),
-    getDeviceData(range),
-    getUserBehaviour(range),
-  ]);
+  type SectionKey = keyof AnalyticsDashboardBundle;
+  const loaders: { key: SectionKey; load: () => Promise<AnalyticsDashboardBundle[SectionKey]> }[] = [
+    { key: "summary", load: () => getExecutiveSummary(range) },
+    { key: "traffic", load: () => getTrafficAcquisition(range) },
+    { key: "ecommerce", load: () => getEcommercePerformance(range) },
+    { key: "pages", load: () => getLandingPageAnalysis(range) },
+    { key: "geo", load: () => getGeographicData(range) },
+    { key: "devices", load: () => getDeviceData(range) },
+    { key: "behaviour", load: () => getUserBehaviour(range) },
+  ];
 
-  const data = { summary, traffic, ecommerce, pages, geo, devices, behaviour };
+  const settled = await Promise.allSettled(loaders.map((entry) => entry.load()));
+  const sectionErrors: Partial<Record<SectionKey, string>> = {};
+  const partial: Partial<AnalyticsDashboardBundle> = {};
+
+  settled.forEach((result, index) => {
+    const { key } = loaders[index];
+    if (result.status === "fulfilled") {
+      partial[key] = result.value;
+    } else {
+      sectionErrors[key] = formatGa4ApiError(result.reason);
+    }
+  });
+
+  if (Object.keys(partial).length === 0) {
+    const first = Object.values(sectionErrors)[0];
+    throw new Error(first ?? "All GA4 dashboard sections failed.");
+  }
+
+  const data: AnalyticsDashboardResult = {
+    summary: partial.summary ?? { current: EMPTY_METRIC_SNAPSHOT, previous: EMPTY_METRIC_SNAPSHOT },
+    traffic: partial.traffic ?? { rows: [], totals: { users: 0, sessions: 0, revenue: 0 } },
+    ecommerce: partial.ecommerce ?? {
+      transactions: 0,
+      purchaseRevenue: 0,
+      conversionRate: 0,
+      averagePurchaseRevenue: 0,
+      topProducts: [],
+      revenueTrend: [],
+    },
+    pages: partial.pages ?? { rows: [] },
+    geo: partial.geo ?? { rows: [] },
+    devices: partial.devices ?? { rows: [], totals: { users: 0, sessions: 0, revenue: 0 } },
+    behaviour: partial.behaviour ?? { rows: [] },
+    ...(Object.keys(sectionErrors).length > 0 ? { sectionErrors } : {}),
+  };
+
   setCached(cacheKey, data);
   return data;
 }
@@ -185,11 +234,11 @@ export async function getEcommercePerformance(range: DateRange): Promise<Ecommer
     }),
     runReport({
       dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-      dimensions: [{ name: "itemName" }, { name: "itemCategory" }],
+      dimensions: [{ name: "itemName" }],
       metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
       limit: 10,
-    }),
+    }).catch(() => ({ rows: [] })),
     runReport({
       dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
       dimensions: [{ name: "date" }],
@@ -207,7 +256,7 @@ export async function getEcommercePerformance(range: DateRange): Promise<Ecommer
   const topProducts: ProductRow[] = (productsResponse.rows ?? []).map((row, index) => ({
     rank: index + 1,
     name: dimensionString(row, 0) || "(not set)",
-    category: dimensionString(row, 1) || "—",
+    category: "—",
     revenue: metricNumber(row, 0),
     quantity: metricNumber(row, 1),
   }));
@@ -251,7 +300,6 @@ export async function getLandingPageAnalysis(range: DateRange): Promise<LandingP
       { name: "totalUsers" },
       { name: "sessions" },
       { name: "engagementRate" },
-      { name: "conversions" },
       { name: "purchaseRevenue" },
     ],
     orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
@@ -263,8 +311,8 @@ export async function getLandingPageAnalysis(range: DateRange): Promise<LandingP
     users: metricNumber(row, 0),
     sessions: metricNumber(row, 1),
     engagementRate: metricNumber(row, 2) * 100,
-    conversions: metricNumber(row, 3),
-    revenue: metricNumber(row, 4),
+    conversions: 0,
+    revenue: metricNumber(row, 3),
   }));
 
   const data = { rows };
@@ -279,7 +327,7 @@ export async function getGeographicData(range: DateRange): Promise<GeographicDat
 
   const response = await runReport({
     dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
-    dimensions: [{ name: "country" }, { name: "city" }, { name: "countryId" }],
+    dimensions: [{ name: "country" }, { name: "city" }],
     metrics: [
       { name: "totalUsers" },
       { name: "purchaseRevenue" },
@@ -293,7 +341,7 @@ export async function getGeographicData(range: DateRange): Promise<GeographicDat
     rank: index + 1,
     country: dimensionString(row, 0) || "Unknown",
     city: dimensionString(row, 1) || "—",
-    countryCode: dimensionString(row, 2),
+    countryCode: "",
     users: metricNumber(row, 0),
     revenue: metricNumber(row, 1),
     transactions: metricNumber(row, 2),
@@ -356,21 +404,25 @@ export async function getUserBehaviour(range: DateRange): Promise<UserBehaviourD
     dimensions: [{ name: "pagePath" }],
     metrics: [
       { name: "screenPageViews" },
-      { name: "averageSessionDuration" },
-      { name: "exitRate" },
+      { name: "userEngagementDuration" },
       { name: "totalUsers" },
     ],
     orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
     limit: 100,
   });
 
-  const rows: BehaviourRow[] = (response.rows ?? []).map((row) => ({
-    pagePath: dimensionString(row, 0) || "/",
-    pageViews: metricNumber(row, 0),
-    avgTime: metricNumber(row, 1),
-    exitRate: metricNumber(row, 2) * 100,
-    users: metricNumber(row, 3),
-  }));
+  const rows: BehaviourRow[] = (response.rows ?? []).map((row) => {
+    const pageViews = metricNumber(row, 0);
+    const engagementSeconds = metricNumber(row, 1);
+    const users = metricNumber(row, 2);
+    return {
+      pagePath: dimensionString(row, 0) || "/",
+      pageViews,
+      avgTime: users > 0 ? engagementSeconds / users : engagementSeconds,
+      exitRate: 0,
+      users,
+    };
+  });
 
   const data = { rows };
   setCached(cacheKey, data);

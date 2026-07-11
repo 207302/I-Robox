@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   formatDuration,
   formatNumber,
-  formatPercent,
 } from "@/lib/ga4/formatters";
 import type { BehaviourRow, UserBehaviourData } from "@/lib/ga4/types";
 
@@ -63,8 +62,7 @@ export default function UserBehaviour({ data, loading, error }: Props) {
   const columns: { key: SortKey; label: string }[] = [
     { key: "pagePath", label: "Page Path" },
     { key: "pageViews", label: "Page Views" },
-    { key: "avgTime", label: "Avg Time" },
-    { key: "exitRate", label: "Exit Rate" },
+    { key: "avgTime", label: "Avg Engagement" },
     { key: "users", label: "Users" },
   ];
 
@@ -96,7 +94,6 @@ export default function UserBehaviour({ data, loading, error }: Props) {
                 </td>
                 <td className="px-4 py-3">{formatNumber(row.pageViews)}</td>
                 <td className="px-4 py-3">{formatDuration(row.avgTime)}</td>
-                <td className="px-4 py-3">{formatPercent(row.exitRate)}</td>
                 <td className="px-4 py-3">{formatNumber(row.users)}</td>
               </tr>
             ))}

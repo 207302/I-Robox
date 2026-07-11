@@ -197,3 +197,7 @@ export type AnalyticsDashboardBundle = {
   devices: DeviceData;
   behaviour: UserBehaviourData;
 };
+
+export type AnalyticsDashboardResult = AnalyticsDashboardBundle & {
+  sectionErrors?: Partial<Record<keyof AnalyticsDashboardBundle, string>>;
+};

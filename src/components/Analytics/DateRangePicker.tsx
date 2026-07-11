@@ -85,7 +85,7 @@ export default function DateRangePicker({ value, onChange }: DateRangePickerProp
             }}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
               activePreset === preset.key
-                ? "bg-blue-600 text-white"
+                ? "bg-blue-600 text-white border border-blue-600"
                 : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             }`}
           >

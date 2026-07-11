@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { AnalyticsThemeProvider } from "@/components/Analytics/AnalyticsThemeProvider";
 
 export default function AnalyticsLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="analytics-dashboard min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <AnalyticsThemeProvider>
       <style>{`
         @media print {
           .analytics-dashboard {
@@ -19,6 +20,6 @@ export default function AnalyticsLayout({ children }: { children: ReactNode }) {
         }
       `}</style>
       {children}
-    </div>
+    </AnalyticsThemeProvider>
   );
 }

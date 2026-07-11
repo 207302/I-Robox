@@ -91,6 +91,31 @@
   --color-orange: #f27430;
   --color-orange-dark: #e1580e;
 
+  /* GA4 analytics dashboard — standard scales omitted from brand @theme reset */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  --color-blue-400: #60a5fa;
+  --color-blue-600: #2563eb;
+
+  --color-emerald-400: #34d399;
+  --color-emerald-600: #059669;
+
+  --color-rose-50: #fff1f2;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-700: #be123c;
+  --color-rose-900: #881337;
+  --color-rose-950: #4c0519;
+
   --breakpoint-*: initial;
   --breakpoint-xsm: 375px;
   --breakpoint-lsm: 425px;

@@ -11,6 +11,7 @@ import GeographicAnalysis from "@/components/Analytics/GeographicAnalysis";
 import LandingPageAnalysis from "@/components/Analytics/LandingPageAnalysis";
 import TrafficAcquisition from "@/components/Analytics/TrafficAcquisition";
 import UserBehaviour from "@/components/Analytics/UserBehaviour";
+import { useAnalyticsTheme } from "@/components/Analytics/AnalyticsThemeProvider";
 import { fetchAnalyticsDashboard } from "@/lib/ga4/fetchClient";
 import type {
   DashboardExportData,
@@ -65,7 +66,7 @@ function SectionBlock({
 }
 
 export default function AnalyticsDashboardPage() {
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleDarkMode } = useAnalyticsTheme();
   const [dateRange, setDateRange] = useState<DateRange>(defaultRange);
 
   const [summary, setSummary] = useState(initialSection<ExecutiveSummaryData>());
@@ -114,13 +115,6 @@ export default function AnalyticsDashboardPage() {
     void loadDashboard(dateRange);
   }, [dateRange, loadDashboard]);
 
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    return () => {
-      document.documentElement.classList.remove("dark");
-    };
-  }, [darkMode]);
-
   const exportData: DashboardExportData = useMemo(
     () => ({
       summary: summary.data,
@@ -152,7 +146,7 @@ export default function AnalyticsDashboardPage() {
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <button
             type="button"
-            onClick={() => setDarkMode((value) => !value)}
+            onClick={toggleDarkMode}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
           >
             {darkMode ? "Light mode" : "Dark mode"}

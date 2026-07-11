@@ -65,7 +65,7 @@ function formatReviewerLabel(
   return "— Customer";
 }
 
-async function loadFeaturedHomeReview(): Promise<HomeFeaturedReview | null> {
+async function loadFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
   const rows = await prisma.reviews.findMany({
     where: {
       is_approved: true,
@@ -94,24 +94,27 @@ async function loadFeaturedHomeReview(): Promise<HomeFeaturedReview | null> {
     },
   });
 
-  const row = rows.find((candidate) => candidate.comment?.trim());
-  const comment = row?.comment?.trim();
-  if (!row || !comment) return null;
+  return rows
+    .map((row) => {
+      const comment = row.comment?.trim();
+      if (!comment) return null;
 
-  return {
-    id: row.id,
-    rating: row.rating,
-    comment,
-    reviewerLabel: formatReviewerLabel(row.customers?.name, row.is_verified_purchase),
-    productSlug: row.products.slug,
-    productName: row.products.name,
-    productImageUrl: row.products.product_images[0]?.url ?? null,
-  };
+      return {
+        id: row.id,
+        rating: row.rating,
+        comment,
+        reviewerLabel: formatReviewerLabel(row.customers?.name, row.is_verified_purchase),
+        productSlug: row.products.slug,
+        productName: row.products.name,
+        productImageUrl: row.products.product_images[0]?.url ?? null,
+      };
+    })
+    .filter((review): review is HomeFeaturedReview => review !== null);
 }
 
-/** Latest approved review for homepage testimonial — ISR-safe (no session). */
-export function getFeaturedHomeReview(): Promise<HomeFeaturedReview | null> {
-  return unstable_cache(loadFeaturedHomeReview, ["home-featured-review"], {
+/** Latest approved reviews for homepage testimonial — ISR-safe (no session). */
+export function getFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
+  return unstable_cache(loadFeaturedHomeReviews, ["home-featured-reviews"], {
     revalidate: HOME_PAGE_REVALIDATE_SECONDS,
     tags: [HOME_PAGE_TAG],
   })();

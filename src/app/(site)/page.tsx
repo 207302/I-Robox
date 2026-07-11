@@ -1,6 +1,6 @@
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { getHomePageData } from "@/lib/queries/homePage";
-import { getFeaturedHomeReview } from "@/lib/queries/productReviews";
+import { getFeaturedHomeReviews } from "@/lib/queries/productReviews";
 import { getSiteChromeColors } from "@/lib/queries/marketing";
 import { withPagePerf } from "@/lib/observability/route";
 import Home, {
@@ -79,10 +79,10 @@ export default async function HomePage() {
     highlightsRaw,
     brandRailRaw,
     categoryTilesRaw,
-  }, chromeColors, featuredReviewRaw] = await Promise.all([
+  }, chromeColors, featuredReviewsRaw] = await Promise.all([
     getHomePageData(),
     getSiteChromeColors(),
-    getFeaturedHomeReview(),
+    getFeaturedHomeReviews(),
   ]);
 
   const highlightsSectionEyebrow =
@@ -215,14 +215,12 @@ export default async function HomePage() {
     reviewCount: p.reviewCount ?? 0,
   }));
 
-  const featuredReview = featuredReviewRaw
-    ? {
-        ...featuredReviewRaw,
-        productImageUrl: featuredReviewRaw.productImageUrl
-          ? cloudinaryProductCardUrl(featuredReviewRaw.productImageUrl, 192)
-          : null,
-      }
-    : null;
+  const featuredReviews = featuredReviewsRaw.map((review) => ({
+    ...review,
+    productImageUrl: review.productImageUrl
+      ? cloudinaryProductCardUrl(review.productImageUrl, 192)
+      : null,
+  }));
 
   return (
     <>
@@ -239,7 +237,7 @@ export default async function HomePage() {
         categories={categories}
         newArrivals={newArrivals}
         bestSellers={bestSellers}
-        featuredReview={featuredReview}
+        featuredReviews={featuredReviews}
         footerChrome={{
           footerBg: chromeColors.footerBg,
           footerText: chromeColors.footerText,

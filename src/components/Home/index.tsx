@@ -68,7 +68,7 @@ type HomeProps = {
   categories?: HomeCategoryTile[];
   newArrivals?: HomeProductCardItem[];
   bestSellers?: HomeProductCardItem[];
-  featuredReview?: HomeFeaturedReview | null;
+  featuredReviews?: HomeFeaturedReview[];
   footerChrome?: Pick<SiteChromeColors, "footerBg" | "footerText">;
 };
 
@@ -83,7 +83,7 @@ const Home = ({
   categories,
   newArrivals,
   bestSellers,
-  featuredReview,
+  featuredReviews,
   footerChrome,
 }: HomeProps) => {
   const spotlightItems = highlights && highlights.length > 0 ? highlights : null;
@@ -160,7 +160,7 @@ const Home = ({
       </FadeInSection>
 
       <FadeInSection>
-        <HomeWhyChooseRow featuredReview={featuredReview} />
+        <HomeWhyChooseRow featuredReviews={featuredReviews} />
       </FadeInSection>
 
       <FadeInSection>

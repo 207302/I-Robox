@@ -74,8 +74,18 @@ export async function POST(req: NextRequest) {
     const productId = productIdResult.value;
     const rating = ratingResult.value;
     const comment = commentResult.value;
-  
-    // Strict enforcement: one review per purchased order item.
+
+    const existingReview = await prisma.reviews.findFirst({
+      where: { product_id: productId, customer_id: session.sub },
+      select: { id: true },
+    });
+    if (existingReview) {
+      return NextResponse.json(
+        { error: "You have already submitted a review for this product" },
+        { status: 400 }
+      );
+    }
+
     const unreviewedPurchasedItem = await prisma.order_items.findFirst({
       where: {
         product_id: productId,
@@ -83,42 +93,39 @@ export async function POST(req: NextRequest) {
           customer_id: session.sub,
           payment_status: "SUCCEEDED",
         },
-        reviews: {
-          none: {
-            customer_id: session.sub,
-          },
-        },
+        reviews: { none: {} },
       },
       orderBy: { created_at: "asc" },
       select: { id: true },
     });
-    if (!unreviewedPurchasedItem) {
-      return NextResponse.json(
-        { error: "You can only review purchased items once per purchase" },
-        { status: 400 }
-      );
-    }
-  
+
+    const isVerifiedPurchase = Boolean(unreviewedPurchasedItem);
+
     const created = await prisma.reviews.create({
       data: {
         product_id: productId,
         customer_id: session.sub,
-        order_item_id: unreviewedPurchasedItem.id,
+        order_item_id: unreviewedPurchasedItem?.id ?? null,
         rating,
         title,
         comment,
-        is_verified_purchase: true,
+        is_verified_purchase: isVerifiedPurchase,
         is_approved: false, // moderation required
       },
       select: { id: true },
     });
-  
+
     await writeAuditLog({
       customerId: session.sub,
       entityType: "REVIEW",
       entityId: created.id,
       action: "REVIEW_SUBMITTED",
-      newValues: { productId, rating, verified: true, orderItemId: unreviewedPurchasedItem.id },
+      newValues: {
+        productId,
+        rating,
+        verified: isVerifiedPurchase,
+        orderItemId: unreviewedPurchasedItem?.id ?? null,
+      },
       ipAddress: req.ip ?? null,
       userAgent: req.headers.get("user-agent"),
     });

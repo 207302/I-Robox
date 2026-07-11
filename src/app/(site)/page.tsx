@@ -55,8 +55,7 @@ const websiteJsonLd = {
   },
 };
 
-const FALLBACK_HIGHLIGHT_IMAGE =
-  "/images/collections/693c2377f0a417e6ed0a3758-rc-cars-1-14-all-terrain-rc-car-for.jpg";
+const FALLBACK_HIGHLIGHT_IMAGE = PRODUCT_IMAGE_PLACEHOLDER;
 
 const FALLBACK_PRODUCT_IMAGE = PRODUCT_IMAGE_PLACEHOLDER;
 

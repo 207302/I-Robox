@@ -15,7 +15,7 @@ const NAV: { href: string; label: string; superAdminOnly?: boolean }[] = [
   { href: "/admin/pages/route-pages", label: "Pages" },
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/csv", label: "CSV Upload" },
-  { href: "/admin/media", label: "Media upload", superAdminOnly: true },
+  { href: "/admin/media", label: "Media upload" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/security", label: "Security" },
   { href: "/admin/users", label: "Admin Users" },

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { isUuid } from "@/lib/validation/input";
+import { formatUnknownError } from "@/lib/observability/formatUnknownError";
 import {
   fetchShipmozoTrackOrder,
   discoverShipmozoOrdersForRef,
@@ -632,7 +633,10 @@ export async function syncShipmozoAwbForOrder(
       duplicateCount: discovery.duplicateCount,
     };
   } catch (err) {
-    console.error("[shipmozo-awb-discovery] unhandled error", { orderId, err });
+    console.error("[shipmozo-awb-discovery] unhandled error", {
+      orderId,
+      err: formatUnknownError(err),
+    });
     return { ok: false as const, error: "awb_discovery_failed" };
   }
 }
@@ -763,7 +767,12 @@ export async function syncShipmozoTrackingForOrder(
 
     const track = await fetchShipmozoTrackOrder(awb);
     if (!track.ok) {
-      console.warn("[shipmozo-sync] track-order failed", { orderId, awb, error: track.error });
+      console.warn("[shipmozo-sync] track-order failed", {
+        orderId,
+        awb,
+        error: track.error,
+        httpStatus: track.httpStatus,
+      });
       return { ok: false as const, error: track.error ?? "track-order failed" };
     }
 
@@ -784,7 +793,7 @@ export async function syncShipmozoTrackingForOrder(
 
     return { ok: true as const, orderId, mappedStatus: result.mappedStatus };
   } catch (err) {
-    console.error("[shipmozo-sync] unhandled error", { orderId, err });
+    console.error("[shipmozo-sync] unhandled error", { orderId, err: formatUnknownError(err) });
     return { ok: false as const, error: "sync failed" };
   }
 }

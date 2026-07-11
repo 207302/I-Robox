@@ -15,6 +15,19 @@ export async function register() {
     console.warn("[instrumentation] SMTP env check skipped:", err);
   }
 
+  try {
+    const { getMissingCloudinaryEnvKeys } = await import("@/lib/cloudinary/adminImageUpload");
+    const missingCloudinary = getMissingCloudinaryEnvKeys();
+    if (missingCloudinary.length > 0) {
+      console.error(
+        "[instrumentation] Cloudinary not configured — bulk image upload will fail. " +
+          `Missing: ${missingCloudinary.join(", ")}`
+      );
+    }
+  } catch (err) {
+    console.warn("[instrumentation] Cloudinary env check skipped:", err);
+  }
+
   // Dev / `next dev`: env + Prisma init happen on first request, not during instrumentation.
   if (process.env.NODE_ENV !== "production") return;
 

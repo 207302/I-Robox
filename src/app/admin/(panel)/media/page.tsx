@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import BulkCloudinaryUploadPanel from "@/components/admin/BulkCloudinaryUploadPanel";
-import { requireSuperAdmin } from "@/lib/admin/rbac";
+import { requireAdminWrite } from "@/lib/admin/rbac";
 
 export const metadata = {
   title: "Media upload | Admin",
 };
 
 export default async function AdminMediaPage() {
-  const auth = await requireSuperAdmin();
+  const auth = await requireAdminWrite();
   if (!auth.ok) redirect("/admin/dashboard");
 
   return (

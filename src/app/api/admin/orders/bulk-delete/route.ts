@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
             for (const productId of affectedProductIds) {
               revalidateInventoryCatalog({ productId });
             }
-            revalidateTag(ORDERS_TAG);
+            revalidateTag(ORDERS_TAG, "max");
           } catch (err) {
             console.error("[admin orders bulk-delete] background work failed", err);
           }

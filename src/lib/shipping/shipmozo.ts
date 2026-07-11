@@ -198,6 +198,7 @@ export type ShipmozoTrackOrderResult = {
   courier?: string;
   awb_number?: string;
   error?: string;
+  httpStatus?: number;
 };
 
 export type ShipmozoOrderDetailResult = {
@@ -805,7 +806,11 @@ export async function fetchShipmozoTrackOrder(awb: string): Promise<ShipmozoTrac
     "GET"
   );
   if (!res.ok || !res.parsed || typeof res.parsed !== "object") {
-    return { ok: false, error: "track_order_request_failed" };
+    return {
+      ok: false,
+      error: "track_order_request_failed",
+      httpStatus: res.status,
+    };
   }
 
   const data = (res.parsed as ShipmozoResponse).data;
@@ -918,6 +923,14 @@ export async function appendShipmozoMetadata(orderId: string, patch: Record<stri
 
   const row = await prisma.shipments.findUnique({ where: { order_id: orderId }, select: { metadata: true } });
   const prev = (row?.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
+
+  const safePatch = JSON.parse(JSON.stringify(patch)) as Record<string, unknown>;
+  const panelOrders = safePatch.panelOrders;
+  if (Array.isArray(panelOrders) && panelOrders.length > 12) {
+    safePatch.panelOrders = panelOrders.slice(0, 12);
+    safePatch.panelOrdersTruncated = panelOrders.length;
+  }
+
   await prisma.shipments.updateMany({
     where: { order_id: orderId },
     data: {
@@ -925,7 +938,7 @@ export async function appendShipmozoMetadata(orderId: string, patch: Record<stri
         ...prev,
         shipmozo: {
           ...(typeof prev.shipmozo === "object" && prev.shipmozo ? (prev.shipmozo as object) : {}),
-          ...patch,
+          ...safePatch,
         },
       } as object,
     },

@@ -545,7 +545,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
         for (const productId of result.productIds) {
           revalidateInventoryCatalog({ productId });
         }
-        revalidateTag(ORDERS_TAG);
+        revalidateTag(ORDERS_TAG, "max");
       } catch (err) {
         console.error("[admin orders DELETE] background work failed", err);
       }

@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
   ADMIN_IMAGE_MAX_BYTES,
   CLOUDINARY_ADMIN_IMAGE_FOLDERS,
 } from "@/lib/cloudinary/adminImageUploadConstants";
+import { isAllowedImageMime, resolveImageMimeType } from "@/lib/cloudinary/resolveImageMimeType";
 
 type UploadStatus = "queued" | "uploading" | "done" | "error";
 
@@ -19,7 +20,19 @@ type UploadItem = {
   error?: string;
 };
 
-const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
+type MediaStatus = {
+  authenticated: boolean;
+  canUpload: boolean;
+  cloudinaryConfigured: boolean;
+  cloudinaryPingOk?: boolean;
+  cloudinaryError?: string | null;
+  missingCloudinaryKeys: string[];
+  cloudName: string | null;
+};
+
+const UPLOAD_API = "/api/admin/upload";
+
+const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
 const UPLOAD_CONCURRENCY = 3;
 
 function formatBytes(bytes: number) {
@@ -38,6 +51,26 @@ export default function BulkCloudinaryUploadPanel() {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [mediaStatus, setMediaStatus] = useState<MediaStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/media/status", { credentials: "same-origin" });
+        const data = (await res.json().catch(() => null)) as MediaStatus | null;
+        if (!cancelled && data) setMediaStatus(data);
+      } catch {
+        if (!cancelled) setMediaStatus(null);
+      } finally {
+        if (!cancelled) setStatusLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const fileArr = Array.from(files);
@@ -45,7 +78,8 @@ export default function BulkCloudinaryUploadPanel() {
     let skipped = 0;
 
     for (const file of fileArr) {
-      if (!file.type.startsWith("image/")) {
+      const mime = resolveImageMimeType(file.name, file.type);
+      if (!isAllowedImageMime(mime)) {
         skipped += 1;
         continue;
       }
@@ -82,10 +116,25 @@ export default function BulkCloudinaryUploadPanel() {
     fd.append("folder", targetFolder);
 
     try {
-      const res = await fetch("/api/admin/media/upload", { method: "POST", body: fd });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const res = await fetch(UPLOAD_API, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+      });
+      const raw = await res.text();
+      let data: { url?: string; error?: string } = {};
+      try {
+        data = JSON.parse(raw) as { url?: string; error?: string };
+      } catch {
+        data = {
+          error:
+            res.status === 413
+              ? "File too large for server (try under 5 MB)"
+              : raw.slice(0, 120) || `Upload failed (${res.status})`,
+        };
+      }
       if (!res.ok || !data.url) {
-        return { ...item, status: "error", error: data.error || "Upload failed" };
+        return { ...item, status: "error", error: data.error || `Upload failed (${res.status})` };
       }
       return { ...item, status: "done", url: data.url };
     } catch (err: unknown) {
@@ -130,9 +179,11 @@ export default function BulkCloudinaryUploadPanel() {
     );
 
     setUploading(false);
-    toast.success(
-      `Upload complete — ${sent} succeeded` + (failed > 0 ? `, ${failed} failed` : "")
-    );
+    if (failed > 0) {
+      toast.error(`Upload finished — ${failed} failed. See error text in the table below.`);
+    } else {
+      toast.success(`Upload complete — ${sent} succeeded`);
+    }
   }
 
   function removeItem(id: string) {
@@ -172,9 +223,48 @@ export default function BulkCloudinaryUploadPanel() {
 
   const queuedCount = items.filter((i) => i.status === "queued" || i.status === "error").length;
   const doneCount = items.filter((i) => i.status === "done").length;
+  const uploadBlocked =
+    !statusLoading &&
+    mediaStatus &&
+    (!mediaStatus.canUpload ||
+      !mediaStatus.cloudinaryConfigured ||
+      mediaStatus.cloudinaryPingOk === false);
 
   return (
     <div className="space-y-6">
+      {statusLoading ? (
+        <p className="text-sm text-meta-3">Checking upload configuration…</p>
+      ) : mediaStatus && !mediaStatus.cloudinaryConfigured ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-medium">Cloudinary is not configured on the server.</p>
+          <p className="mt-1">
+            Missing env vars:{" "}
+            {mediaStatus.missingCloudinaryKeys.length > 0
+              ? mediaStatus.missingCloudinaryKeys.join(", ")
+              : "unknown"}
+          </p>
+          <p className="mt-1 text-xs">
+            Set these in Hostinger hPanel → Node.js → Environment variables, then redeploy.
+          </p>
+        </div>
+      ) : mediaStatus && mediaStatus.cloudinaryConfigured && mediaStatus.cloudinaryPingOk === false ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-medium">Cloudinary credentials are set but API ping failed.</p>
+          <p className="mt-1">{mediaStatus.cloudinaryError ?? "Check API key and secret match your cloud name."}</p>
+          <p className="mt-1 text-xs">
+            Run on Hostinger: <code className="rounded bg-red-100 px-1">node scripts/test-cloudinary-upload.mjs</code>
+          </p>
+        </div>
+      ) : mediaStatus && !mediaStatus.canUpload ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Admin session cannot upload. Try logging out and back in.
+        </div>
+      ) : mediaStatus?.cloudName ? (
+        <p className="text-xs text-meta-3">
+          Cloudinary cloud: <span className="font-medium text-dark">{mediaStatus.cloudName}</span>
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
           <label htmlFor="cloudinary-folder" className="block text-sm font-medium text-dark">
@@ -206,7 +296,7 @@ export default function BulkCloudinaryUploadPanel() {
           </button>
           <button
             type="button"
-            disabled={uploading || queuedCount === 0}
+            disabled={uploading || queuedCount === 0 || Boolean(uploadBlocked)}
             onClick={() => void runUploads()}
             className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-dark disabled:opacity-60"
           >

@@ -28,7 +28,7 @@ export const STORE_PATHS = {
 
 function revalidateTags(...tags: string[]) {
   for (const tag of tags) {
-    revalidateTag(tag);
+    revalidateTag(tag, "max");
   }
 }
 
@@ -82,15 +82,15 @@ export function revalidateProductCatalog(options?: RevalidateProductCatalogOptio
 
   const slug = options?.slug?.trim();
   const previousSlug = options?.previousSlug?.trim();
-  if (slug) revalidateTag(productSlugTag(slug));
+  if (slug) revalidateTag(productSlugTag(slug), "max");
   if (previousSlug && previousSlug !== slug) {
-    revalidateTag(productSlugTag(previousSlug));
+    revalidateTag(productSlugTag(previousSlug), "max");
   }
 }
 
 export function revalidateProductReviews(productId: string): void {
-  revalidateTag(productReviewsTag(productId));
-  revalidateTag(HOME_PAGE_TAG);
+  revalidateTag(productReviewsTag(productId), "max");
+  revalidateTag(HOME_PAGE_TAG, "max");
 }
 
 export async function revalidateProductById(productId: string): Promise<void> {
@@ -108,7 +108,7 @@ export async function revalidateProductReviewsByReviewId(reviewId: string): Prom
     select: { product_id: true },
   });
   if (row?.product_id) revalidateProductReviews(row.product_id);
-  else revalidateTag(HOME_PAGE_TAG);
+  else revalidateTag(HOME_PAGE_TAG, "max");
 }
 
 /** Category tree, nav, shop facets, home tiles fallback. */
@@ -162,7 +162,7 @@ export async function revalidateFlashSales(options?: {
     slug = row?.slug ?? undefined;
   }
   if (slug) {
-    revalidateTag(productSlugTag(slug));
+    revalidateTag(productSlugTag(slug), "max");
     revalidatePath(STORE_PATHS.product(slug));
   }
 }

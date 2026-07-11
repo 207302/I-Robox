@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { sendEmail, abandonedCartReminderEmailHtml, isEmailConfigured } from "@/lib/email";
+import { sendEmail, abandonedCartReminderEmailHtml, isEmailConfigured, isSmtpDeliveryBlocked } from "@/lib/email";
 import {
   abandonedCartItemSelect,
   abandonedCartReminderTextLines,
@@ -15,7 +15,7 @@ export type AbandonedCartRunResult =
   | {
       ok: true;
       skipped: true;
-      reason: "abandoned_cart_reminders_disabled" | "smtp_not_configured";
+      reason: "abandoned_cart_reminders_disabled" | "smtp_not_configured" | "smtp_delivery_blocked";
       source: string;
       ranAt: string;
     }
@@ -129,6 +129,19 @@ export async function runAbandonedCartReminders(): Promise<AbandonedCartRunResul
     } catch (e) {
       failed += 1;
       console.error("[abandoned-cart] send failed", c.id, e);
+      if (isSmtpDeliveryBlocked(e)) {
+        console.error(
+          "[abandoned-cart] SMTP delivery blocked — stopping batch. " +
+            "info@i-robox.com is on MailChannels blocklist; switch to Gmail SMTP or request delisting."
+        );
+        return {
+          ok: true,
+          skipped: true,
+          reason: "smtp_delivery_blocked",
+          source: settings.source,
+          ranAt,
+        };
+      }
     }
   }
 

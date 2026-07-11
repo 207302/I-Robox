@@ -1,60 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assertSameOrigin } from "@/lib/security/origin";
+import { getAdminSession } from "@/lib/auth/session";
 import { runApiRoute } from "@/lib/api/runApiRoute";
-import { requireSuperAdmin } from "@/lib/admin/rbac";
-import {
-  ADMIN_IMAGE_ALLOWED_TYPES,
-  ADMIN_IMAGE_MAX_BYTES,
-  isAllowedAdminImageFolder,
-  uploadAdminImageToCloudinary,
-} from "@/lib/cloudinary/adminImageUpload";
+import { processAdminImageUploadFormData } from "@/lib/cloudinary/adminImageUpload";
 
+function isAllowedAdminRole(roles: string[]) {
+  return roles.some((r) => ["SUPER_ADMIN", "MANAGER", "STAFF"].includes(r));
+}
+
+/** Alias of /api/admin/upload — kept for bulk media panel and backwards compatibility. */
 export async function POST(req: NextRequest) {
-  return runApiRoute(async () => {
-    try {
-      assertSameOrigin(req);
-    } catch {
-      return NextResponse.json({ error: "Bad origin" }, { status: 403 });
-    }
+  return runApiRoute(
+    async () => {
+      const session = await getAdminSession();
+      if (!session || !isAllowedAdminRole(session.roles ?? [])) {
+        return NextResponse.json({ error: "Forbidden — sign in as admin" }, { status: 403 });
+      }
 
-    const auth = await requireSuperAdmin();
-    if (!auth.ok) {
-      return NextResponse.json({ error: "Only SUPER_ADMIN can bulk-upload media" }, { status: 403 });
-    }
+      let formData: FormData;
+      try {
+        formData = await req.formData();
+      } catch {
+        return NextResponse.json(
+          { error: "Could not read upload (file may exceed server limit — try under 5 MB)" },
+          { status: 400 }
+        );
+      }
 
-    let formData: FormData;
-    try {
-      formData = await req.formData();
-    } catch {
-      return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
-    }
+      const result = await processAdminImageUploadFormData(formData);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status });
+      }
 
-    const file = formData.get("file") as File | null;
-    const folder = String(formData.get("folder") ?? "irobox/products").trim();
-
-    if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    if (!isAllowedAdminImageFolder(folder)) {
-      return NextResponse.json({ error: "Invalid folder" }, { status: 400 });
-    }
-    if (!ADMIN_IMAGE_ALLOWED_TYPES.includes(file.type as (typeof ADMIN_IMAGE_ALLOWED_TYPES)[number])) {
-      return NextResponse.json({ error: "Only JPEG, PNG, WebP and GIF are allowed" }, { status: 400 });
-    }
-    if (file.size > ADMIN_IMAGE_MAX_BYTES) {
-      return NextResponse.json({ error: "File too large (max 9 MB)" }, { status: 400 });
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    try {
-      const result = await uploadAdminImageToCloudinary(buffer, folder);
       return NextResponse.json(
-        { url: result.secure_url, public_id: result.public_id, folder },
+        { url: result.url, public_id: result.public_id, folder: result.folder },
         { status: 201 }
       );
-    } catch (err: unknown) {
-      console.error("[admin/media/upload]", err);
-      return NextResponse.json({ error: "Cloudinary upload failed" }, { status: 502 });
-    }
-  });
+    },
+    { name: "POST /api/admin/media/upload", timeoutMs: 60_000 }
+  );
 }

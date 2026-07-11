@@ -100,6 +100,16 @@ export function createPooledEmailTransporter() {
   });
 }
 
+export function isSmtpDeliveryBlocked(err: unknown): boolean {
+  const response =
+    typeof err === "object" && err && "response" in err
+      ? String((err as { response?: string }).response ?? "")
+      : "";
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  const combined = `${response} ${message}`.toLowerCase();
+  return combined.includes("554 5.7.1") || combined.includes("mailchannels blocklist");
+}
+
 export function getSmtpErrorHint(err: unknown): string | null {
   const response =
     typeof err === "object" && err && "response" in err
@@ -110,6 +120,9 @@ export function getSmtpErrorHint(err: unknown): string | null {
 
   if (combined.includes("Disabled by user from hPanel")) {
     return "Hostinger SMTP is turned off in hPanel. Enable outbound email for your mailbox, or set Gmail SMTP (smtp.gmail.com + app password) in Hostinger env vars.";
+  }
+  if (combined.includes("554 5.7.1") && combined.toLowerCase().includes("mailchannels")) {
+    return "Hostinger/MailChannels blocked info@i-robox.com (554 blocklist). Request delisting at support.mailchannels.net or switch to Gmail SMTP (see .env.example).";
   }
   if (combined.includes("554 5.7.1")) {
     return "SMTP server blocked sending (554). Check Hostinger email settings or use Gmail SMTP.";

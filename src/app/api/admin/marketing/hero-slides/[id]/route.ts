@@ -54,6 +54,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const body = parsed.body;
   
     const image_url = body.image_url !== undefined ? cleanText(body.image_url, 2000) : undefined;
+    const image_public_id =
+      body.image_public_id !== undefined ? cleanOptionalText(body.image_public_id, 255) : undefined;
+    const mobile_image_url =
+      body.mobile_image_url !== undefined ? cleanOptionalText(body.mobile_image_url, 2000) : undefined;
+    const mobile_image_public_id =
+      body.mobile_image_public_id !== undefined
+        ? cleanOptionalText(body.mobile_image_public_id, 255)
+        : undefined;
+    const clear_mobile_image = body.clear_mobile_image === true;
     const title = body.title !== undefined ? cleanOptionalText(body.title, 255) : undefined;
     const link_url = body.link_url !== undefined ? cleanOptionalText(body.link_url, 2000) : undefined;
     const sort_order = body.sort_order !== undefined ? Number(body.sort_order) : undefined;
@@ -71,11 +80,33 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (image_url !== undefined && !image_url) {
       return NextResponse.json({ error: "image_url cannot be empty" }, { status: 400 });
     }
+
+    const existing = await prisma.homepage_hero_slides.findUnique({
+      where: { id },
+      select: {
+        image_url: true,
+        image_public_id: true,
+        mobile_image_url: true,
+        mobile_image_public_id: true,
+      },
+    });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
     await prisma.homepage_hero_slides.update({
       where: { id },
       data: {
         ...(image_url !== undefined ? { image_url } : {}),
+        ...(image_public_id !== undefined ? { image_public_id: image_public_id ?? null } : {}),
+        ...(clear_mobile_image
+          ? { mobile_image_url: null, mobile_image_public_id: null }
+          : {
+              ...(mobile_image_url !== undefined
+                ? { mobile_image_url: mobile_image_url || null }
+                : {}),
+              ...(mobile_image_public_id !== undefined
+                ? { mobile_image_public_id: mobile_image_public_id ?? null }
+                : {}),
+            }),
         ...(title !== undefined ? { title: title ?? null } : {}),
         ...(link_url !== undefined ? { link_url: link_url ?? null } : {}),
         ...(sort_order !== undefined && Number.isFinite(sort_order) ? { sort_order } : {}),
@@ -84,6 +115,28 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         ...(body.active_until !== undefined ? { active_until: active_until ?? null } : {}),
       },
     });
+
+    if (clear_mobile_image || mobile_image_url !== undefined) {
+      const nextMobileUrl = clear_mobile_image ? null : mobile_image_url || null;
+      const nextMobilePublicId = clear_mobile_image
+        ? null
+        : mobile_image_public_id !== undefined
+          ? mobile_image_public_id
+          : undefined;
+      const oldMobileId =
+        existing.mobile_image_public_id ||
+        cloudinaryPublicIdFromUrl(existing.mobile_image_url);
+      const nextId =
+        nextMobilePublicId ||
+        (nextMobileUrl ? cloudinaryPublicIdFromUrl(nextMobileUrl) : null);
+      if (
+        oldMobileId?.startsWith("irobox/homepage-hero/") &&
+        (!nextMobileUrl || oldMobileId !== nextId)
+      ) {
+        await cloudinary.uploader.destroy(oldMobileId).catch(() => null);
+      }
+    }
+
     revalidateHomePage();
     revalidateMarketingSite();
     return NextResponse.json({ ok: true }, { status: 200 });
@@ -109,7 +162,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   
     const row = await prisma.homepage_hero_slides.findUnique({
       where: { id },
-      select: { image_url: true },
+      select: { image_url: true, mobile_image_url: true, mobile_image_public_id: true },
     });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   
@@ -118,6 +171,11 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const derivedPublicId = cloudinaryPublicIdFromUrl(row.image_url);
     if (derivedPublicId?.startsWith("irobox/homepage-hero/")) {
       await cloudinary.uploader.destroy(derivedPublicId).catch(() => null);
+    }
+    const mobilePublicId =
+      row.mobile_image_public_id || cloudinaryPublicIdFromUrl(row.mobile_image_url);
+    if (mobilePublicId?.startsWith("irobox/homepage-hero/")) {
+      await cloudinary.uploader.destroy(mobilePublicId).catch(() => null);
     }
     revalidateHomePage();
     revalidateMarketingSite();

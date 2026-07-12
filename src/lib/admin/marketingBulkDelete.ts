@@ -65,12 +65,20 @@ export async function deleteMarketingEntityById(
       case "hero-slides": {
         const row = await prisma.homepage_hero_slides.findUnique({
           where: { id },
-          select: { image_url: true },
+          select: {
+            image_url: true,
+            mobile_image_url: true,
+            mobile_image_public_id: true,
+          },
         });
         if (!row) return { ok: false, id, error: "Not found" };
         await prisma.homepage_hero_slides.delete({ where: { id } });
         await destroyCloudinaryIfPrefix(
           cloudinaryPublicIdFromUrl(row.image_url),
+          "irobox/homepage-hero/"
+        );
+        await destroyCloudinaryIfPrefix(
+          cloudinaryPublicIdFromStoredOrUrl(row.mobile_image_public_id, row.mobile_image_url),
           "irobox/homepage-hero/"
         );
         return { ok: true, id };

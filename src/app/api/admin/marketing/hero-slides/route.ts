@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
   
     const image_url = cleanText(body.image_url, 2000);
     const image_public_id = cleanOptionalText(body.image_public_id, 255);
+    const mobile_image_url = cleanOptionalText(body.mobile_image_url, 2000);
+    const mobile_image_public_id = cleanOptionalText(body.mobile_image_public_id, 255);
     const title = cleanOptionalText(body.title, 255);
     const link_url = cleanOptionalText(body.link_url, 2000);
     const sortFromBody = body.sort_order !== undefined ? Number(body.sort_order) : NaN;
@@ -77,6 +79,8 @@ export async function POST(req: NextRequest) {
       data: {
         image_url,
         image_public_id: image_public_id ?? null,
+        mobile_image_url: mobile_image_url ?? null,
+        mobile_image_public_id: mobile_image_public_id ?? null,
         title: title ?? null,
         link_url: link_url ?? null,
         sort_order,

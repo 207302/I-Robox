@@ -29,6 +29,7 @@ type MarketingTabState = MarketingTab;
 type HeroSlideRow = {
   id: string;
   image_url: string;
+  mobile_image_url?: string | null;
   title: string | null;
   link_url: string | null;
   sort_order: number;
@@ -379,6 +380,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [heroEditOriginalSortOrder, setHeroEditOriginalSortOrder] = useState(0);
   const [heroEditActive, setHeroEditActive] = useState(true);
   const [heroEditImageUrl, setHeroEditImageUrl] = useState("");
+  const [heroEditMobileImageUrl, setHeroEditMobileImageUrl] = useState("");
   const [heroEditSaving, setHeroEditSaving] = useState(false);
   const [highlightUploading, setHighlightUploading] = useState(false);
   const [brandRailUploading, setBrandRailUploading] = useState(false);
@@ -526,6 +528,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     setHeroEditOriginalSortOrder(row.sort_order ?? 0);
     setHeroEditActive(Boolean(row.is_active));
     setHeroEditImageUrl(row.image_url ?? "");
+    setHeroEditMobileImageUrl(row.mobile_image_url ?? "");
   }
 
   function cancelHeroEdit() {
@@ -981,7 +984,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             <p className="text-sm text-meta-3">
               {(slides as HeroSlideRow[]).length} banner
               {(slides as HeroSlideRow[]).length === 1 ? "" : "s"} — all listed below (no pages).
-              Lower sort numbers show first on the homepage.
+              Lower sort numbers show first on the homepage. Upload a desktop image and an optional
+              mobile image for each slide.
             </p>
           </div>
           {marketingSelectAllBar("banner")}
@@ -998,6 +1002,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                       try {
                         setHeroEditSaving(true);
                         let imageUrl = String(fd.get("image_url") ?? heroEditImageUrl).trim();
+                        let imagePublicId: string | null = null;
                         const heroFile = fd.get("image_file");
                         if (heroFile instanceof File && heroFile.size > 0) {
                           setHeroUploading(true);
@@ -1010,8 +1015,28 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                             })
                           );
                           imageUrl = uploadRes.url;
+                          imagePublicId = uploadRes.public_id;
                         }
-                        if (!imageUrl) throw new Error("Image URL is required");
+                        if (!imageUrl) throw new Error("Desktop image URL is required");
+
+                        let mobileImageUrl = String(
+                          fd.get("mobile_image_url") ?? heroEditMobileImageUrl
+                        ).trim();
+                        let mobileImagePublicId: string | null = null;
+                        const mobileFile = fd.get("mobile_image_file");
+                        if (mobileFile instanceof File && mobileFile.size > 0) {
+                          setHeroUploading(true);
+                          const uploadFd = new FormData();
+                          uploadFd.append("file", mobileFile);
+                          const uploadRes = await j<{ url: string; public_id: string }>(
+                            await fetch("/api/admin/marketing/hero-slides/upload", {
+                              method: "POST",
+                              body: uploadFd,
+                            })
+                          );
+                          mobileImageUrl = uploadRes.url;
+                          mobileImagePublicId = uploadRes.public_id;
+                        }
 
                         const sortFromForm = Number(fd.get("sort_order"));
                         const sortOrder = Number.isFinite(sortFromForm)
@@ -1024,6 +1049,13 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                             headers: { "content-type": "application/json" },
                             body: JSON.stringify({
                               image_url: imageUrl,
+                              ...(imagePublicId ? { image_public_id: imagePublicId } : {}),
+                              mobile_image_url: mobileImageUrl || null,
+                              ...(mobileImagePublicId
+                                ? { mobile_image_public_id: mobileImagePublicId }
+                                : !mobileImageUrl
+                                  ? { mobile_image_public_id: null }
+                                  : {}),
                               title: String(fd.get("title") ?? "").trim() || null,
                               link_url: String(fd.get("link_url") ?? "").trim() || null,
                               sort_order: sortOrder,
@@ -1053,10 +1085,21 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                           sizes="96px"
                         />
                       </div>
+                      {heroEditMobileImageUrl ? (
+                        <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded border border-gray-3 bg-gray-2">
+                          <Image
+                            src={heroSlideThumbUrl(heroEditMobileImageUrl)}
+                            alt="Mobile banner"
+                            fill
+                            className="object-cover"
+                            sizes="40px"
+                          />
+                        </div>
+                      ) : null}
                       <span className="text-sm font-medium text-dark">Editing slide</span>
                     </div>
                     <label className="sm:col-span-2">
-                      <span className="text-sm font-medium">Image URL</span>
+                      <span className="text-sm font-medium">Desktop image URL</span>
                       <div className="mt-1 flex flex-wrap gap-2">
                         <input
                           name="image_url"
@@ -1067,7 +1110,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                         <PickFromCloudinaryButton
                           folder="irobox/homepage-hero"
                           multiple={false}
-                          label="Pick image"
+                          label="Pick desktop"
                           onSelect={(urls) => {
                             if (urls[0]) setHeroEditImageUrl(urls[0]);
                           }}
@@ -1075,13 +1118,46 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                       </div>
                     </label>
                     <label className="sm:col-span-2">
-                      <span className="text-sm font-medium">Replace image (optional)</span>
+                      <span className="text-sm font-medium">Replace desktop image (optional)</span>
                       <input
                         name="image_file"
                         type="file"
                         accept="image/png,image/jpeg,image/webp,image/gif"
                         className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
                       />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Mobile image URL (optional)</span>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <input
+                          name="mobile_image_url"
+                          value={heroEditMobileImageUrl}
+                          onChange={(e) => setHeroEditMobileImageUrl(e.target.value)}
+                          className="min-w-0 flex-1 rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                          placeholder="Leave empty to use desktop image on mobile"
+                        />
+                        <PickFromCloudinaryButton
+                          folder="irobox/homepage-hero"
+                          multiple={false}
+                          label="Pick mobile"
+                          onSelect={(urls) => {
+                            if (urls[0]) setHeroEditMobileImageUrl(urls[0]);
+                          }}
+                        />
+                      </div>
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Replace / upload mobile image (optional)</span>
+                      <input
+                        name="mobile_image_file"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                      <p className="mt-1 text-xs text-meta-3">
+                        Recommended ~390×360 or similar tall mobile crop. Leave empty to reuse the
+                        desktop image on phones.
+                      </p>
                     </label>
                     <label>
                       <span className="text-sm font-medium">Title</span>
@@ -1156,6 +1232,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                         </p>
                         <p className="text-xs text-meta-3 mt-0.5">
                           Sort {row.sort_order} · {row.is_active ? "Active" : "Inactive"}
+                          {row.mobile_image_url ? " · Mobile image set" : " · Mobile uses desktop"}
                         </p>
                         {row.link_url ? (
                           <p className="text-xs text-meta-4 truncate mt-0.5">{row.link_url}</p>
@@ -1214,7 +1291,24 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                   imageUrl = uploadRes.url;
                   imagePublicId = uploadRes.public_id;
                 }
-                if (!imageUrl) throw new Error("Provide an image URL or upload a banner image");
+                if (!imageUrl) throw new Error("Provide a desktop image URL or upload");
+
+                let mobileImageUrl = String(fd.get("mobile_image_url") ?? "").trim();
+                let mobileImagePublicId: string | null = null;
+                const mobileFile = fd.get("mobile_image_file");
+                if (mobileFile instanceof File && mobileFile.size > 0) {
+                  setHeroUploading(true);
+                  const uploadFd = new FormData();
+                  uploadFd.append("file", mobileFile);
+                  const uploadRes = await j<{ url: string; public_id: string }>(
+                    await fetch("/api/admin/marketing/hero-slides/upload", {
+                      method: "POST",
+                      body: uploadFd,
+                    })
+                  );
+                  mobileImageUrl = uploadRes.url;
+                  mobileImagePublicId = uploadRes.public_id;
+                }
 
                 const title = String(fd.get("title") ?? "").trim();
                 if (!title) throw new Error("Title is required so you can find this banner in the list");
@@ -1226,6 +1320,8 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                     body: JSON.stringify({
                       image_url: imageUrl,
                       image_public_id: imagePublicId,
+                      mobile_image_url: mobileImageUrl || null,
+                      mobile_image_public_id: mobileImagePublicId,
                       title,
                       link_url: String(fd.get("link_url") ?? "").trim() || null,
                       sort_order: Number(fd.get("sort_order") || nextHeroSortOrder),
@@ -1252,19 +1348,39 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           >
             <AdminImageUrlField
               name="image_url"
-              label="Image URL (optional if uploading)"
+              label="Desktop image URL (optional if uploading)"
               folder="irobox/homepage-hero"
               className="sm:col-span-2"
             />
             <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Upload Banner (Cloudinary)</span>
+              <span className="text-sm font-medium">Upload desktop banner</span>
               <input
                 name="image_file"
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
                 className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
               />
-              <p className="mt-1 text-xs text-meta-3">If both are provided, uploaded file is used.</p>
+              <p className="mt-1 text-xs text-meta-3">
+                Recommended ~1440×580. If URL and file are both provided, the uploaded file is used.
+              </p>
+            </label>
+            <AdminImageUrlField
+              name="mobile_image_url"
+              label="Mobile image URL (optional)"
+              folder="irobox/homepage-hero"
+              className="sm:col-span-2"
+            />
+            <label className="sm:col-span-2">
+              <span className="text-sm font-medium">Upload mobile banner (optional)</span>
+              <input
+                name="mobile_image_file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-meta-3">
+                Recommended ~390×360. Leave empty to reuse the desktop image on mobile.
+              </p>
             </label>
             <label>
               <span className="text-sm font-medium">Title</span>

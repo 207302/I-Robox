@@ -8,18 +8,18 @@ import type { HeroSlide } from "./heroTypes";
 type Props = {
   slide: HeroSlide;
   isLcp: boolean;
-  mobileSrc: string;
 };
 
-/** Hero slide image (LCP candidate when isLcp). */
-export default function HeroSlideImage({ slide, isLcp, mobileSrc }: Props) {
+/** Hero slide image (LCP candidate when isLcp). Uses separate mobile image when set. */
+export default function HeroSlideImage({ slide, isLcp }: Props) {
   const imageUrl = slide.image_url?.trim();
   if (!imageUrl) return null;
   const {
     src: desktopSrc,
+    mobileSrc,
     loading,
     fetchPriority,
-  } = heroSlideImageProps(imageUrl, isLcp);
+  } = heroSlideImageProps(imageUrl, isLcp, slide.mobile_image_url);
 
   const img = (
     <>

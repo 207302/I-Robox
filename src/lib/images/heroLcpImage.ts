@@ -21,16 +21,23 @@ export function heroLcpPreloadHref(rawUrl: string): string | null {
   return t;
 }
 
-export function heroSlideImageProps(src: string, isLcp: boolean) {
-  const resolvedSrc = isCloudinaryDeliveryUrl(src)
-    ? cloudinaryHeroSlideUrl(src, isLcp)
-    : src;
-  const mobileSrc = isCloudinaryDeliveryUrl(src)
+function deliverHeroUrl(src: string, isLcp: boolean, variant: "desktop" | "mobile") {
+  if (!isCloudinaryDeliveryUrl(src)) return src;
+  return variant === "mobile"
     ? cloudinaryHeroMobileUrl(src, isLcp)
-    : src;
+    : cloudinaryHeroSlideUrl(src, isLcp);
+}
+
+export function heroSlideImageProps(
+  desktopSrc: string,
+  isLcp: boolean,
+  mobileSrcOverride?: string | null
+) {
+  const desktop = desktopSrc.trim();
+  const mobileRaw = mobileSrcOverride?.trim() || desktop;
   const shared = {
-    src: resolvedSrc,
-    mobileSrc,
+    src: deliverHeroUrl(desktop, isLcp, "desktop"),
+    mobileSrc: deliverHeroUrl(mobileRaw, isLcp, "mobile"),
     sizes: HERO_IMAGE_SIZES,
   };
 

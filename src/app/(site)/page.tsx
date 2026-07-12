@@ -108,6 +108,7 @@ export default async function HomePage() {
     .map((s) => ({
       id: s.id,
       image_url: s.image_url,
+      mobile_image_url: s.mobile_image_url ?? null,
       title: s.title,
       link_url: s.link_url,
     }));
@@ -224,7 +225,9 @@ export default async function HomePage() {
   return (
     <>
       <JsonLdScript id="website-jsonld" data={websiteJsonLd} />
-      <HomeHeroLcpPreload imageUrl={heroSlides[0]?.image_url} />
+      <HomeHeroLcpPreload
+        imageUrl={heroSlides[0]?.mobile_image_url || heroSlides[0]?.image_url}
+      />
       <Home
         heroSlides={heroSlides}
         heroOverlay={heroOverlay}

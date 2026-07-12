@@ -12,7 +12,6 @@ import {
 } from "react";
 import HeroSlideImage from "./HeroSlideImage";
 import type { HeroSlide } from "./heroTypes";
-import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
 import { DEFAULT_HERO_CAROUSEL_INTERVAL_MS } from "@/lib/marketing/heroCarousel";
 import { HERO_MIN_HEIGHT_CLASS } from "./heroLayout";
 
@@ -115,7 +114,6 @@ export default function HeroCarouselClient({
         >
           {slides.map((slide, index) => {
             const isActive = index === activeIndex;
-            const { mobileSrc } = heroSlideImageProps(slide.image_url, index === 0);
             return (
               <div
                 key={slide.id}
@@ -124,11 +122,7 @@ export default function HeroCarouselClient({
                 }`}
                 aria-hidden={!isActive}
               >
-                <HeroSlideImage
-                  slide={slide}
-                  isLcp={index === 0}
-                  mobileSrc={mobileSrc}
-                />
+                <HeroSlideImage slide={slide} isLcp={index === 0} />
               </div>
             );
           })}

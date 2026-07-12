@@ -97,6 +97,7 @@ async function loadHomePageRawBundle() {
         select: {
           id: true,
           image_url: true,
+          mobile_image_url: true,
           title: true,
           link_url: true,
           is_active: true,

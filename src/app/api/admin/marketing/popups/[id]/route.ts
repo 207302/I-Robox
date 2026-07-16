@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { cleanOptionalText, cleanText, isUuid, normalizeCode, readJsonBody } from "@/lib/validation/input";
+import { cleanOptionalHtml, cleanOptionalText, cleanText, isUuid, normalizeCode, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidatePopups } from "@/lib/cache/revalidate";
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       data.title = t;
     }
     if (body.body !== undefined) {
-      const b = cleanText(body.body, 4000);
+      const b = cleanOptionalHtml(body.body, 4000);
       if (!b) return NextResponse.json({ error: "body cannot be empty" }, { status: 400 });
       data.body = b;
     }

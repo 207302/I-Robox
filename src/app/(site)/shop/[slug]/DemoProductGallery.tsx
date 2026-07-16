@@ -158,7 +158,7 @@ export default function DemoProductGallery({
   return (
     <div
       ref={galleryRootRef}
-      className="flex w-full flex-row gap-3"
+      className="flex w-full flex-row gap-2 md:gap-3"
       onPointerEnter={() => {
         autoplayPausedRef.current = true;
       }}
@@ -169,7 +169,7 @@ export default function DemoProductGallery({
       {images.length > 1 ? (
         <div
           ref={thumbnailRailRef}
-          className="flex max-h-[300px] w-[72px] shrink-0 flex-col gap-2 overflow-y-auto no-scrollbar md:max-h-[420px]"
+          className="flex max-h-[300px] w-12 shrink-0 flex-col gap-1.5 overflow-y-auto no-scrollbar md:max-h-[420px] md:w-[72px] md:gap-2"
         >
           {images.map((thumbnail, index) => (
             <button
@@ -177,7 +177,7 @@ export default function DemoProductGallery({
               type="button"
               data-thumb-index={index}
               onClick={() => goTo(index)}
-              className={`relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg border bg-white object-contain transition ${
+              className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-white object-contain transition md:h-[72px] md:w-[72px] md:rounded-lg ${
                 activeIndex === index
                   ? "border-blue shadow-md"
                   : "border-gray-200 hover:border-gray-300"
@@ -188,8 +188,8 @@ export default function DemoProductGallery({
                 src={resolveProductImageSrc(thumbnail)}
                 alt={`${title} — thumbnail ${index + 1} | i-robox`}
                 fill
-                sizes="72px"
-                className="object-contain p-1.5"
+                sizes="(max-width: 767px) 48px, 72px"
+                className="object-contain p-1 md:p-1.5"
                 loading="lazy"
               />
             </button>
@@ -243,7 +243,7 @@ export default function DemoProductGallery({
                 event.stopPropagation();
                 goTo(activeIndex - 1);
               }}
-              className="absolute left-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white"
+              className="absolute left-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white md:inline-flex"
               aria-label="Previous image"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -262,7 +262,7 @@ export default function DemoProductGallery({
                 event.stopPropagation();
                 goTo(activeIndex + 1);
               }}
-              className="absolute right-2 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white"
+              className="absolute right-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-dark shadow-sm transition hover:bg-white md:inline-flex"
               aria-label="Next image"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

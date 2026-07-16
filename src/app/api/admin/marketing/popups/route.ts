@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStrict } from "@/lib/security/rateLimit";
-import { cleanOptionalText, cleanText, normalizeCode, readJsonBody } from "@/lib/validation/input";
+import { cleanOptionalHtml, cleanOptionalText, cleanText, normalizeCode, readJsonBody } from "@/lib/validation/input";
 import { parseOptionalDate } from "@/lib/admin/parseMarketingBody";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { revalidatePopups } from "@/lib/cache/revalidate";
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const body = parsed.body;
   
     const title = cleanText(body.title, 255);
-    const popupBody = cleanText(body.body, 4000);
+    const popupBody = cleanOptionalHtml(body.body, 4000);
     if (!title || !popupBody) return NextResponse.json({ error: "title and body required" }, { status: 400 });
   
     const frequency = parseFrequency(cleanText(body.frequency ?? "ONCE_PER_SESSION", 40)) ?? "ONCE_PER_SESSION";

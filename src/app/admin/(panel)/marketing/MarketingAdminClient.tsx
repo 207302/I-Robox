@@ -17,6 +17,11 @@ import {
   MAX_ABANDONED_CART_IDLE_HOURS,
   MIN_ABANDONED_CART_IDLE_HOURS,
 } from "@/lib/marketing/abandonedCart";
+import {
+  DEFAULT_REVIEW_REQUEST_DELAY_HOURS,
+  MAX_REVIEW_REQUEST_DELAY_HOURS,
+  MIN_REVIEW_REQUEST_DELAY_HOURS,
+} from "@/lib/marketing/reviewRequestSettings";
 import { heroCarouselIntervalSecondsFromMs } from "@/lib/marketing/heroCarousel";
 import ShopPopupSignupsPanel from "@/components/admin/ShopPopupSignupsPanel";
 import AdminImageUrlField from "@/components/admin/AdminImageUrlField";
@@ -35,6 +40,22 @@ type HeroSlideRow = {
   sort_order: number;
   is_active: boolean;
   created_at?: string;
+};
+
+type PopupRow = {
+  id: string;
+  title: string;
+  body: string;
+  image_url?: string | null;
+  cta_label?: string | null;
+  cta_url?: string | null;
+  delay_ms?: number;
+  auto_close_ms?: number;
+  frequency?: string;
+  audience?: string;
+  suggested_coupon_code?: string | null;
+  sort_priority?: number;
+  is_active?: boolean;
 };
 
 function sortHeroSlides(rows: HeroSlideRow[]): HeroSlideRow[] {
@@ -64,6 +85,8 @@ type SiteSettingsRow = {
   hero_carousel_interval_ms?: number | null;
   abandoned_cart_reminders_enabled?: boolean | null;
   abandoned_cart_idle_minutes?: number | null;
+  review_request_emails_enabled?: boolean | null;
+  review_request_delay_hours?: number | null;
   highlights_section_eyebrow?: string | null;
   highlights_section_heading?: string | null;
   privacy_page_title?: string | null;
@@ -116,6 +139,8 @@ type Initial = {
   settings: SiteSettingsRow | null;
   categories: { id: string; name: string; slug: string }[];
   freeShippingExcludedBrandIds: string[];
+  codAllowedBrandIds: string[];
+  codAllowedCategoryIds: string[];
   products: {
     id: string;
     name: string;
@@ -269,6 +294,15 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [freeShippingExclusionQuery, setFreeShippingExclusionQuery] = useState("");
   const deferredFreeShippingExclusionQuery = useDeferredValue(freeShippingExclusionQuery);
   const [freeShippingExclusionsSaving, setFreeShippingExclusionsSaving] = useState(false);
+  const [codAllowedBrandIds, setCodAllowedBrandIds] = useState<string[]>(initial.codAllowedBrandIds ?? []);
+  const [codAllowedCategoryIds, setCodAllowedCategoryIds] = useState<string[]>(
+    initial.codAllowedCategoryIds ?? []
+  );
+  const [codBrandQuery, setCodBrandQuery] = useState("");
+  const deferredCodBrandQuery = useDeferredValue(codBrandQuery);
+  const [codCategoryQuery, setCodCategoryQuery] = useState("");
+  const deferredCodCategoryQuery = useDeferredValue(codCategoryQuery);
+  const [codSettingsSaving, setCodSettingsSaving] = useState(false);
   const [abandonedCartEnabled, setAbandonedCartEnabled] = useState(
     initial.settings?.abandoned_cart_reminders_enabled ?? true
   );
@@ -279,6 +313,14 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   );
   const [abandonedCartSaving, setAbandonedCartSaving] = useState(false);
   const [abandonedCartRunning, setAbandonedCartRunning] = useState(false);
+  const [reviewRequestEnabled, setReviewRequestEnabled] = useState(
+    initial.settings?.review_request_emails_enabled ?? true
+  );
+  const [reviewRequestDelayHours, setReviewRequestDelayHours] = useState(
+    initial.settings?.review_request_delay_hours ?? DEFAULT_REVIEW_REQUEST_DELAY_HOURS
+  );
+  const [reviewRequestSaving, setReviewRequestSaving] = useState(false);
+  const [reviewRequestRunning, setReviewRequestRunning] = useState(false);
   const st0 = initial.settings;
   const [helpSupportTitle, setHelpSupportTitle] = useState(st0?.help_support_title ?? "");
   const [contactAddress, setContactAddress] = useState(st0?.contact_address ?? "");
@@ -386,6 +428,21 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [brandRailUploading, setBrandRailUploading] = useState(false);
   const [categoryGridUploading, setCategoryGridUploading] = useState(false);
   const [popupUploading, setPopupUploading] = useState(false);
+  const [popupCreateBody, setPopupCreateBody] = useState("");
+  const [popupEditingId, setPopupEditingId] = useState<string | null>(null);
+  const [popupEditSaving, setPopupEditSaving] = useState(false);
+  const [popupEditTitle, setPopupEditTitle] = useState("");
+  const [popupEditBody, setPopupEditBody] = useState("");
+  const [popupEditImageUrl, setPopupEditImageUrl] = useState("");
+  const [popupEditCtaLabel, setPopupEditCtaLabel] = useState("");
+  const [popupEditCtaUrl, setPopupEditCtaUrl] = useState("");
+  const [popupEditDelayMs, setPopupEditDelayMs] = useState(0);
+  const [popupEditAutoCloseSeconds, setPopupEditAutoCloseSeconds] = useState(0);
+  const [popupEditSortPriority, setPopupEditSortPriority] = useState(0);
+  const [popupEditFrequency, setPopupEditFrequency] = useState("ONCE_PER_SESSION");
+  const [popupEditAudience, setPopupEditAudience] = useState("ALL");
+  const [popupEditCoupon, setPopupEditCoupon] = useState("");
+  const [popupEditActive, setPopupEditActive] = useState(true);
 
   const cats = initial.categories;
   const prods = initial.products;
@@ -403,6 +460,28 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     for (const b of filtered) merged.set(b.id, b);
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [brands, deferredFreeShippingExclusionQuery, freeShippingExcludedBrandIds]);
+  const visibleCodBrands = useMemo(() => {
+    const q = deferredCodBrandQuery.trim().toLowerCase();
+    const selected = brands.filter((b) => codAllowedBrandIds.includes(b.id));
+    const filtered = q
+      ? brands.filter((b) => b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q))
+      : brands;
+    const merged = new Map<string, (typeof brands)[number]>();
+    for (const b of selected) merged.set(b.id, b);
+    for (const b of filtered) merged.set(b.id, b);
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [brands, codAllowedBrandIds, deferredCodBrandQuery]);
+  const visibleCodCategories = useMemo(() => {
+    const q = deferredCodCategoryQuery.trim().toLowerCase();
+    const selected = cats.filter((c) => codAllowedCategoryIds.includes(c.id));
+    const filtered = q
+      ? cats.filter((c) => c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q))
+      : cats;
+    const merged = new Map<string, (typeof cats)[number]>();
+    for (const c of selected) merged.set(c.id, c);
+    for (const c of filtered) merged.set(c.id, c);
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [cats, codAllowedCategoryIds, deferredCodCategoryQuery]);
   const coupons = deferredCoupons;
   const quickLinkFieldMap: Record<
     QuickLinkPageAdminKey,
@@ -534,6 +613,27 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   function cancelHeroEdit() {
     setHeroEditingId(null);
   }
+
+  function startPopupEdit(row: PopupRow) {
+    setPopupEditingId(row.id);
+    setPopupEditTitle(row.title ?? "");
+    setPopupEditBody(row.body ?? "");
+    setPopupEditImageUrl(row.image_url ?? "");
+    setPopupEditCtaLabel(row.cta_label ?? "");
+    setPopupEditCtaUrl(row.cta_url ?? "");
+    setPopupEditDelayMs(Number(row.delay_ms ?? 0));
+    setPopupEditAutoCloseSeconds(Number(row.auto_close_ms ?? 0) / 1000);
+    setPopupEditSortPriority(Number(row.sort_priority ?? 0));
+    setPopupEditFrequency(row.frequency ?? "ONCE_PER_SESSION");
+    setPopupEditAudience(row.audience ?? "ALL");
+    setPopupEditCoupon(row.suggested_coupon_code ?? "");
+    setPopupEditActive(Boolean(row.is_active));
+  }
+
+  function cancelPopupEdit() {
+    setPopupEditingId(null);
+  }
+
   async function refreshHighlights() {
     const r = await fetch("/api/admin/marketing/highlights", { cache: "no-store" });
     setHighlights(await r.json());
@@ -2156,31 +2256,265 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           <h2 className="text-lg font-semibold">Popup campaigns</h2>
           {marketingSelectAllBar("popup")}
           <ul className="divide-y divide-gray-3 text-sm">
-            {popups.map((row: any) => (
-              <li key={row.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="flex items-center gap-2 min-w-0">
-                  {marketingRowCheckbox(row.id, row.title)}
-                  <span className="truncate">
-                  {row.title}
-                  <span className="ml-2 text-xs text-meta-3">
-                    {Number(row.auto_close_ms ?? 0) > 0
-                      ? `auto-close ${(Number(row.auto_close_ms) / 1000).toFixed(1)}s`
-                      : "no auto-close"}
-                  </span>
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className="text-red-600 text-sm"
-                  onClick={async () => {
-                    if (!confirm("Delete?")) return;
-                    await j(await fetch(`/api/admin/marketing/popups/${row.id}`, { method: "DELETE" }));
-                    toast.success("Deleted");
-                    void refreshPopups();
-                  }}
-                >
-                  Delete
-                </button>
+            {(popups as PopupRow[]).map((row) => (
+              <li key={row.id} className="py-3">
+                {popupEditingId === row.id ? (
+                  <form
+                    className="grid gap-3 sm:grid-cols-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const formEl = e.currentTarget;
+                      const fd = new FormData(formEl);
+                      try {
+                        setPopupEditSaving(true);
+                        if (!popupEditBody.trim()) {
+                          toast.error("Body is required");
+                          return;
+                        }
+                        let imageUrl = String(fd.get("image_url") ?? popupEditImageUrl).trim();
+                        const popupFile = fd.get("image_file");
+                        if (popupFile instanceof File && popupFile.size > 0) {
+                          setPopupUploading(true);
+                          const uploadFd = new FormData();
+                          uploadFd.append("file", popupFile);
+                          const uploadRes = await j<{ url: string }>(
+                            await fetch("/api/admin/marketing/popups/upload", {
+                              method: "POST",
+                              body: uploadFd,
+                            })
+                          );
+                          imageUrl = uploadRes.url;
+                        }
+                        await j(
+                          await fetch(`/api/admin/marketing/popups/${row.id}`, {
+                            method: "PATCH",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({
+                              title: popupEditTitle,
+                              body: popupEditBody,
+                              image_url: imageUrl || null,
+                              cta_label: popupEditCtaLabel || null,
+                              cta_url: popupEditCtaUrl || null,
+                              delay_ms: Number(popupEditDelayMs || 0),
+                              auto_close_ms: Math.max(0, Number(popupEditAutoCloseSeconds || 0) * 1000),
+                              frequency: popupEditFrequency,
+                              audience: popupEditAudience,
+                              suggested_coupon_code: popupEditCoupon || null,
+                              sort_priority: Number(popupEditSortPriority || 0),
+                              is_active: popupEditActive,
+                            }),
+                          })
+                        );
+                        toast.success("Popup updated");
+                        setPopupEditingId(null);
+                        void refreshPopups();
+                      } catch (err: unknown) {
+                        toast.error(err instanceof Error ? err.message : "Failed");
+                      } finally {
+                        setPopupEditSaving(false);
+                        setPopupUploading(false);
+                      }
+                    }}
+                  >
+                    <p className="sm:col-span-2 text-sm font-medium text-dark">Editing popup</p>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Title</span>
+                      <input
+                        name="title"
+                        required
+                        value={popupEditTitle}
+                        onChange={(e) => setPopupEditTitle(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <div className="sm:col-span-2">
+                      <span className="text-sm font-medium">Body</span>
+                      <QuickLinkHtmlEditor
+                        editorKey={`popup-edit-${row.id}`}
+                        height={220}
+                        value={popupEditBody}
+                        onChange={setPopupEditBody}
+                      />
+                    </div>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Image URL</span>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <input
+                          name="image_url"
+                          value={popupEditImageUrl}
+                          onChange={(e) => setPopupEditImageUrl(e.target.value)}
+                          className="min-w-0 flex-1 rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                        />
+                        <PickFromCloudinaryButton
+                          folder="irobox/marketing-popups"
+                          multiple={false}
+                          label="Pick image"
+                          onSelect={(urls) => {
+                            if (urls[0]) setPopupEditImageUrl(urls[0]);
+                          }}
+                        />
+                      </div>
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Replace image (optional)</span>
+                      <input
+                        name="image_file"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">CTA label</span>
+                      <input
+                        name="cta_label"
+                        value={popupEditCtaLabel}
+                        onChange={(e) => setPopupEditCtaLabel(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">CTA URL</span>
+                      <input
+                        name="cta_url"
+                        value={popupEditCtaUrl}
+                        onChange={(e) => setPopupEditCtaUrl(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Delay (ms)</span>
+                      <input
+                        name="delay_ms"
+                        type="number"
+                        value={popupEditDelayMs}
+                        onChange={(e) => setPopupEditDelayMs(Number(e.target.value))}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Auto close after (seconds)</span>
+                      <input
+                        name="auto_close_seconds"
+                        type="number"
+                        min={0}
+                        step="0.5"
+                        value={popupEditAutoCloseSeconds}
+                        onChange={(e) => setPopupEditAutoCloseSeconds(Number(e.target.value))}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Sort priority</span>
+                      <input
+                        name="sort_priority"
+                        type="number"
+                        value={popupEditSortPriority}
+                        onChange={(e) => setPopupEditSortPriority(Number(e.target.value))}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Frequency</span>
+                      <select
+                        name="frequency"
+                        value={popupEditFrequency}
+                        onChange={(e) => setPopupEditFrequency(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      >
+                        <option value="ONCE_PER_SESSION">ONCE_PER_SESSION</option>
+                        <option value="ONCE_PER_DEVICE">ONCE_PER_DEVICE</option>
+                        <option value="EVERY_VISIT">EVERY_VISIT</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span className="text-sm font-medium">Audience</span>
+                      <select
+                        name="audience"
+                        value={popupEditAudience}
+                        onChange={(e) => setPopupEditAudience(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      >
+                        <option value="ALL">ALL</option>
+                        <option value="GUESTS_ONLY">GUESTS_ONLY</option>
+                        <option value="LOGGED_IN_ONLY">LOGGED_IN_ONLY</option>
+                      </select>
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="text-sm font-medium">Suggested coupon code</span>
+                      <input
+                        name="suggested_coupon_code"
+                        value={popupEditCoupon}
+                        onChange={(e) => setPopupEditCoupon(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm mt-6">
+                      <input
+                        name="is_active"
+                        type="checkbox"
+                        checked={popupEditActive}
+                        onChange={(e) => setPopupEditActive(e.target.checked)}
+                      />
+                      Active
+                    </label>
+                    <div className="sm:col-span-2 flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        disabled={popupEditSaving || popupUploading}
+                        className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                      >
+                        {popupEditSaving || popupUploading ? "Saving…" : "Save changes"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-gray-3 px-4 py-2 text-sm"
+                        onClick={cancelPopupEdit}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {marketingRowCheckbox(row.id, row.title)}
+                      <span className="truncate">
+                        {row.title}
+                        <span className="ml-2 text-xs text-meta-3">
+                          {Number(row.auto_close_ms ?? 0) > 0
+                            ? `auto-close ${(Number(row.auto_close_ms) / 1000).toFixed(1)}s`
+                            : "no auto-close"}
+                          {row.is_active === false ? " · inactive" : ""}
+                        </span>
+                      </span>
+                    </span>
+                    <div className="flex shrink-0 gap-3">
+                      <button
+                        type="button"
+                        className="text-sm text-blue"
+                        onClick={() => startPopupEdit(row)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="text-sm text-red-600"
+                        onClick={async () => {
+                          if (!confirm("Delete?")) return;
+                          await j(
+                            await fetch(`/api/admin/marketing/popups/${row.id}`, { method: "DELETE" })
+                          );
+                          toast.success("Deleted");
+                          if (popupEditingId === row.id) setPopupEditingId(null);
+                          void refreshPopups();
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -2191,6 +2525,10 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               const formEl = e.currentTarget;
               const fd = new FormData(formEl);
               try {
+                if (!popupCreateBody.trim()) {
+                  toast.error("Body is required");
+                  return;
+                }
                 let imageUrl = String(fd.get("image_url") ?? "").trim();
                 const popupFile = fd.get("image_file");
                 if (popupFile instanceof File && popupFile.size > 0) {
@@ -2211,7 +2549,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({
                       title: fd.get("title"),
-                      body: fd.get("body"),
+                      body: popupCreateBody,
                       image_url: imageUrl || null,
                       cta_label: fd.get("cta_label") || null,
                       cta_url: fd.get("cta_url") || null,
@@ -2227,6 +2565,7 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
                 );
                 toast.success("Created");
                 formEl.reset();
+                setPopupCreateBody("");
                 void refreshPopups();
               } catch (err: any) {
                 toast.error(err?.message || "Failed");
@@ -2239,10 +2578,15 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               <span className="text-sm font-medium">Title</span>
               <input name="title" required className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
             </label>
-            <label className="sm:col-span-2">
+            <div className="sm:col-span-2">
               <span className="text-sm font-medium">Body</span>
-              <textarea name="body" required rows={3} className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm" />
-            </label>
+              <QuickLinkHtmlEditor
+                editorKey="popup-create"
+                height={220}
+                value={popupCreateBody}
+                onChange={setPopupCreateBody}
+              />
+            </div>
             <AdminImageUrlField
               name="image_url"
               label="Image URL (optional if uploading)"
@@ -2552,6 +2896,120 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
           </section>
 
           <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
+            <h2 className="text-lg font-semibold">Review request emails</h2>
+            <p className="text-sm text-meta-3">
+              After an order is marked delivered, email the customer asking for a product review.
+              Wait the configured hours before sending (0 = send immediately on delivery). Automatic
+              runs every ~30 minutes while the site is live.
+            </p>
+            <p className="text-sm text-meta-3">
+              <strong>Send review requests now</strong> only emails delivered orders that still have
+              items without a review — customers who already reviewed everything are skipped.
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={reviewRequestEnabled}
+                onChange={(e) => setReviewRequestEnabled(e.target.checked)}
+              />
+              <span>Send review request emails after delivery</span>
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium">Hours after delivery before email</span>
+              <input
+                type="number"
+                min={MIN_REVIEW_REQUEST_DELAY_HOURS}
+                max={MAX_REVIEW_REQUEST_DELAY_HOURS}
+                step={1}
+                value={reviewRequestDelayHours}
+                disabled={!reviewRequestEnabled}
+                onChange={(e) => setReviewRequestDelayHours(Number(e.target.value))}
+                className="mt-1 w-full max-w-xs rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm disabled:opacity-60"
+              />
+              <span className="mt-1 block text-xs text-meta-3">
+                Range: {MIN_REVIEW_REQUEST_DELAY_HOURS}–{MAX_REVIEW_REQUEST_DELAY_HOURS} hours
+                (default {DEFAULT_REVIEW_REQUEST_DELAY_HOURS}).
+              </span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={reviewRequestSaving}
+                className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    setReviewRequestSaving(true);
+                    const row = await j<SiteSettingsRow>(
+                      await fetch("/api/admin/marketing/settings", {
+                        method: "PATCH",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                          review_request_emails_enabled: reviewRequestEnabled,
+                          review_request_delay_hours: reviewRequestDelayHours,
+                        }),
+                      })
+                    );
+                    setReviewRequestEnabled(row.review_request_emails_enabled ?? true);
+                    setReviewRequestDelayHours(
+                      row.review_request_delay_hours ?? DEFAULT_REVIEW_REQUEST_DELAY_HOURS
+                    );
+                    toast.success("Review request settings saved");
+                    router.refresh();
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : "Failed");
+                  } finally {
+                    setReviewRequestSaving(false);
+                  }
+                }}
+              >
+                {reviewRequestSaving ? "Saving…" : "Save review request settings"}
+              </button>
+              <button
+                type="button"
+                disabled={reviewRequestRunning || !reviewRequestEnabled}
+                className="rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-dark disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    setReviewRequestRunning(true);
+                    const result = await j<{
+                      ok: boolean;
+                      skipped?: boolean;
+                      reason?: string;
+                      scanned?: number;
+                      sent?: number;
+                      failed?: number;
+                      skippedAlreadyReviewed?: number;
+                    }>(
+                      await fetch("/api/admin/marketing/review-requests/run", { method: "POST" })
+                    );
+                    if (result.skipped) {
+                      const msg =
+                        result.reason === "smtp_not_configured"
+                          ? "SMTP not configured — set EMAIL_SERVER_* on the server."
+                          : "Review request emails are disabled.";
+                      toast.error(msg);
+                      return;
+                    }
+                    const failed = result.failed ?? 0;
+                    const reviewed = result.skippedAlreadyReviewed ?? 0;
+                    toast.success(
+                      `Done — scanned ${result.scanned ?? 0}, sent ${result.sent ?? 0}` +
+                        (failed > 0 ? `, failed ${failed}` : "") +
+                        (reviewed > 0 ? `, already reviewed ${reviewed}` : "")
+                    );
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : "Run failed");
+                  } finally {
+                    setReviewRequestRunning(false);
+                  }
+                }}
+              >
+                {reviewRequestRunning ? "Sending…" : "Send review requests now"}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
             <h2 className="text-lg font-semibold">Free shipping exclusions</h2>
             <p className="text-sm text-meta-3">
               Selected brands are excluded from the free-shipping cart value and always charged
@@ -2625,6 +3083,125 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               }}
             >
               {freeShippingExclusionsSaving ? "Saving…" : "Save exclusions"}
+            </button>
+          </section>
+
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-3xl">
+            <h2 className="text-lg font-semibold">Cash on Delivery allow list</h2>
+            <p className="text-sm text-meta-3">
+              COD is available only when every cart item matches at least one selected brand or
+              category. Leave both lists empty to disable COD entirely.
+            </p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-dark">Allowed brands</label>
+                  <input
+                    type="search"
+                    value={codBrandQuery}
+                    onChange={(e) => setCodBrandQuery(e.target.value)}
+                    placeholder="Search brands…"
+                    className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                  />
+                </div>
+                {codAllowedBrandIds.length > 0 ? (
+                  <p className="text-xs text-meta-3">{codAllowedBrandIds.length} brand(s) selected</p>
+                ) : null}
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
+                  {visibleCodBrands.length === 0 ? (
+                    <p className="text-sm text-meta-3">No brands match your search.</p>
+                  ) : (
+                    visibleCodBrands.map((b) => (
+                      <label key={b.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={codAllowedBrandIds.includes(b.id)}
+                          onChange={() =>
+                            setCodAllowedBrandIds((prev) =>
+                              prev.includes(b.id) ? prev.filter((id) => id !== b.id) : [...prev, b.id]
+                            )
+                          }
+                        />
+                        {b.name}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-dark">Allowed categories</label>
+                  <input
+                    type="search"
+                    value={codCategoryQuery}
+                    onChange={(e) => setCodCategoryQuery(e.target.value)}
+                    placeholder="Search categories…"
+                    className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                  />
+                </div>
+                {codAllowedCategoryIds.length > 0 ? (
+                  <p className="text-xs text-meta-3">
+                    {codAllowedCategoryIds.length} category(s) selected
+                  </p>
+                ) : null}
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
+                  {visibleCodCategories.length === 0 ? (
+                    <p className="text-sm text-meta-3">No categories match your search.</p>
+                  ) : (
+                    visibleCodCategories.map((c) => (
+                      <label key={c.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={codAllowedCategoryIds.includes(c.id)}
+                          onChange={() =>
+                            setCodAllowedCategoryIds((prev) =>
+                              prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+                            )
+                          }
+                        />
+                        {c.name}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={codSettingsSaving}
+              className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setCodSettingsSaving(true);
+                  const row = await j<{
+                    cod_allowed_brand_ids?: string[];
+                    cod_allowed_category_ids?: string[];
+                  }>(
+                    await fetch("/api/admin/marketing/settings", {
+                      method: "PATCH",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        cod_allowed_brand_ids: codAllowedBrandIds,
+                        cod_allowed_category_ids: codAllowedCategoryIds,
+                      }),
+                    })
+                  );
+                  setCodAllowedBrandIds(
+                    Array.isArray(row.cod_allowed_brand_ids) ? row.cod_allowed_brand_ids : []
+                  );
+                  setCodAllowedCategoryIds(
+                    Array.isArray(row.cod_allowed_category_ids) ? row.cod_allowed_category_ids : []
+                  );
+                  toast.success("COD allow list saved");
+                  router.refresh();
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : "Failed");
+                } finally {
+                  setCodSettingsSaving(false);
+                }
+              }}
+            >
+              {codSettingsSaving ? "Saving…" : "Save COD settings"}
             </button>
           </section>
 

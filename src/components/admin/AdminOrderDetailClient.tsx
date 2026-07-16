@@ -182,6 +182,7 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   const [syncingShipment, setSyncingShipment] = useState(false);
   const [pushingShipmozo, setPushingShipmozo] = useState(false);
   const [refreshingShipmozo, setRefreshingShipmozo] = useState(false);
+  const [sendingReviewEmail, setSendingReviewEmail] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("PENDING");
 
   function resolveStatusSelection(order: { status?: string; paymentStatus?: string }): string {
@@ -548,6 +549,37 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
             customer. Other options update fulfilment status only.
           </p>
         </label>
+        {data.status === "DELIVERED" ? (
+          <button
+            type="button"
+            disabled={sendingReviewEmail || saving || deleting}
+            onClick={async () => {
+              setSendingReviewEmail(true);
+              try {
+                const res = await fetchAdminWithRetry(`/api/admin/orders/${id}/review-request`, {
+                  method: "POST",
+                  credentials: "include",
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  throw new Error(
+                    (json as { error?: string }).error || "Could not send review email"
+                  );
+                }
+                toast.success(
+                  `Review request sent${(json as { sentTo?: string }).sentTo ? ` to ${(json as { sentTo: string }).sentTo}` : ""}`
+                );
+              } catch (err: unknown) {
+                toast.error(err instanceof Error ? err.message : "Could not send review email");
+              } finally {
+                setSendingReviewEmail(false);
+              }
+            }}
+            className="rounded-lg border border-gray-3 bg-white px-4 py-2 text-sm font-medium text-dark hover:bg-gray-1 transition disabled:opacity-60"
+          >
+            {sendingReviewEmail ? "Sending…" : "Send review request email"}
+          </button>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4">

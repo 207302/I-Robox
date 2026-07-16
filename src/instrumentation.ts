@@ -85,6 +85,13 @@ export async function register() {
   }
 
   try {
+    const { startReviewRequestScheduler } = await import("./lib/cron/reviewRequestScheduler");
+    startReviewRequestScheduler();
+  } catch (err) {
+    console.warn("[instrumentation] Review request scheduler skipped:", err);
+  }
+
+  try {
     const { startShipmozoTrackingScheduler } = await import("./lib/cron/shipmozoTrackingScheduler");
     startShipmozoTrackingScheduler();
     const { shipmozoConfigDiagnostics } = await import("./lib/shipping/shipmozo");
@@ -103,6 +110,12 @@ export async function register() {
     try {
       const { stopAbandonedCartScheduler } = await import("./lib/cron/abandonedCartScheduler");
       stopAbandonedCartScheduler();
+    } catch {
+      /* shutting down */
+    }
+    try {
+      const { stopReviewRequestScheduler } = await import("./lib/cron/reviewRequestScheduler");
+      stopReviewRequestScheduler();
     } catch {
       /* shutting down */
     }

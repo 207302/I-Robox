@@ -36,6 +36,8 @@ export type PostOrderFulfillmentInput = {
     customerId: string | null;
     ipAddress: string | null;
     userAgent: string | null;
+    action?: string;
+    newValues?: Record<string, unknown>;
   };
 };
 
@@ -94,8 +96,9 @@ export async function runPostOrderFulfillment(input: PostOrderFulfillmentInput) 
         customerId: audit.customerId,
         entityType: "ORDER",
         entityId: orderId,
-        action: "PAYMENT_CONFIRMED",
-        newValues: { payment_status: "SUCCEEDED", status: "PENDING", paymentProvider: "razorpay" },
+        action: audit.action ?? "PAYMENT_CONFIRMED",
+        newValues:
+          audit.newValues ?? { payment_status: "SUCCEEDED", status: "PENDING", paymentProvider: "razorpay" },
         ipAddress: audit.ipAddress,
         userAgent: audit.userAgent,
       });

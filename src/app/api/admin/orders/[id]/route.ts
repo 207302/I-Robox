@@ -29,6 +29,9 @@ import {
 } from "@/lib/email/refundConfirmationEmail";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { compactOrderId, formatOrderReference } from "@/lib/orders/orderNumber";
+import { confirmReservedInventoryAsSold } from "@/lib/orders/createFailedOrderFromCheckoutContext";
+import { buildCheckoutContextFromOrder } from "@/lib/orders/buildCheckoutContextFromOrder";
+import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import {
   applyShipmozoWebhookUpdate,
@@ -42,6 +45,7 @@ import { isShipmozoTrackingStatus } from "@/lib/shipping/shipmozoTrackingConstan
 function formatPaymentMethod(provider: string | null, paymentStatus: string): string {
   const p = (provider ?? "").trim().toLowerCase();
   if (p.includes("razorpay")) return "Razorpay";
+  if (p === "cod") return "Cash on Delivery";
   if (p === "placeholder") {
     return paymentStatus === "SUCCEEDED" ? "Online payment" : "Payment pending";
   }
@@ -245,6 +249,9 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         order_number: true,
         status: true,
         payment_status: true,
+        payment_provider: true,
+        coupon_id: true,
+        customer_id: true,
         refund_transaction_id: true,
         refunded_amount: true,
         customers: { select: { email: true } },
@@ -351,7 +358,64 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         }
       }
     } else {
-      await prisma.orders.update({ where: { id }, data: { status: status as any } });
+      const isManualCodConfirm =
+        status === "CONFIRMED" &&
+        prevStatus !== "CONFIRMED" &&
+        String(before.payment_provider ?? "").toLowerCase() === "cod";
+
+      if (isManualCodConfirm) {
+        skipShipmentNotify = true;
+        const orderCtx = await buildCheckoutContextFromOrder(id);
+        if (!orderCtx) {
+          return NextResponse.json({ error: "Order details are incomplete" }, { status: 400 });
+        }
+
+        await prisma.$transaction(async (tx) => {
+          await confirmReservedInventoryAsSold(id, tx);
+          await tx.orders.update({ where: { id }, data: { status: "CONFIRMED" } });
+          if (before.coupon_id) {
+            const usageCount = await tx.coupon_usages.count({
+              where: { order_id: id, coupon_id: before.coupon_id },
+            });
+            if (usageCount === 0) {
+              await tx.coupon_usages.create({
+                data: {
+                  coupon_id: before.coupon_id,
+                  customer_id: before.customer_id ?? null,
+                  order_id: id,
+                },
+              });
+            }
+          }
+        }, PRISMA_TRANSACTION_OPTIONS);
+
+        after(async () => {
+          try {
+            await runPostOrderFulfillment({
+              orderId: id,
+              productIds: orderCtx.lineItems.map((li) => li.productId),
+              checkoutFormEmail: orderCtx.address.email,
+              accountEmail: orderCtx.accountEmail,
+              newAccountPasswordSetup: orderCtx.newAccountPasswordSetup,
+              audit: {
+                customerId: before.customer_id ?? null,
+                ipAddress: req.ip ?? null,
+                userAgent: req.headers.get("user-agent"),
+                action: "ORDER_CONFIRMED_COD",
+                newValues: {
+                  payment_status: "PENDING",
+                  status: "CONFIRMED",
+                  paymentProvider: "cod",
+                },
+              },
+            });
+          } catch (err) {
+            console.error("[admin orders PUT] COD fulfillment failed", err);
+          }
+        });
+      } else {
+        await prisma.orders.update({ where: { id }, data: { status: status as any } });
+      }
       nextOrderStatusForNotify = status;
     }
 

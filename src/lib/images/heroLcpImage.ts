@@ -9,7 +9,7 @@ export { isCloudinaryDeliveryUrl };
 
 /** Default sizes hint — per-breakpoint sizes are set on each hero Image in HeroSlideImage. */
 export const HERO_IMAGE_SIZES =
-  "(max-width: 1023px) 100vw, 1440px";
+  "(max-width: 767px) 100vw, 1440px";
 
 /** Preload href for shop/LCP helpers — ceiling URL; next/image handles responsive widths. */
 export function heroLcpPreloadHref(rawUrl: string): string | null {

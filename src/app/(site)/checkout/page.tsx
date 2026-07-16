@@ -57,6 +57,9 @@ export default function CheckoutPage() {
   const [signedInLabel, setSignedInLabel] = useState<string | null>(null);
   const [freeShippingThresholdInr, setFreeShippingThresholdInr] = useState<number | null>(2000);
   const [freeShippingExcludedBrandIds, setFreeShippingExcludedBrandIds] = useState<string[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "COD">("RAZORPAY");
+  const [codAvailable, setCodAvailable] = useState(false);
+  const [codReason, setCodReason] = useState<string | null>(null);
   const [deliveryCharge, setDeliveryCharge] = useState(0);
   const [shippingPreviewLoading, setShippingPreviewLoading] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddressRecord[]>([]);
@@ -107,6 +110,8 @@ export default function CheckoutPage() {
           if (Array.isArray(data.freeShippingExcludedBrandIds)) {
             setFreeShippingExcludedBrandIds(data.freeShippingExcludedBrandIds);
           }
+          setCodAvailable(Boolean(data.codAvailable));
+          setCodReason(typeof data.codReason === "string" ? data.codReason : null);
           return;
         }
 
@@ -124,7 +129,11 @@ export default function CheckoutPage() {
           })
         );
       } catch {
-        if (!cancelled) setDeliveryCharge(0);
+        if (!cancelled) {
+          setDeliveryCharge(0);
+          setCodAvailable(false);
+          setCodReason(null);
+        }
       } finally {
         if (!cancelled) setShippingPreviewLoading(false);
       }
@@ -136,6 +145,11 @@ export default function CheckoutPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- preview API is source of truth; fallback reads latest marketing state once per cart change
   }, [items, checkoutItems, previewSubtotal]);
+  useEffect(() => {
+    if (paymentMethod === "COD" && !codAvailable) {
+      setPaymentMethod("RAZORPAY");
+    }
+  }, [codAvailable, paymentMethod]);
   const previewDiscount = couponBreakdown?.discount ?? 0;
   const previewTotal = Math.max(0, previewSubtotal - previewDiscount) + deliveryCharge;
 
@@ -361,6 +375,27 @@ export default function CheckoutPage() {
         isGift,
         giftMessage: giftMessage.trim() || undefined,
       };
+
+      if (paymentMethod === "COD") {
+        if (!codAvailable) {
+          throw new Error(codReason || "Cash on Delivery is not available for these items");
+        }
+        const codRes = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...payload, paymentMethod: "COD" }),
+        });
+        const codData = await codRes.json().catch(() => ({}));
+        if (!codRes.ok) throw new Error(codData?.error || "Could not place COD order");
+        clearCart();
+        const tokenQuery =
+          typeof codData?.accessToken === "string" && codData.accessToken
+            ? `?access=${encodeURIComponent(codData.accessToken)}`
+            : "";
+        toast.success("COD order placed. It will be confirmed manually.");
+        router.replace(`/orders/${codData.orderId}${tokenQuery}`);
+        return;
+      }
 
       const ready = await ensureRazorpayScript();
       if (!ready || !window.Razorpay) throw new Error("Razorpay checkout is unavailable");
@@ -753,15 +788,70 @@ export default function CheckoutPage() {
               </button>
             </div>
 
+            <div className="mt-6 space-y-3">
+              <div>
+                <span className="mb-2 block text-sm font-medium text-dark">Payment method</span>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 rounded-lg border border-gray-3 bg-white px-3 py-3 text-sm">
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="RAZORPAY"
+                      checked={paymentMethod === "RAZORPAY"}
+                      onChange={() => setPaymentMethod("RAZORPAY")}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block font-medium text-dark">Pay online</span>
+                      <span className="block text-xs text-meta-3">Pay securely with Razorpay.</span>
+                    </span>
+                  </label>
+                  <label
+                    className={`flex items-start gap-3 rounded-lg border px-3 py-3 text-sm ${
+                      codAvailable
+                        ? "border-gray-3 bg-white"
+                        : "border-gray-3 bg-gray-1 text-meta-3 opacity-70"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="COD"
+                      checked={paymentMethod === "COD"}
+                      onChange={() => setPaymentMethod("COD")}
+                      disabled={!codAvailable}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block font-medium text-dark">Cash on Delivery</span>
+                      <span className="block text-xs text-meta-3">
+                        {codAvailable
+                          ? "Available for the current cart."
+                          : codReason || "Not available for the current cart."}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <button
               disabled={loading || stockCheckLoading || hasStockBlocker || !items.length}
               onClick={handlePlaceOrder}
               className="mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
             >
-              {loading ? "Starting payment…" : "Pay now"}
+              {loading
+                ? paymentMethod === "COD"
+                  ? "Placing order…"
+                  : "Starting payment…"
+                : paymentMethod === "COD"
+                  ? "Place COD order"
+                  : "Pay now"}
             </button>
             <p className="mt-3 text-xs text-meta-4">
-              You will be redirected to Razorpay to complete payment securely.
+              {paymentMethod === "COD"
+                ? "COD orders stay pending until an admin confirms them manually."
+                : "You will be redirected to Razorpay to complete payment securely."}
             </p>
           </aside>
         </div>

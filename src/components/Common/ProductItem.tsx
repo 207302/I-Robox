@@ -194,23 +194,24 @@ function ProductItemInner({
             unoptimized={isCloudinaryDeliveryUrl(cardImageDelivery.src)}
           />
         </Link>
-        <div className="pointer-events-none absolute right-2 top-2 z-10 flex h-[26px] w-[4.5rem] shrink-0 items-center justify-end">
+        <div className="pointer-events-none absolute right-1.5 top-1.5 z-10 flex h-[20px] w-[3.5rem] shrink-0 items-center justify-end sm:right-2 sm:top-2 sm:h-[26px] sm:w-[4.5rem]">
           {item.quantity < 1 ? (
-            <span className="pointer-events-auto rounded-full bg-amber-600 px-2 py-1 text-xs font-medium text-white">
+            <span className="pointer-events-auto rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white sm:px-2 sm:py-1 sm:text-xs sm:leading-normal">
               Out of Stock
             </span>
           ) : item?.discountedPrice && item?.discountedPrice > 0 ? (
-            <span className="pointer-events-auto rounded-full bg-blue px-2 py-1 text-xs font-medium text-white tabular-nums">
+            <span className="pointer-events-auto rounded-full bg-blue px-1.5 py-0.5 text-[10px] font-medium leading-none text-white tabular-nums sm:px-2 sm:py-1 sm:text-xs sm:leading-normal">
               {calculateDiscountPercentage(item.discountedPrice, item.price)}%
               OFF
             </span>
           ) : (
-            <span className="h-[26px] w-px shrink-0 opacity-0" aria-hidden />
+            <span className="h-[20px] w-px shrink-0 opacity-0 sm:h-[26px]" aria-hidden />
           )}
         </div>
 
         <div className="product-item-card-actions absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full flex items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0">
-          <Tooltip content="Quick View" placement="top">
+          <div className="hidden lg:block">
+            <Tooltip content="Quick View" placement="top">
             <button
               type="button"
               className="border border-gray-3 h-[38px] w-[38px] rounded-lg flex items-center justify-center text-dark bg-white hover:text-blue active:scale-95"
@@ -219,7 +220,8 @@ function ProductItemInner({
             >
               <EyeIcon />
             </button>
-          </Tooltip>
+            </Tooltip>
+          </div>
 
           {hasVariants ? (
             <Link
@@ -266,10 +268,12 @@ function ProductItemInner({
             </button>
           )}
           {/* wishlist button */}
-          <WishlistButton
-            item={item}
-            handleItemToWishList={handleItemToWishList}
-          />
+          <div className="hidden lg:block">
+            <WishlistButton
+              item={item}
+              handleItemToWishList={handleItemToWishList}
+            />
+          </div>
         </div>
       </div>
 

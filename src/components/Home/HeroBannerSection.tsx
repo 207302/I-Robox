@@ -2,6 +2,7 @@ import HeroBannerLcp from "./HeroBannerLcp";
 import HeroBannerMulti from "./HeroBannerMulti";
 import type { HeroSlide } from "./heroTypes";
 import type { HeroOverlayProps } from "./HeroBannerOverlay";
+import { HERO_HEIGHT_CLASS } from "./heroLayout";
 
 type Props = {
   slides?: HeroSlide[];
@@ -19,7 +20,7 @@ export default function HeroBannerSection({
     return (
       <div className="relative w-full bg-gray-1">
         <div
-          className="relative flex w-full min-h-[360px] h-[360px] md:min-h-[580px] md:h-[580px] items-center justify-center bg-gray-1 border-b border-gray-3"
+          className={`relative flex w-full items-center justify-center bg-gray-1 border-b border-gray-3 ${HERO_HEIGHT_CLASS}`}
           aria-label="Hero banner area"
         >
           <p className="max-w-md px-4 text-center text-sm leading-relaxed text-meta-3">

@@ -67,6 +67,12 @@ type BroadcastPreview = {
   products: { name: string; priceLabel: string; productUrl: string }[];
 };
 
+type BroadcastFailure = {
+  email: string;
+  name: string;
+  error: string;
+};
+
 type BroadcastResult = {
   ok: boolean;
   skipped?: boolean;
@@ -76,6 +82,8 @@ type BroadcastResult = {
   recipients?: number;
   sent?: number;
   failed?: number;
+  failures?: BroadcastFailure[];
+  notAttempted?: BroadcastFailure[];
   productCount?: number;
 };
 
@@ -85,6 +93,13 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
   const [exporting, setExporting] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [lastBroadcastFailures, setLastBroadcastFailures] = useState<{
+    sent: number;
+    recipients: number;
+    failures: BroadcastFailure[];
+    notAttempted: BroadcastFailure[];
+    smtpError?: string;
+  } | null>(null);
 
   async function handleDelete(row: NotifySignupRow) {
     const confirmed = window.confirm(
@@ -201,29 +216,63 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                   })
                 );
                 if (result.skipped) {
+                  const failures = result.failures ?? [];
+                  const notAttempted = result.notAttempted ?? [];
+                  if (failures.length > 0 || notAttempted.length > 0) {
+                    setLastBroadcastFailures({
+                      sent: 0,
+                      recipients: rows.length,
+                      failures,
+                      notAttempted,
+                      smtpError: result.message,
+                    });
+                  } else {
+                    setLastBroadcastFailures(null);
+                  }
                   const msg =
                     result.reason === "smtp_not_configured"
                       ? "SMTP not configured — set EMAIL_SERVER_* on the server."
                       : result.reason === "smtp_blocked"
                         ? result.message ||
                           "SMTP blocked by your email host. Enable outbound mail in Hostinger hPanel or use Gmail SMTP."
-                      : result.reason === "no_products"
-                        ? "No active products to feature."
-                        : "No signups to email.";
+                        : result.reason === "no_products"
+                          ? "No active products to feature."
+                          : "No signups to email.";
                   toast.error(msg);
                   return;
                 }
-                const failed = result.failed ?? 0;
+
+                const failures = result.failures ?? [];
+                const notAttempted = result.notAttempted ?? [];
+                const failed = result.failed ?? failures.length;
+                const sent = result.sent ?? 0;
+                const recipients = result.recipients ?? rows.length;
+
+                if (failures.length > 0 || notAttempted.length > 0) {
+                  setLastBroadcastFailures({
+                    sent,
+                    recipients,
+                    failures,
+                    notAttempted,
+                    smtpError: result.smtpError,
+                  });
+                } else {
+                  setLastBroadcastFailures(null);
+                }
+
                 if (result.smtpError) {
                   toast.error(
-                    `Partial send — ${result.sent ?? 0} sent, ${failed} failed. ${result.smtpError}`
+                    `Partial send — ${sent} sent, ${failed} failed. ${result.smtpError}`
                   );
                   return;
                 }
-                toast.success(
-                  `Sent to ${result.sent ?? 0} of ${result.recipients ?? rows.length}` +
-                    (failed > 0 ? ` (${failed} failed)` : "")
-                );
+                if (failed > 0) {
+                  toast.error(
+                    `Sent to ${sent} of ${recipients} (${failed} failed — see list below)`
+                  );
+                  return;
+                }
+                toast.success(`Sent to ${sent} of ${recipients}`);
               } catch (err: unknown) {
                 toast.error(err instanceof Error ? err.message : "Bulk email failed");
               } finally {
@@ -262,6 +311,106 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
         <span className="font-semibold text-dark">{rows.length}</span> signup
         {rows.length === 1 ? "" : "s"}
       </p>
+
+      {lastBroadcastFailures ? (
+        <div className="rounded-xl border border-red-200 bg-red-50/60 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-red-800">
+                Bulk email failures
+              </h3>
+              <p className="mt-1 text-sm text-red-700/90">
+                Sent {lastBroadcastFailures.sent} of {lastBroadcastFailures.recipients}.
+                {lastBroadcastFailures.failures.length > 0
+                  ? ` ${lastBroadcastFailures.failures.length} failed.`
+                  : ""}
+                {lastBroadcastFailures.notAttempted.length > 0
+                  ? ` ${lastBroadcastFailures.notAttempted.length} not attempted.`
+                  : ""}
+                {lastBroadcastFailures.smtpError
+                  ? ` ${lastBroadcastFailures.smtpError}`
+                  : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-dark hover:bg-gray-1"
+                onClick={async () => {
+                  const emails = [
+                    ...lastBroadcastFailures.failures.map((f) => f.email),
+                    ...lastBroadcastFailures.notAttempted.map((f) => f.email),
+                  ];
+                  try {
+                    await navigator.clipboard.writeText(emails.join("\n"));
+                    toast.success("Failed emails copied");
+                  } catch {
+                    toast.error("Could not copy to clipboard");
+                  }
+                }}
+              >
+                Copy emails
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-dark hover:bg-gray-1"
+                onClick={() => setLastBroadcastFailures(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+
+          {lastBroadcastFailures.failures.length > 0 ? (
+            <div className="mt-3 overflow-x-auto rounded-lg border border-red-200 bg-white">
+              <table className="min-w-full text-sm">
+                <thead className="bg-red-50 text-left text-red-800/80">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Name</th>
+                    <th className="px-3 py-2 font-medium">Email</th>
+                    <th className="px-3 py-2 font-medium">Error</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-red-100">
+                  {lastBroadcastFailures.failures.map((f) => (
+                    <tr key={`fail-${f.email}`} className="text-dark">
+                      <td className="px-3 py-2 font-medium">{f.name || "—"}</td>
+                      <td className="px-3 py-2">{f.email}</td>
+                      <td className="px-3 py-2 text-meta-3">{f.error}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {lastBroadcastFailures.notAttempted.length > 0 ? (
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-800/70">
+                Not attempted (send stopped)
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-red-200 bg-white">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-red-50 text-left text-red-800/80">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Name</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-red-100">
+                    {lastBroadcastFailures.notAttempted.map((f) => (
+                      <tr key={`skip-${f.email}`} className="text-dark">
+                        <td className="px-3 py-2 font-medium">{f.name || "—"}</td>
+                        <td className="px-3 py-2">{f.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {loading && rows.length === 0 ? (
         <p className="text-sm text-meta-3">Loading signups…</p>

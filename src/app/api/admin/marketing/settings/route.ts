@@ -24,6 +24,7 @@ import {
   abandonedCartIdleMinutesFromHours,
   resolveAbandonedCartIdleMinutes,
 } from "@/lib/marketing/abandonedCart";
+import { resolveReviewRequestDelayHours } from "@/lib/marketing/reviewRequestSettings";
 import {
   heroCarouselIntervalMsFromSeconds,
   resolveHeroCarouselIntervalMs,
@@ -35,17 +36,21 @@ export async function GET() {
   return runApiRoute(async () => {
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const [row, excludedBrands] = await Promise.all([
+    const [row, excludedBrands, codAllowedBrands, codAllowedCategories] = await Promise.all([
       safeSiteMarketingSettingsFindUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
       }),
       prisma.free_shipping_excluded_brands
         .findMany({ select: { brand_id: true } })
         .catch(() => []),
+      prisma.cod_allowed_brands.findMany({ select: { brand_id: true } }).catch(() => []),
+      prisma.cod_allowed_categories.findMany({ select: { category_id: true } }).catch(() => []),
     ]);
     return NextResponse.json({
       ...(row ?? { id: SITE_MARKETING_SETTINGS_ID, first_visit_coupon_code: null }),
       free_shipping_excluded_brand_ids: excludedBrands.map((b) => b.brand_id),
+      cod_allowed_brand_ids: codAllowedBrands.map((b) => b.brand_id),
+      cod_allowed_category_ids: codAllowedCategories.map((c) => c.category_id),
     });
   
   });}
@@ -184,7 +189,24 @@ export async function PATCH(req: NextRequest) {
         data.abandoned_cart_idle_minutes = resolveAbandonedCartIdleMinutes(minutes);
       }
     }
-  
+    if (body.review_request_emails_enabled !== undefined) {
+      data.review_request_emails_enabled = Boolean(body.review_request_emails_enabled);
+    }
+    if (body.review_request_delay_hours !== undefined) {
+      if (
+        body.review_request_delay_hours === null ||
+        body.review_request_delay_hours === ""
+      ) {
+        data.review_request_delay_hours = resolveReviewRequestDelayHours(undefined);
+      } else {
+        const hours = Number(body.review_request_delay_hours);
+        if (!Number.isFinite(hours)) {
+          return NextResponse.json({ error: "Invalid review_request_delay_hours" }, { status: 400 });
+        }
+        data.review_request_delay_hours = resolveReviewRequestDelayHours(hours);
+      }
+    }
+
     if (body.highlights_section_eyebrow !== undefined) {
       data.highlights_section_eyebrow = cleanOptionalText(body.highlights_section_eyebrow, 120);
     }
@@ -351,8 +373,47 @@ export async function PATCH(req: NextRequest) {
       }
       excludedBrandIds = [...new Set(ids)];
     }
+
+    let codAllowedBrandIds: string[] | undefined;
+    if (body.cod_allowed_brand_ids !== undefined) {
+      if (!Array.isArray(body.cod_allowed_brand_ids)) {
+        return NextResponse.json({ error: "Invalid cod_allowed_brand_ids" }, { status: 400 });
+      }
+      if (body.cod_allowed_brand_ids.length > 200) {
+        return NextResponse.json({ error: "Too many COD brands" }, { status: 400 });
+      }
+      const ids = body.cod_allowed_brand_ids.filter(
+        (x: unknown) => typeof x === "string" && isUuid(x)
+      ) as string[];
+      if (ids.length !== body.cod_allowed_brand_ids.length) {
+        return NextResponse.json({ error: "Invalid cod_allowed_brand_ids" }, { status: 400 });
+      }
+      codAllowedBrandIds = [...new Set(ids)];
+    }
+
+    let codAllowedCategoryIds: string[] | undefined;
+    if (body.cod_allowed_category_ids !== undefined) {
+      if (!Array.isArray(body.cod_allowed_category_ids)) {
+        return NextResponse.json({ error: "Invalid cod_allowed_category_ids" }, { status: 400 });
+      }
+      if (body.cod_allowed_category_ids.length > 200) {
+        return NextResponse.json({ error: "Too many COD categories" }, { status: 400 });
+      }
+      const ids = body.cod_allowed_category_ids.filter(
+        (x: unknown) => typeof x === "string" && isUuid(x)
+      ) as string[];
+      if (ids.length !== body.cod_allowed_category_ids.length) {
+        return NextResponse.json({ error: "Invalid cod_allowed_category_ids" }, { status: 400 });
+      }
+      codAllowedCategoryIds = [...new Set(ids)];
+    }
   
-    if (Object.keys(data).length === 0 && excludedBrandIds === undefined) {
+    if (
+      Object.keys(data).length === 0 &&
+      excludedBrandIds === undefined &&
+      codAllowedBrandIds === undefined &&
+      codAllowedCategoryIds === undefined
+    ) {
       return NextResponse.json({ error: "No recognized fields to update" }, { status: 400 });
     }
   
@@ -424,6 +485,24 @@ export async function PATCH(req: NextRequest) {
           }
         }
 
+        if (codAllowedBrandIds !== undefined) {
+          await tx.cod_allowed_brands.deleteMany({});
+          if (codAllowedBrandIds.length > 0) {
+            await tx.cod_allowed_brands.createMany({
+              data: codAllowedBrandIds.map((brand_id) => ({ brand_id })),
+            });
+          }
+        }
+
+        if (codAllowedCategoryIds !== undefined) {
+          await tx.cod_allowed_categories.deleteMany({});
+          if (codAllowedCategoryIds.length > 0) {
+            await tx.cod_allowed_categories.createMany({
+              data: codAllowedCategoryIds.map((category_id) => ({ category_id })),
+            });
+          }
+        }
+
         if (Object.keys(data).length === 0) {
           return (
             (await tx.site_marketing_settings.findUnique({
@@ -445,12 +524,26 @@ export async function PATCH(req: NextRequest) {
           .findMany({ select: { brand_id: true } })
           .then((rows) => rows.map((row) => row.brand_id))
           .catch(() => []));
+      const codBrandRows =
+        codAllowedBrandIds ??
+        (await prisma.cod_allowed_brands
+          .findMany({ select: { brand_id: true } })
+          .then((rows) => rows.map((row) => row.brand_id))
+          .catch(() => []));
+      const codCategoryRows =
+        codAllowedCategoryIds ??
+        (await prisma.cod_allowed_categories
+          .findMany({ select: { category_id: true } })
+          .then((rows) => rows.map((row) => row.category_id))
+          .catch(() => []));
 
       revalidateMarketingSite();
       return NextResponse.json(
         {
           ...updated,
           free_shipping_excluded_brand_ids: excludedRows,
+          cod_allowed_brand_ids: codBrandRows,
+          cod_allowed_category_ids: codCategoryRows,
         },
         { status: 200 }
       );

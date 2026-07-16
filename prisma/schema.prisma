@@ -83,6 +83,7 @@ model brands {
   coupon_brands coupon_brands[]
   flash_sale_brands flash_sale_brands[]
   free_shipping_excluded_brands free_shipping_excluded_brands?
+  cod_allowed_brands cod_allowed_brands?
   brand_pages brand_pages?
 }
 
@@ -142,6 +143,7 @@ model categories {
   flash_sale_categories flash_sale_categories[]
   homepage_highlights homepage_highlights[]
   homepage_category_tiles homepage_category_tiles[]
+  cod_allowed_categories cod_allowed_categories?
   product_types     product_types[]
   /// Sub categories (legacy table product_subtypes).
   product_subtypes  product_subtypes[]
@@ -154,6 +156,18 @@ model categories {
 model free_shipping_excluded_brands {
   brand_id String @id @db.Uuid
   brands   brands @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// Brands eligible for Cash on Delivery. If any COD allow-list exists, cart lines must match brand or category.
+model cod_allowed_brands {
+  brand_id String @id @db.Uuid
+  brands   brands @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// Categories eligible for Cash on Delivery. If any COD allow-list exists, cart lines must match brand or category.
+model cod_allowed_categories {
+  category_id String     @id @db.Uuid
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 /// Per-category product type (e.g. "RC Car"). Slug is globally unique for simple URL params.
@@ -366,6 +380,8 @@ model orders {
   shipment_status                                 String                   @default("ORDER_PLACED") @db.VarChar(40)
   shipment_updated_at                             DateTime?                @db.Timestamptz(6)
   shipment_location                               String?                  @db.VarChar(255)
+  /// When the post-delivery review-request email was sent (null = not sent yet).
+  review_request_email_sent_at                    DateTime?                @db.Timestamptz(6)
   created_at                                      DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at                                      DateTime                 @default(now()) @db.Timestamptz(6)
   coupon_usages                                   coupon_usages[]
@@ -950,6 +966,10 @@ model site_marketing_settings {
   abandoned_cart_reminders_enabled Boolean @default(true)
   /// Minutes a cart must sit unchanged before the reminder cron emails the customer (6–10080).
   abandoned_cart_idle_minutes      Int     @default(2880)
+  /// Send review-request emails after orders reach DELIVERED.
+  review_request_emails_enabled    Boolean @default(true)
+  /// Hours to wait after delivery before sending the review request (0 = immediate).
+  review_request_delay_hours       Int     @default(24)
   /// Homepage highlights block — small label above the carousel (CSS may uppercase).
   highlights_section_eyebrow  String? @db.VarChar(120)
   /// Homepage highlights block — main heading under the label.

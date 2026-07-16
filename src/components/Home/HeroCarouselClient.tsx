@@ -13,7 +13,7 @@ import {
 import HeroSlideImage from "./HeroSlideImage";
 import type { HeroSlide } from "./heroTypes";
 import { DEFAULT_HERO_CAROUSEL_INTERVAL_MS } from "@/lib/marketing/heroCarousel";
-import { HERO_MIN_HEIGHT_CLASS } from "./heroLayout";
+import { HERO_HEIGHT_CLASS } from "./heroLayout";
 
 const SWIPE_THRESHOLD = 50;
 
@@ -99,7 +99,7 @@ export default function HeroCarouselClient({
 
   return (
     <div
-      className={`relative w-full touch-pan-y overflow-hidden ${HERO_MIN_HEIGHT_CLASS}`}
+      className={`relative w-full touch-pan-y overflow-hidden ${HERO_HEIGHT_CLASS}`}
       aria-roledescription="carousel"
       aria-label="Hero banner carousel"
       onTouchStart={handleTouchStart}

@@ -35,6 +35,7 @@ import {
   getFreeShippingExcludedBrandIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
+import { getCodEligibilityForProducts } from "@/lib/checkout/cod";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { allocateNextOrderNumber, formatOrderReference } from "@/lib/orders/orderNumber";
 import { assertMaxOrderQuantities } from "@/lib/cart/maxOrderQuantity";
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
     const parsed = await readJsonBody(req);
     if (!parsed.ok) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     const body = parsed.body;
+    const paymentMethod = String(body.paymentMethod ?? "COD").trim().toUpperCase();
   
     const items = (Array.isArray(body.items) ? body.items : []) as CheckoutItem[];
     const address = (body.address ?? {}) as Record<string, unknown>;
@@ -247,6 +249,24 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+
+    if (paymentMethod !== "COD") {
+      return NextResponse.json({ error: "Unsupported payment method" }, { status: 400 });
+    }
+
+    const codEligibility = await getCodEligibilityForProducts(
+      dbProducts.map((p) => ({
+        id: p.id,
+        brand_id: p.brand_id ?? null,
+        category_id: p.category_id ?? null,
+      }))
+    );
+    if (!codEligibility.available) {
+      return NextResponse.json(
+        { error: codEligibility.reason ?? "Cash on Delivery is not available for these items." },
+        { status: 400 }
+      );
+    }
   
     const coupon = couponCode ? await fetchCouponForCart(couponCode) : null;
   
@@ -384,7 +404,7 @@ export async function POST(req: NextRequest) {
           coupon_id: coupon?.id ?? null,
           shipping_address_id: addr.id,
           billing_address_id: addr.id,
-          payment_provider: "placeholder",
+          payment_provider: "cod",
           is_gift: isGift,
           gift_message: giftMessage,
         },
@@ -477,8 +497,8 @@ export async function POST(req: NextRequest) {
         await sendEmailToRecipients({
           recipients: notificationRecipients,
           subject: newAccountPasswordSetup
-            ? "Order received — set your password (see email)"
-            : "Order created (pending payment)",
+            ? "COD order received — set your password (see email)"
+            : "COD order created (pending confirmation)",
           html: orderPendingCustomerEmailHtml({
             orderId: orderRef,
             lines: orderLines,
@@ -507,6 +527,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         orderId: order.id,
         accessToken,
+        paymentMethod: "COD",
         /** Checkout attached to session vs reused email vs new row this request. */
         checkoutLinkedAs,
         /** True when a one-time set-password URL was generated and included in the order email. */

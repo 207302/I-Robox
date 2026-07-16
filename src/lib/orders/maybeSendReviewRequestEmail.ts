@@ -7,6 +7,7 @@ import {
 } from "@/lib/email/reviewRequestEmailLines";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { EMAIL_FONT_FAMILY } from "@/lib/email/emailTypography";
+import { getReviewRequestSettings } from "@/lib/marketing/getReviewRequestSettings";
 import { formatOrderReference } from "@/lib/orders/orderNumber";
 import { prisma } from "@/lib/prisma";
 import { getSiteBaseUrl } from "@/lib/siteUrl";
@@ -20,6 +21,24 @@ type DeliveryTransitionInput = {
   previousTrackingStep?: string | null;
   nextTrackingStep?: string | null;
 };
+
+export type SendReviewRequestResult =
+  | { ok: true; sentTo: string; itemCount: number }
+  | {
+      ok: true;
+      skipped: true;
+      reason:
+        | "disabled"
+        | "smtp_not_configured"
+        | "already_sent"
+        | "no_email"
+        | "no_unreviewed_items"
+        | "not_delivered"
+        | "order_not_found"
+        | "waiting_delay"
+        | "not_delivered_transition";
+    }
+  | { ok: false; error: string };
 
 function escapeHtml(value: string) {
   return value
@@ -71,6 +90,12 @@ function reviewRequestEmailHtml(input: {
 }
 
 async function reviewRequestAlreadySent(orderId: string): Promise<boolean> {
+  const order = await prisma.orders.findUnique({
+    where: { id: orderId },
+    select: { review_request_email_sent_at: true },
+  });
+  if (order?.review_request_email_sent_at) return true;
+
   const shipment = await prisma.shipments.findUnique({
     where: { order_id: orderId },
     select: { metadata: true },
@@ -83,6 +108,12 @@ async function reviewRequestAlreadySent(orderId: string): Promise<boolean> {
 }
 
 async function markReviewRequestSent(orderId: string) {
+  const sentAt = new Date();
+  await prisma.orders.update({
+    where: { id: orderId },
+    data: { review_request_email_sent_at: sentAt },
+  });
+
   const existing = await prisma.shipments.findUnique({
     where: { order_id: orderId },
     select: { metadata: true },
@@ -97,37 +128,78 @@ async function markReviewRequestSent(orderId: string) {
     create: {
       order_id: orderId,
       metadata: {
-        reviewRequestEmailSentAt: new Date().toISOString(),
+        reviewRequestEmailSentAt: sentAt.toISOString(),
       } as object,
     },
     update: {
       metadata: {
         ...prevMeta,
-        reviewRequestEmailSentAt: new Date().toISOString(),
+        reviewRequestEmailSentAt: sentAt.toISOString(),
       } as object,
     },
   });
 }
 
-/** Sends a product-specific review request after an order is first marked delivered. */
-export async function maybeSendReviewRequestEmail(input: DeliveryTransitionInput) {
-  if (!orderJustDelivered(input)) {
-    return { ok: true, skipped: true as const, reason: "not_delivered_transition" as const };
-  }
+/** Ensure shipment has a delivered_at so delay cron can schedule correctly. */
+async function ensureDeliveredTimestamp(orderId: string) {
+  const shipment = await prisma.shipments.findUnique({
+    where: { order_id: orderId },
+    select: { delivered_at: true, metadata: true },
+  });
+  if (shipment?.delivered_at) return;
 
+  const now = new Date();
+  const prevMeta =
+    shipment?.metadata && typeof shipment.metadata === "object"
+      ? (shipment.metadata as Record<string, unknown>)
+      : {};
+
+  await prisma.shipments.upsert({
+    where: { order_id: orderId },
+    create: {
+      order_id: orderId,
+      status: "DELIVERED",
+      delivered_at: now,
+    },
+    update: {
+      delivered_at: now,
+      status: "DELIVERED",
+      metadata: prevMeta as object,
+    },
+  });
+
+  await prisma.orders.update({
+    where: { id: orderId },
+    data: {
+      shipment_status: "DELIVERED",
+      shipment_updated_at: now,
+    },
+  });
+}
+
+/**
+ * Send review-request email for one order.
+ * Only emails product lines that still have no review.
+ * `force` allows resend even if already marked sent (still skips if nothing left to review).
+ */
+export async function sendReviewRequestEmailForOrder(
+  orderId: string,
+  opts?: { force?: boolean }
+): Promise<SendReviewRequestResult> {
   if (!isEmailConfigured()) {
-    console.warn("[review-request-email] SMTP not configured — skipped", { orderId: input.orderId });
-    return { ok: false, skipped: true as const, reason: "smtp_not_configured" as const };
+    console.warn("[review-request-email] SMTP not configured — skipped", { orderId });
+    return { ok: true, skipped: true, reason: "smtp_not_configured" };
   }
 
-  if (await reviewRequestAlreadySent(input.orderId)) {
-    return { ok: true, skipped: true as const, reason: "already_sent" as const };
+  if (!opts?.force && (await reviewRequestAlreadySent(orderId))) {
+    return { ok: true, skipped: true, reason: "already_sent" };
   }
 
   const order = await prisma.orders.findUnique({
-    where: { id: input.orderId },
+    where: { id: orderId },
     select: {
       id: true,
+      status: true,
       order_number: true,
       customers: { select: { email: true, name: true } },
       addresses_orders_shipping_address_idToaddresses: { select: { full_name: true } },
@@ -135,23 +207,27 @@ export async function maybeSendReviewRequestEmail(input: DeliveryTransitionInput
   });
 
   if (!order) {
-    return { ok: false, error: "order_not_found" as const };
+    return { ok: false, error: "order_not_found" };
+  }
+
+  if (order.status !== "DELIVERED") {
+    return { ok: true, skipped: true, reason: "not_delivered" };
   }
 
   const rawEmail = order.customers?.email ?? null;
   if (!rawEmail || isSyntheticPhoneSignupEmail(rawEmail)) {
-    return { ok: true, skipped: true as const, reason: "no_email" as const };
+    return { ok: true, skipped: true, reason: "no_email" };
   }
 
   const to = displayEmailForCustomer(rawEmail);
   if (!to) {
-    return { ok: true, skipped: true as const, reason: "no_email" as const };
+    return { ok: true, skipped: true, reason: "no_email" };
   }
 
-  const lines = await loadReviewRequestLines(input.orderId);
+  const lines = await loadReviewRequestLines(orderId);
   if (lines.length === 0) {
-    await markReviewRequestSent(input.orderId);
-    return { ok: true, skipped: true as const, reason: "no_unreviewed_items" as const };
+    await markReviewRequestSent(orderId);
+    return { ok: true, skipped: true, reason: "no_unreviewed_items" };
   }
 
   const customerName =
@@ -189,8 +265,32 @@ export async function maybeSendReviewRequestEmail(input: DeliveryTransitionInput
       : `Your order #${orderRef} was delivered — leave a review | i-Robox`;
 
   await sendEmail({ to, subject, html, text });
-  await markReviewRequestSent(input.orderId);
+  await markReviewRequestSent(orderId);
 
-  console.info("[review-request-email] sent", { orderId: input.orderId, to, itemCount: lines.length });
+  console.info("[review-request-email] sent", { orderId, to, itemCount: lines.length });
   return { ok: true, sentTo: to, itemCount: lines.length };
+}
+
+/**
+ * On first delivery transition: send immediately when delay is 0, otherwise wait for cron.
+ */
+export async function maybeSendReviewRequestEmail(
+  input: DeliveryTransitionInput
+): Promise<SendReviewRequestResult> {
+  if (!orderJustDelivered(input)) {
+    return { ok: true, skipped: true, reason: "not_delivered_transition" };
+  }
+
+  await ensureDeliveredTimestamp(input.orderId);
+
+  const settings = await getReviewRequestSettings();
+  if (!settings.enabled) {
+    return { ok: true, skipped: true, reason: "disabled" };
+  }
+
+  if (settings.delayHours > 0) {
+    return { ok: true, skipped: true, reason: "waiting_delay" };
+  }
+
+  return sendReviewRequestEmailForOrder(input.orderId);
 }

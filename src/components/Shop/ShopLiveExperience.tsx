@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import ProductItem from "@/components/Common/ProductItem";
 import ShopProductGridSkeleton from "@/components/Shop/ShopProductGridSkeleton";
 import { ShopSearchCarDriveLoader, useHeaderSearchNavProgress } from "@/components/Common/ShopSearchCarLottie";
@@ -32,14 +31,16 @@ import {
   SHOP_QUERY_EVENT,
   applyShopQuery,
   buildListingQueryString,
-  paginationItems,
   parseShopQueryString,
   type ShopQueryState,
 } from "@/lib/shop/shopQuery";
+import {
+  getCachedShopListing,
+  setCachedShopListing,
+} from "@/lib/shop/shopListingClientCache";
 import { useDebounce } from "@/hooks/useDebounce";
 import { bindShopFilterScrollbarReveal } from "@/lib/shop/filterScrollbarReveal";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/shop/shopConstants";
-import { throttle } from "@/lib/perf/throttle";
 import type { ProductSearchItem } from "@/lib/search/productSearch";
 import {
   completeSearchProgress,
@@ -48,7 +49,6 @@ import {
 } from "@/lib/shop/searchProgress";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -57,21 +57,6 @@ import {
 } from "react";
 
 const DIECAST_ONLY_CATEGORY = "toy cars, trains & vehicles";
-
-/** Directional slide for product-grid page transitions. */
-const slideVariants = {
-  enterFromRight: { x: "100%", opacity: 0 },
-  enterFromLeft: { x: "-100%", opacity: 0 },
-  center: { x: 0, opacity: 1 },
-  exitToLeft: { x: "-100%", opacity: 0 },
-  exitToRight: { x: "100%", opacity: 0 },
-};
-
-/** 0.3s tween — short enough not to feel laggy on slow networks. */
-const slideTransition = {
-  x: { type: "tween" as const, ease: "easeInOut" as const, duration: 0.3 },
-  opacity: { duration: 0.2 },
-};
 
 function countActiveShopFilters(q: ShopQueryState): number {
   let n = 0;
@@ -212,7 +197,29 @@ export default function ShopLiveExperience({
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlQueryString = searchParams.toString();
-  const [listing, setListing] = useState(initialListing);
+
+  /** Bootstrap once: prefer client cache so back-navigation keeps loaded pages. */
+  const listingBootstrapRef = useRef<{
+    listing: ShopListingData;
+    fromCache: boolean;
+    cacheKey: string;
+  } | null>(null);
+  if (listingBootstrapRef.current === null) {
+    const qs = queryStringFromWindow(initialQueryString || urlQueryString);
+    const cacheKey = listingFilterFingerprint(qs);
+    const cached =
+      typeof window !== "undefined" ? getCachedShopListing(cacheKey) : null;
+    const fromCache = Boolean(
+      cached && cached.items.length >= (initialListing.items?.length ?? 0)
+    );
+    listingBootstrapRef.current = {
+      listing: fromCache && cached ? cached : initialListing,
+      fromCache,
+      cacheKey,
+    };
+  }
+
+  const [listing, setListing] = useState(listingBootstrapRef.current.listing);
   const [queryString, setQueryString] = useState(() =>
     queryStringFromWindow(initialQueryString || urlQueryString)
   );
@@ -224,25 +231,29 @@ export default function ShopLiveExperience({
   const [mobileGridColumns, setMobileGridColumns] = useState<ShopMobileGridColumns>(() =>
     readShopMobileGridColumns()
   );
+  const [loadingMore, setLoadingMore] = useState(false);
   const productsPaneRef = useRef<HTMLDivElement>(null);
   const shopSectionRef = useRef<HTMLElement>(null);
   const desktopSidebarPaneRef = useRef<HTMLDivElement>(null);
   const desktopSidebarScrollRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const fetchGenRef = useRef(0);
   const inflightQsRef = useRef<string | null>(null);
+  const filterFingerprintRef = useRef(
+    listingBootstrapRef.current.cacheKey || listingFilterFingerprint(initialQueryString)
+  );
   const shellLoadStartedRef = useRef(false);
   const skipListingKeyFetchRef = useRef(true);
-  const skippedSsrRefetchRef = useRef(false);
-  const hasVisibleProductsRef = useRef(initialListing.items.length > 0);
-  const filterFingerprintRef = useRef(
-    listingFilterFingerprint(queryStringFromWindow(initialQueryString))
+  const skippedSsrRefetchRef = useRef(listingBootstrapRef.current.fromCache);
+  const hasVisibleProductsRef = useRef(
+    listingBootstrapRef.current.listing.items.length > 0
   );
   const prefetchHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefetchedUrlsRef = useRef<Set<string>>(new Set());
   const listingRef = useRef(initialListing);
   listingRef.current = listing;
-  const prevPageScrollRef = useRef(parseShopQueryString(queryStringFromWindow(initialQueryString)).page);
   const clientQueryRef = useRef(queryStringFromWindow(initialQueryString || urlQueryString));
   const [pendingFilters, setPendingFilters] = useState<ShopFilterDraft>(() =>
     shopQueryToFilterDraft(parseShopQueryString(queryStringFromWindow(initialQueryString)))
@@ -331,13 +342,6 @@ export default function ShopLiveExperience({
       signal: controller.signal,
     };
 
-    if (current > 1) {
-      const prevQs = buildListingQueryString({ ...state, page: current - 1 });
-      if (!prefetchedUrlsRef.current.has(prevQs)) {
-        prefetchedUrlsRef.current.add(prevQs);
-        prefetchProductsApi(prevQs, baseOpts);
-      }
-    }
     if (current < totalPages) {
       const nextQs = buildListingQueryString({ ...state, page: current + 1 });
       if (!prefetchedUrlsRef.current.has(nextQs)) {
@@ -447,12 +451,13 @@ export default function ShopLiveExperience({
 
   const effectiveQueryString = useMemo(() => {
     const parsed = parseShopQueryString(queryString);
+    /** Infinite scroll always loads from page 1; later pages append via loadMore. */
     if (clientFuzzyIds !== null) {
-      const usp = new URLSearchParams(buildListingQueryString({ ...parsed, q: "" }));
+      const usp = new URLSearchParams(buildListingQueryString({ ...parsed, q: "", page: 1 }));
       if (clientFuzzyIds.length > 0) usp.set("ids", clientFuzzyIds.join(","));
       return usp.toString();
     }
-    return buildListingQueryString({ ...parsed, q: debouncedSearchInput });
+    return buildListingQueryString({ ...parsed, q: debouncedSearchInput, page: 1 });
   }, [queryString, clientFuzzyIds, debouncedSearchInput]);
 
   const debouncedFetchQs = useDebounce(effectiveQueryString, SEARCH_DEBOUNCE_MS);
@@ -464,9 +469,8 @@ export default function ShopLiveExperience({
   const fetchQsRef = useRef(listingFetchQs);
   fetchQsRef.current = listingFetchQs;
   const listingFetchKey = useMemo(
-    () =>
-      `${debouncedFilterFpExclQ}|${listingFetchQs}|${query.page}|${urlQueryString}`,
-    [debouncedFilterFpExclQ, listingFetchQs, query.page, urlQueryString]
+    () => `${debouncedFilterFpExclQ}|${listingFetchQs}|${urlQueryString}`,
+    [debouncedFilterFpExclQ, listingFetchQs, urlQueryString]
   );
   const searchPending =
     searchInput !== debouncedSearchInput ||
@@ -481,7 +485,8 @@ export default function ShopLiveExperience({
   const showSearchStatusLoader =
     gridBusy || showSearchLoader || (headerNavProgress !== null && headerNavProgress < 100);
 
-  const fetchListing = useCallback(async (qs: string) => {
+  const fetchListing = useCallback(async (qs: string, opts?: { append?: boolean }) => {
+    const append = opts?.append === true;
     if (inflightQsRef.current === qs && abortRef.current && !abortRef.current.signal.aborted) {
       return;
     }
@@ -494,11 +499,11 @@ export default function ShopLiveExperience({
     const requestedState = parseShopQueryString(qs);
     const fingerprint = listingFilterFingerprint(qs);
     const paginationOnly =
-      fingerprint === filterFingerprintRef.current && params.has("page");
+      append || (fingerprint === filterFingerprintRef.current && params.has("page"));
     if (!paginationOnly) {
       setIsLoading(true);
     }
-    const trackProgress = isSearchProgressPending();
+    const trackProgress = !append && isSearchProgressPending();
     if (trackProgress) setSearchProgress(55);
     try {
       if (paginationOnly) {
@@ -530,7 +535,7 @@ export default function ShopLiveExperience({
       if (!res.ok) throw new Error(data.error || "Failed to load products");
       if (!controller.signal.aborted) {
         const responsePage = data.page ?? requestedState.page;
-        if (responsePage !== requestedState.page && (data.total ?? 0) > 0) {
+        if (!append && responsePage !== requestedState.page && (data.total ?? 0) > 0) {
           const correctedQs = buildListingQueryString({
             ...requestedState,
             page: responsePage,
@@ -540,6 +545,32 @@ export default function ShopLiveExperience({
           return;
         }
         setListing((prev) => {
+          if (append) {
+            const seen = new Set(prev.items.map((item) => item.id));
+            const items = [...prev.items];
+            for (const item of data.items ?? []) {
+              if (seen.has(item.id)) continue;
+              seen.add(item.id);
+              items.push(item);
+            }
+            if (items.length) hasVisibleProductsRef.current = true;
+            return {
+              ...data,
+              items,
+              ageGroups: data.ageGroups.length ? data.ageGroups : prev.ageGroups,
+              diecastScales: data.diecastScales.length ? data.diecastScales : prev.diecastScales,
+              brands: data.brands.length ? data.brands : prev.brands,
+              productSubtypes: data.productSubtypes.length
+                ? data.productSubtypes
+                : prev.productSubtypes,
+              productCollections: data.productCollections.length
+                ? data.productCollections
+                : prev.productCollections,
+              discountBuckets: data.discountBuckets.length
+                ? data.discountBuckets
+                : prev.discountBuckets,
+            };
+          }
           const next = !paginationOnly
             ? data
             : {
@@ -561,6 +592,9 @@ export default function ShopLiveExperience({
           return next;
         });
         if (trackProgress) completeSearchProgress();
+        if (!append) {
+          productsPaneRef.current?.scrollTo({ top: 0, behavior: "auto" });
+        }
         prefetchAdjacentPages(data, qs);
       }
     } catch (err) {
@@ -664,6 +698,12 @@ export default function ShopLiveExperience({
     }
     if (skipListingKeyFetchRef.current) {
       skipListingKeyFetchRef.current = false;
+      // Restored infinite-scroll cache — don't wipe with a fresh page-1 fetch.
+      if (listingBootstrapRef.current?.fromCache) {
+        listingBootstrapRef.current.fromCache = false;
+        skippedSsrRefetchRef.current = true;
+        return;
+      }
       if (initialListing.items.length === 0) return;
     }
     if (
@@ -684,63 +724,78 @@ export default function ShopLiveExperience({
     ) {
       return;
     }
+    // Keep restored infinite-scroll pages when filters/search are unchanged.
+    const nextFp = listingFilterFingerprint(fetchQsRef.current);
+    if (
+      nextFp === filterFingerprintRef.current &&
+      listingRef.current.items.length > (initialListing.items?.length ?? 0)
+    ) {
+      skippedSsrRefetchRef.current = true;
+      return;
+    }
     void fetchListing(fetchQsRef.current);
   }, [listingFetchKey, fetchListing, initialListing.items.length, initialListing.page, initialQueryString, clientFuzzyIds, searchInput]);
 
+  /** Persist listing so browser-back can restore scroll into loaded pages. */
   useEffect(() => {
-    if (prevPageScrollRef.current === query.page) return;
-    prevPageScrollRef.current = query.page;
-    productsPaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [query.page]);
-
-  /**
-   * Directional page-transition state.
-   *  - "left"  → next page  (exit left,  enter from right)
-   *  - "right" → prev page  (exit right, enter from left)
-   * `isPageChangeOnlyRef` gates animation to *pure pagination*; filter/search
-   * changes (which may also reset page→1) skip the slide.
-   */
-  const prevPageDirectionRef = useRef({
-    page: query.page,
-    fp: listingFilterFingerprint(queryString),
-  });
-  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
-  const isPageChangeOnlyRef = useRef(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    /** Snapshot only after hydration to avoid SSR/client output divergence. */
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setPrefersReducedMotion(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-
-  useEffect(() => {
-    const currentFp = listingFilterFingerprint(queryString);
-    const prev = prevPageDirectionRef.current;
-    if (prev.page !== query.page && prev.fp === currentFp) {
-      isPageChangeOnlyRef.current = true;
-      setSlideDirection(query.page > prev.page ? "left" : "right");
-    } else {
-      isPageChangeOnlyRef.current = false;
-      setSlideDirection(null);
+    const key = listingFilterFingerprint(queryString);
+    if (listing.items.length > 0) {
+      setCachedShopListing(key, listing);
     }
-    prevPageDirectionRef.current = { page: query.page, fp: currentFp };
-  }, [query.page, queryString]);
+  }, [listing, queryString]);
 
   const totalPages = Math.max(1, listing.totalPages ?? 1);
+  const currentPage = listing.page ?? 1;
+  const hasMorePages = currentPage < totalPages;
 
-  const goToPage = useCallback(
-    (page: number) => {
-      const safePage = Math.max(1, Math.min(page, totalPages));
-      const nextState: ShopQueryState = { ...query, q: searchInput, page: safePage };
-      applyShopQuery(pathname, buildListingQueryString(nextState));
-    },
-    [pathname, query, searchInput, totalPages]
-  );
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || isLoading) return;
+    const current = listingRef.current;
+    const loadedPage = current.page ?? 1;
+    const pages = Math.max(1, current.totalPages ?? 1);
+    if (loadedPage >= pages) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const state = parseShopQueryString(fetchQsRef.current);
+      const qs = buildListingQueryString({ ...state, page: loadedPage + 1 });
+      await fetchListing(qs, { append: true });
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [fetchListing, isLoading]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMorePages) return;
+
+    const mq = window.matchMedia("(min-width: 1024px)");
+    let observer: IntersectionObserver | null = null;
+
+    const connect = () => {
+      observer?.disconnect();
+      const root = mq.matches ? productsPaneRef.current : null;
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            void loadMore();
+          }
+        },
+        { root, rootMargin: "320px 0px", threshold: 0 }
+      );
+      observer.observe(sentinel);
+    };
+
+    connect();
+    const onChange = () => connect();
+    mq.addEventListener("change", onChange);
+    return () => {
+      mq.removeEventListener("change", onChange);
+      observer?.disconnect();
+    };
+  }, [loadMore, hasMorePages, listing.items.length, currentPage, gridBusy]);
 
   const clearFilters = useCallback(() => {
     setSearchInput("");
@@ -770,7 +825,6 @@ export default function ShopLiveExperience({
   }, [pathname, query]);
 
   const products = listing.items ?? [];
-  const currentPage = listing.page ?? query.page;
   const gridResultsLoading = gridBusy && products.length > 0;
 
   const ageGroups = listing.ageGroups ?? [];
@@ -826,85 +880,6 @@ export default function ShopLiveExperience({
       )),
     [products]
   );
-
-  useEffect(() => {
-    const productsPane = productsPaneRef.current;
-    const sidebarPane = desktopSidebarPaneRef.current;
-    const sidebarScroll = desktopSidebarScrollRef.current;
-    if (!productsPane || !sidebarPane || !sidebarScroll) return;
-
-    let cancelled = false;
-
-    const clearSidebarHeight = () => {
-      sidebarPane.style.height = "";
-      sidebarPane.style.maxHeight = "";
-      sidebarPane.style.overflow = "";
-      sidebarScroll.style.height = "";
-      sidebarScroll.style.maxHeight = "";
-      sidebarScroll.style.overflowY = "";
-    };
-
-    const syncSidebarHeight = () => {
-      if (cancelled || window.innerWidth < 1024) {
-        clearSidebarHeight();
-        return;
-      }
-      const h = Math.round(productsPane.getBoundingClientRect().height);
-      if (h <= 0) return;
-      const px = `${h}px`;
-      sidebarPane.style.height = px;
-      sidebarPane.style.maxHeight = px;
-      sidebarPane.style.overflow = "hidden";
-      sidebarScroll.style.height = px;
-      sidebarScroll.style.maxHeight = px;
-      sidebarScroll.style.overflowY = "auto";
-    };
-
-    const scheduleSync = () => requestAnimationFrame(syncSidebarHeight);
-    const onResize = throttle(scheduleSync, 100);
-
-    const run = () => {
-      if (cancelled) return;
-      scheduleSync();
-      const ro = new ResizeObserver(scheduleSync);
-      ro.observe(productsPane);
-
-      const onImgLoad = () => scheduleSync();
-      const imgs = productsPane.querySelectorAll("img");
-      imgs.forEach((img) => {
-        if (!img.complete) img.addEventListener("load", onImgLoad, { once: true });
-      });
-
-      window.addEventListener("resize", onResize);
-
-      return () => {
-        ro.disconnect();
-        window.removeEventListener("resize", onResize);
-        imgs.forEach((img) => img.removeEventListener("load", onImgLoad));
-        clearSidebarHeight();
-      };
-    };
-
-    let teardown: (() => void) | undefined;
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(() => {
-        teardown = run();
-      }, { timeout: 800 });
-      return () => {
-        cancelled = true;
-        cancelIdleCallback(id);
-        teardown?.();
-        clearSidebarHeight();
-      };
-    }
-
-    teardown = run();
-    return () => {
-      cancelled = true;
-      teardown?.();
-      clearSidebarHeight();
-    };
-  }, [products.length, totalPages, currentPage, gridBusy, query.q, clientMatchCount]);
 
   useEffect(() => bindShopFilterScrollbarReveal(shopSectionRef.current), []);
 
@@ -1348,10 +1323,11 @@ export default function ShopLiveExperience({
         </div>
 
         <div className="shop-page-columns flex flex-col gap-8 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
-          <div className="min-w-0 lg:col-start-2 lg:row-start-1">
+          <div className="shop-products-column min-w-0 lg:col-start-2 lg:row-start-1">
             <div
               ref={productsPaneRef}
-              className="relative scroll-mt-24"
+              className="shop-products-scroll relative scroll-mt-24"
+              data-scroll-restore="shop-products"
               aria-busy={gridBusy}
             >
               <div
@@ -1361,34 +1337,10 @@ export default function ShopLiveExperience({
               >
               <h2 className="sr-only">Products</h2>
               {products.length > 0 ? (
-                <div className="relative pb-8">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={listing.page}
-                      variants={slideVariants}
-                      initial={
-                        prefersReducedMotion || !isPageChangeOnlyRef.current
-                          ? false
-                          : slideDirection === "left"
-                            ? "enterFromRight"
-                            : slideDirection === "right"
-                              ? "enterFromLeft"
-                              : false
-                      }
-                      animate="center"
-                      exit={
-                        prefersReducedMotion || !isPageChangeOnlyRef.current
-                          ? undefined
-                          : slideDirection === "left"
-                            ? "exitToLeft"
-                            : "exitToRight"
-                      }
-                      transition={slideTransition}
-                      className={shopProductGridClassName(mobileGridColumns)}
-                    >
-                      {productGrid}
-                    </motion.div>
-                  </AnimatePresence>
+                <div className="relative pb-4">
+                  <div className={shopProductGridClassName(mobileGridColumns)}>
+                    {productGrid}
+                  </div>
                 </div>
               ) : gridBusy ? (
                 <ShopProductGridSkeleton count={listing.pageSize || 12} mobileColumns={mobileGridColumns} />
@@ -1396,73 +1348,24 @@ export default function ShopLiveExperience({
                 <p className="text-sm text-meta-3">No products match your filters.</p>
               )}
 
-              {totalPages > 1 ? (
-                <nav
-                  className="mt-10 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2"
-                  aria-label="Shop pagination"
+              {hasMorePages ? (
+                <div
+                  ref={loadMoreSentinelRef}
+                  className="flex min-h-12 items-center justify-center py-6"
+                  aria-hidden={!loadingMore}
                 >
-                  {currentPage > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => goToPage(currentPage - 1)}
-                      className="h-9 min-w-9 px-2 rounded-lg border border-gray-3 bg-white grid place-items-center text-sm font-medium text-dark hover:bg-gray-1"
-                      aria-label="Previous page"
-                    >
-                      &lt;
-                    </button>
+                  {loadingMore ? (
+                    <p className="text-sm font-medium text-meta-3" aria-live="polite">
+                      Loading more products…
+                    </p>
                   ) : (
-                    <span
-                      className="h-9 min-w-9 px-2 rounded-lg border border-gray-3 bg-gray-1 grid place-items-center text-sm text-meta-4 pointer-events-none"
-                      aria-hidden
-                    >
-                      &lt;
-                    </span>
+                    <span className="sr-only">Scroll for more products</span>
                   )}
-
-                  {paginationItems(currentPage, totalPages).map((item, i) =>
-                    item === "ellipsis" ? (
-                      <span
-                        key={`e-${i}`}
-                        className="px-1 text-sm text-meta-4 select-none"
-                        aria-hidden
-                      >
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => goToPage(item)}
-                        className={`h-9 min-w-9 px-2 rounded-lg border grid place-items-center text-sm font-medium ${
-                          item === currentPage
-                            ? "bg-blue text-white border-blue"
-                            : "border-gray-3 bg-white text-blue hover:bg-gray-1"
-                        }`}
-                        aria-current={item === currentPage ? "page" : undefined}
-                      >
-                        {item}
-                      </button>
-                    )
-                  )}
-
-                  {currentPage < totalPages ? (
-                    <button
-                      type="button"
-                      onClick={() => goToPage(currentPage + 1)}
-                      className="h-9 min-w-9 px-2 rounded-lg border border-gray-3 bg-white grid place-items-center text-sm font-medium text-dark hover:bg-gray-1"
-                      aria-label="Next page"
-                    >
-                      &gt;
-                    </button>
-                  ) : (
-                    <span
-                      className="h-9 min-w-9 px-2 rounded-lg border border-gray-3 bg-gray-1 grid place-items-center text-sm text-meta-4 pointer-events-none"
-                      aria-hidden
-                    >
-                      &gt;
-                    </span>
-                  )}
-                </nav>
+                </div>
+              ) : products.length > 0 ? (
+                <p className="py-6 text-center text-sm text-meta-4">
+                  Showing all {listing.total} products
+                </p>
               ) : null}
               </div>
             </div>
@@ -1470,7 +1373,11 @@ export default function ShopLiveExperience({
 
           <aside className="shop-desktop-filters-aside lg:col-start-1 lg:row-start-1">
             <div ref={desktopSidebarPaneRef} className="shop-desktop-sidebar-pane">
-              <div ref={desktopSidebarScrollRef} className="shop-desktop-sidebar-scroll pb-8">
+              <div
+                ref={desktopSidebarScrollRef}
+                className="shop-desktop-sidebar-scroll pb-8"
+                data-scroll-restore="shop-filters"
+              >
                 {renderFilters("shop-filters-form", true)}
               </div>
             </div>

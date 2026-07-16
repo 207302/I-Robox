@@ -15,12 +15,20 @@ import {
   latestDropShopUrl,
 } from "@/lib/marketing/fetchLatestDropEmailProducts";
 
+export type LatestDropBroadcastFailure = {
+  email: string;
+  name: string;
+  error: string;
+};
+
 export type LatestDropBroadcastResult =
   | {
       ok: true;
       skipped: true;
       reason: "smtp_not_configured" | "no_signups" | "no_products" | "smtp_blocked";
       message?: string;
+      failures?: LatestDropBroadcastFailure[];
+      notAttempted?: LatestDropBroadcastFailure[];
       ranAt: string;
     }
   | {
@@ -28,12 +36,22 @@ export type LatestDropBroadcastResult =
       recipients: number;
       sent: number;
       failed: number;
+      failures: LatestDropBroadcastFailure[];
+      /** Left in queue when a blocking SMTP error stopped the run. */
+      notAttempted?: LatestDropBroadcastFailure[];
       productCount: number;
       smtpError?: string;
       ranAt: string;
     };
 
 const SEND_CONCURRENCY = 5;
+
+function failureMessage(err: unknown): string {
+  const hint = getSmtpErrorHint(err);
+  if (hint) return hint;
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return "Send failed";
+}
 
 /** Send latest-drop email to every notify-signup (products fetched fresh at send time). */
 export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResult> {
@@ -71,7 +89,7 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
     .filter((s) => s.email.length > 0);
 
   let sent = 0;
-  let failed = 0;
+  const failures: LatestDropBroadcastFailure[] = [];
   let smtpError: string | null = null;
 
   async function sendOne(signup: { email: string; full_name: string }) {
@@ -100,12 +118,16 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
         await sendOne(signup);
         sent += 1;
       } catch (err) {
-        failed += 1;
-        const hint = getSmtpErrorHint(err);
+        const error = failureMessage(err);
+        failures.push({
+          email: signup.email,
+          name: signup.full_name,
+          error,
+        });
         console.error("[latest-drop-broadcast] send failed", { email: signup.email, err });
+        const hint = getSmtpErrorHint(err);
         if (hint) {
           smtpError = hint;
-          queue.length = 0;
         }
       }
     }
@@ -119,12 +141,22 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
     transporter.close();
   }
 
+  const notAttempted: LatestDropBroadcastFailure[] = smtpError
+    ? queue.splice(0, queue.length).map((s) => ({
+        email: s.email,
+        name: s.full_name,
+        error: "Not attempted — send stopped after SMTP block",
+      }))
+    : [];
+
   if (smtpError && sent === 0) {
     return {
       ok: true,
       skipped: true,
       reason: "smtp_blocked",
       message: smtpError,
+      ...(failures.length > 0 ? { failures } : {}),
+      ...(notAttempted.length > 0 ? { notAttempted } : {}),
       ranAt,
     };
   }
@@ -133,7 +165,9 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
     ok: true,
     recipients: signups.length,
     sent,
-    failed,
+    failed: failures.length,
+    failures,
+    ...(notAttempted.length > 0 ? { notAttempted } : {}),
     productCount: products.length,
     ...(smtpError ? { smtpError } : {}),
     ranAt,

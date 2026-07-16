@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePublicMarketing } from "@/hooks/usePublicMarketing";
 import type { MarketingPopupPayload } from "@/lib/marketing/publicMarketingTypes";
+import { prepareQuickLinkContentForHtml } from "@/lib/marketing/prepareQuickLinkContentHtml";
 
 const RETURNING_KEY = "irobox_returning_visitor";
 const PREFILL_COUPON_KEY = "irobox_prefill_coupon";
@@ -18,6 +19,10 @@ export default function MarketingSiteEffects() {
   const { data, isLoading } = usePublicMarketing();
   const [popup, setPopup] = useState<MarketingPopupPayload | null>(null);
   const [open, setOpen] = useState(false);
+  const popupBodyHtml = useMemo(
+    () => (popup?.body ? prepareQuickLinkContentForHtml(popup.body) : ""),
+    [popup?.body]
+  );
 
   useEffect(() => {
     if (isLoading || !data) return;
@@ -97,7 +102,12 @@ export default function MarketingSiteEffects() {
         <h2 id="marketing-popup-title" className="pr-8 text-lg font-semibold text-dark">
           {popup.title}
         </h2>
-        <p className="mt-2 whitespace-pre-wrap text-sm text-meta-3">{popup.body}</p>
+        {popupBodyHtml ? (
+          <div
+            className="prose prose-sm prose-neutral mt-2 max-w-none text-meta-3 prose-p:my-1.5 prose-headings:text-dark prose-a:text-blue"
+            dangerouslySetInnerHTML={{ __html: popupBodyHtml }}
+          />
+        ) : null}
         {popup.suggested_coupon_code ? (
           <p className="mt-3 text-sm font-medium text-dark">
             Code: <span className="text-blue">{popup.suggested_coupon_code}</span>

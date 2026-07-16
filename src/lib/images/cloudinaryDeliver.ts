@@ -96,12 +96,12 @@ function cloudinaryUrlWithoutTransforms(url: string): string {
  */
 const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 
-/** Desktop hero frame — matches lg:aspect-[16/5.5] (1440 / (16/5.5) ≈ 495). */
+/** Desktop hero frame — matches md:aspect-[1440/520] container. */
 export const HERO_WIDTH_CEILING = 1440;
-export const HERO_HEIGHT_CEILING = 495;
-/** Mobile hero frame — matches aspect-[7/5] (750 × 5/7 = 536). */
+export const HERO_HEIGHT_CEILING = 520;
+/** Mobile hero frame — matches aspect-[750/660] container. */
 export const HERO_MOBILE_WIDTH = 750;
-export const HERO_MOBILE_HEIGHT = 536;
+export const HERO_MOBILE_HEIGHT = 660;
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).
@@ -122,14 +122,14 @@ export function cloudinaryHeroSlideUrl(url: string, isLcp: boolean): string {
   });
 }
 
-/** Mobile hero source: fixed crop to mobile banner frame, top-anchored. */
+/** Mobile hero source: fixed crop to mobile banner frame, AI subject-aware gravity. */
 export function cloudinaryHeroMobileUrl(src: string, isLcp: boolean = false): string {
   return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(src), {
     width: HERO_MOBILE_WIDTH,
     height: HERO_MOBILE_HEIGHT,
     quality: isLcp ? "auto:best" : "auto:good",
     crop: "fill",
-    gravity: "north",
+    gravity: "auto",
   });
 }
 

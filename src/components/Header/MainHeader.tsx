@@ -230,7 +230,7 @@ const MainHeader = ({
       >
         {/* Announcement bar */}
         <div
-          className={`py-2.5 min-h-[2.75rem] border-b border-white/[0.08] ${utilityBarStyle ? "" : "bg-[#0c1220]"}`}
+          className={`py-1.5 min-h-[2.25rem] border-b border-white/[0.08] sm:py-2.5 sm:min-h-[2.75rem] ${utilityBarStyle ? "" : "bg-[#0c1220]"}`}
           style={utilityBarStyle}
           suppressHydrationWarning
         >
@@ -288,7 +288,7 @@ const MainHeader = ({
 
         {/* Running promo banner — min height avoids CLS when DB-driven copy length changes */}
         <div
-          className={`flex min-h-[2.75rem] flex-col justify-center overflow-hidden border-b border-blue-dark ${marqueeBarStyle ? "" : "bg-blue"}`}
+          className={`flex min-h-[2.25rem] flex-col justify-center overflow-hidden border-b border-blue-dark sm:min-h-[2.75rem] ${marqueeBarStyle ? "" : "bg-blue"}`}
           style={marqueeBarStyle}
           suppressHydrationWarning
         >
@@ -315,7 +315,7 @@ const MainHeader = ({
               );
               return (
                 <div
-                  className="marquee-track py-2 text-xs sm:text-sm font-medium text-white"
+                  className="marquee-track py-1.5 text-xs sm:py-2 sm:text-sm font-medium text-white"
                   style={{ "--marquee-duration": `${marqueeDurationSec}s` } as React.CSSProperties}
                   suppressHydrationWarning
                 >

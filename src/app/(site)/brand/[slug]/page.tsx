@@ -24,11 +24,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Brand not found | i-robox" };
   }
   const title = `${data.brand.name} | i-robox`;
-  const description = truncateMetaDescription(
-    data.brand.description?.trim() ||
-      `Shop ${data.brand.name} products at i-robox — RC toys, diecast models, and collectibles with secure checkout across India.`,
-    155
-  );
+  const description = truncateMetaDescription(data.blurb, 155);
   return {
     title,
     description,

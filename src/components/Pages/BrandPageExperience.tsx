@@ -38,7 +38,7 @@ export default function BrandPageExperience({ page, initialListing }: Props) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { brand, heroImage, logoImage, stats, collections } = page;
+  const { brand, blurb, heroImage, logoImage, stats, collections } = page;
   const hasExtraFilters = Boolean(categoryFilter || minPrice || maxPrice);
 
   const fetchListing = useCallback(
@@ -162,11 +162,11 @@ export default function BrandPageExperience({ page, initialListing }: Props) {
                   )}
                   <BadgeCheck className="size-5 text-blue" aria-label="Verified brand" />
                 </div>
-                {brand.description?.trim() ? (
-                  <p className="mt-2 max-w-3xl text-sm text-meta-3 md:text-base">
-                    {brand.description}
-                  </p>
-                ) : null}
+                {/* Always render the blurb — an empty brand page with a bare
+                    "no products" message gets flagged as a soft 404 by Google. */}
+                <p className="mt-2 max-w-3xl text-sm text-meta-3 md:text-base">
+                  {blurb}
+                </p>
                 <ul className="mt-4 flex flex-wrap gap-6 text-sm text-dark">
                   <li>
                     <span className="font-semibold">{stats.productCount}+</span> Products

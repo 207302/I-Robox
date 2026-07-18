@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { parseShopQueryString } from "@/lib/shop/shopQuery";
+import { shopListingRedirectTarget } from "@/lib/shop/shopListingRedirect";
 
 const SECURITY_HEADERS: [string, string][] = [
   ["X-Frame-Options", "SAMEORIGIN"],
@@ -32,6 +34,26 @@ export async function proxy(request: NextRequest) {
       const httpsUrl = request.nextUrl.clone();
       httpsUrl.protocol = "https:";
       return NextResponse.redirect(httpsUrl, { status: 301 });
+    }
+  }
+
+  /**
+   * Legacy /shop?brand=X / /shop?category=X → path-based landing pages, as a
+   * real 308. The page-level permanentRedirect() can't produce a 3xx here:
+   * shop/loading.tsx makes Next stream a 200 shell before the page component
+   * runs, so its redirect degrades to a client-side one — which Google reports
+   * as "page with redirect" / soft-404 instead of following it.
+   */
+  if (pathname === "/shop" && request.nextUrl.search) {
+    const target = shopListingRedirectTarget(
+      parseShopQueryString(request.nextUrl.search)
+    );
+    if (target) {
+      const url = request.nextUrl.clone();
+      const [targetPath, targetQuery = ""] = target.split("?");
+      url.pathname = targetPath!;
+      url.search = targetQuery;
+      return NextResponse.redirect(url, { status: 308 });
     }
   }
 

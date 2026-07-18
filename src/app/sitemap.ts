@@ -99,7 +99,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         select: { slug: true, updated_at: true },
         orderBy: { name: "asc" },
       }),
+      // Only brands with live products — an all-brands list feeds Google
+      // empty pages it then reports as soft 404s.
       prisma.brands.findMany({
+        where: { products: { some: { is_active: true } } },
         select: { slug: true, updated_at: true },
         orderBy: { name: "asc" },
       }),

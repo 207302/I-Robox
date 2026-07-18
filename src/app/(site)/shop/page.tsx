@@ -9,7 +9,7 @@ import { getShopListingLcpImageUrl } from "@/lib/shop/productCardImage";
 import { parseShopQueryString } from "@/lib/shop/shopQuery";
 import { shopListingRedirectTarget } from "@/lib/shop/shopListingRedirect";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 import { JsonLdScript } from "@/lib/seo/jsonLd";
 import { absoluteSeoUrl, buildSocialMetadata, truncateMetaDescription } from "@/lib/seo/metadata";
 import { categoryListingMetaDescription } from "@/lib/seo/categoryMetadata";
@@ -27,6 +27,7 @@ type PageProps = {
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const sp = await searchParams;
+  const searchQ = (Array.isArray(sp.q) ? sp.q[0] : sp.q)?.trim() ?? "";
   const categorySlugs = (() => {
     const raw = sp.category;
     if (!raw) return [];
@@ -54,6 +55,10 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     title,
     description,
     ...buildSocialMetadata({ title, description, path: "/shop" }),
+    // Search-result URLs (/shop?q=...) must never be indexed — arbitrary user
+    // queries have no SEO value, and Google was crawling the JSON-LD
+    // SearchAction template literally as /shop?q={search_term_string}.
+    ...(searchQ ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
@@ -75,8 +80,10 @@ export default async function ShopPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const listingParams = listingSearchParamsFromRecord(sp);
   const initialQueryString = listingParams.toString();
+  // 308 (permanent): /shop?brand=X and /shop?category=X are legacy URLs whose
+  // canonical homes are the path-based landing pages.
   const redirectTarget = shopListingRedirectTarget(parseShopQueryString(initialQueryString));
-  if (redirectTarget) redirect(redirectTarget);
+  if (redirectTarget) permanentRedirect(redirectTarget);
 
   const [listingEnvelope, allCategories, allBrands] = await Promise.all([
     getShopListingForApi(listingParams),

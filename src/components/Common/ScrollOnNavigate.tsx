@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useEffect, useRef } from "react";
+import { useLayoutEffect, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const STORAGE_PREFIX = "scroll-restore:";
@@ -12,39 +12,30 @@ type ScrollSnapshot = {
 };
 
 type NavState = {
-  lastRouteKey: string | null;
-  pendingPopRestore: boolean;
   /** Cancel token for in-flight restore retries. */
   restoreGeneration: number;
 };
 
 const NAV_KEY = "__tronScrollNav__";
-const POP_KEY = "__tronScrollPop__";
 const memory = new Map<string, ScrollSnapshot>();
 
 function getNav(): NavState {
   const w = window as Window & { [NAV_KEY]?: NavState };
   if (!w[NAV_KEY]) {
     w[NAV_KEY] = {
-      lastRouteKey: null,
-      pendingPopRestore: false,
       restoreGeneration: 0,
     };
   }
   return w[NAV_KEY];
 }
 
-function ensurePopListener() {
-  const w = window as Window & { [POP_KEY]?: boolean };
-  if (w[POP_KEY]) return;
-  w[POP_KEY] = true;
-  window.addEventListener("popstate", () => {
-    getNav().pendingPopRestore = true;
-  });
-}
-
 function routeKey(pathname: string, search: string) {
   return search ? `${pathname}?${search}` : pathname;
+}
+
+function liveRouteKey(): string {
+  const params = new URLSearchParams(window.location.search);
+  return routeKey(window.location.pathname, params.toString());
 }
 
 function readRegions(): Record<string, number> {
@@ -238,19 +229,20 @@ export default function ScrollOnNavigate() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
+  // Hook-derived key drives WHEN effects re-run; the actual save/restore
+  // identity always comes from liveRouteKey() (window.location), because raw
+  // history.replaceState (shop filter sync) updates the URL without ever
+  // updating usePathname()/useSearchParams().
   const key = routeKey(pathname, search);
-  const keyRef = useRef(key);
-  keyRef.current = key;
 
   useEffect(() => {
-    ensurePopListener();
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
   }, []);
 
   useEffect(() => {
-    const persist = () => saveSnapshot(keyRef.current);
+    const persist = () => saveSnapshot(liveRouteKey());
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
@@ -271,7 +263,7 @@ export default function ScrollOnNavigate() {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        saveSnapshot(keyRef.current);
+        saveSnapshot(liveRouteKey());
         ticking = false;
       });
     };
@@ -284,7 +276,7 @@ export default function ScrollOnNavigate() {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        saveSnapshot(keyRef.current);
+        saveSnapshot(liveRouteKey());
         ticking = false;
       });
     };
@@ -296,7 +288,7 @@ export default function ScrollOnNavigate() {
     window.addEventListener("pagehide", persist);
 
     // Initial capture for this route (may be 0 right after forward nav — OK).
-    saveSnapshot(key);
+    saveSnapshot(liveRouteKey());
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
@@ -304,49 +296,32 @@ export default function ScrollOnNavigate() {
       window.removeEventListener("scroll", onScroll);
       document.removeEventListener("scroll", onRegionScroll, true);
       window.removeEventListener("pagehide", persist);
-      const y = window.scrollY || 0;
-      const regions = readRegions();
-      if (y > 0 || Object.values(regions).some((v) => v > 0)) {
-        saveSnapshot(key, { windowY: y, regions });
-      }
     };
   }, [key]);
 
   useLayoutEffect(() => {
-    ensurePopListener();
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
 
     const nav = getNav();
+    // Identity is always the live URL, never the (possibly stale) hook key.
+    const liveKey = liveRouteKey();
 
-    // Same-route remount (Suspense): don't jump to top; finish a pending back restore.
-    if (nav.lastRouteKey === key) {
-      if (nav.pendingPopRestore) {
-        nav.pendingPopRestore = false;
-        const snap = getSnapshot(key);
-        if (snap && snapshotMeaningful(snap)) restoreSnapshot(snap);
-      }
-      return;
-    }
+    // Existence-based restoration: a saved snapshot for the live URL is the
+    // only signal. If one exists, restore into it; otherwise land at the top.
+    // No back/forward direction detection — that race is what kept sending
+    // real Back presses to the top even though the snapshot was in memory.
+    const snap = getSnapshot(liveKey);
+    const willRestore = !!(snap && snapshotMeaningful(snap));
 
-    const isBack = nav.pendingPopRestore;
-    nav.pendingPopRestore = false;
-
-    if (isBack) {
-      const snap = getSnapshot(key);
-      if (snap && snapshotMeaningful(snap)) {
-        restoreSnapshot(snap);
-      } else {
-        scrollWindowToTop();
-      }
-    } else if (nav.lastRouteKey !== null) {
-      // Invalidate any in-flight restore from a previous back.
+    if (willRestore) {
+      restoreSnapshot(snap!);
+    } else {
+      // Cancel any in-flight restore from a previous navigation before topping.
       nav.restoreGeneration += 1;
       scrollWindowToTop();
     }
-
-    nav.lastRouteKey = key;
   }, [key]);
 
   return null;

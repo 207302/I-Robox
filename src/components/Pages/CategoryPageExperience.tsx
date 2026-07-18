@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
 import ProductItem from "@/components/Common/ProductItem";
 import FadeInSection from "@/components/ui/FadeInSection";
 import PageBreadcrumb from "@/components/Pages/PageBreadcrumb";
@@ -71,15 +72,21 @@ export default function CategoryPageExperience({
     }
   }, [fetchListing]);
 
+  const loadingMoreRef = useRef(false);
   const loadMore = useCallback(async () => {
-    if (loadingMore || listing.page >= listing.totalPages) return;
+    if (loadingMoreRef.current || listing.page >= listing.totalPages) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       await fetchListing(listing.page + 1, true);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [fetchListing, listing.page, listing.totalPages, loadingMore]);
+  }, [fetchListing, listing.page, listing.totalPages]);
+
+  const hasMorePages = listing.page < listing.totalPages;
+  const loadMoreSentinelRef = useLoadMoreSentinel(loadMore, hasMorePages, listing.page);
 
   const clearFilters = useCallback(() => {
     if (!hasExtraFilters) {
@@ -272,16 +279,19 @@ export default function CategoryPageExperience({
               <p className="py-12 text-center text-sm text-meta-3">No products in this category yet.</p>
             ) : null}
 
-            {listing.page < listing.totalPages ? (
-              <div className="mt-10 flex justify-center">
-                <button
-                  type="button"
-                  disabled={loadingMore}
-                  onClick={() => void loadMore()}
-                  className="rounded-lg bg-dark px-6 py-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-                >
-                  {loadingMore ? "Loading…" : "Load More"}
-                </button>
+            {hasMorePages ? (
+              <div
+                ref={loadMoreSentinelRef}
+                className="mt-6 flex min-h-12 items-center justify-center py-6"
+                aria-hidden={!loadingMore}
+              >
+                {loadingMore ? (
+                  <p className="text-sm font-medium text-meta-3" aria-live="polite">
+                    Loading more products…
+                  </p>
+                ) : (
+                  <span className="sr-only">Scroll for more products</span>
+                )}
               </div>
             ) : null}
           </div>

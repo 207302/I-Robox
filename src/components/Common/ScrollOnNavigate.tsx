@@ -214,9 +214,15 @@ function restoreSnapshot(snap: ScrollSnapshot) {
   let idleDeadline: number | null = null;
   let lastHeight = 0;
 
-  const finish = () => {
+  const finish = (reason = "unspecified") => {
     if (finished) return;
     finished = true;
+    scrollDebug("restore-finish", {
+      reason,
+      target: snap.windowY,
+      actual: window.scrollY,
+      scrollHeight: document.documentElement.scrollHeight,
+    });
     // Only unlock saves if no newer restore has taken over the flag.
     if (generation === getNav().restoreGeneration) nav.restoring = false;
     observer?.disconnect();
@@ -229,8 +235,7 @@ function restoreSnapshot(snap: ScrollSnapshot) {
 
   // The user grabbing the page mid-restore wins over the retry loop.
   const onUserScroll = () => {
-    scrollDebug("restore-cancelled (user scroll)");
-    finish();
+    finish("user-scroll");
   };
 
   // Give up only after the page has stopped growing for a while. A fixed
@@ -238,13 +243,13 @@ function restoreSnapshot(snap: ScrollSnapshot) {
   // slow (mobile/dev) connections; each height increase buys more time.
   const armIdleDeadline = () => {
     if (idleDeadline != null) window.clearTimeout(idleDeadline);
-    idleDeadline = window.setTimeout(finish, 12000);
+    idleDeadline = window.setTimeout(() => finish("idle-deadline"), 12000);
   };
 
   const tick = () => {
     if (finished) return;
     if (generation !== getNav().restoreGeneration) {
-      finish();
+      finish("superseded");
       return;
     }
     const height = document.documentElement.scrollHeight;
@@ -253,9 +258,36 @@ function restoreSnapshot(snap: ScrollSnapshot) {
       armIdleDeadline();
     }
     applySnapshot(snap);
+    const maxWindow = Math.max(0, height - window.innerHeight);
+    const clamped = snap.windowY > maxWindow + 4;
+    scrollDebug("tick", {
+      target: snap.windowY,
+      actual: window.scrollY,
+      scrollHeight: height,
+      maxWindow,
+      clamped,
+      regions: Object.keys(snap.regions).length
+        ? Object.fromEntries(
+            Object.entries(snap.regions).map(([id, top]) => {
+              const el = document.querySelector<HTMLElement>(
+                `[${REGION_ATTR}="${escapeSelectorValue(id)}"]`
+              );
+              return [
+                id,
+                el
+                  ? {
+                      target: top,
+                      actual: el.scrollTop,
+                      max: Math.max(0, el.scrollHeight - el.clientHeight),
+                    }
+                  : { target: top, missing: true },
+              ];
+            })
+          )
+        : undefined,
+    });
     if (snapshotApplied(snap)) {
-      scrollDebug("restore-applied", { target: snap.windowY, actual: window.scrollY });
-      finish();
+      finish("applied");
     }
   };
 
@@ -273,8 +305,12 @@ function restoreSnapshot(snap: ScrollSnapshot) {
   for (const ms of delays) {
     timers.push(window.setTimeout(tick, ms));
   }
-  // Absolute cap so a pathological layout can't hold the scroll hostage.
-  timers.push(window.setTimeout(finish, 45000));
+  // Runaway insurance only. A deep restore into an infinite-scroll list
+  // legitimately climbs page-by-page for a long time (verified trace: a
+  // 45s cap cut off an actively growing ladder at 21k/24k px, stranding
+  // the user at the bottom). Stalls are already handled by the 12s idle
+  // deadline, and the user can cancel any time by scrolling.
+  timers.push(window.setTimeout(() => finish("absolute-cap"), 300000));
 
   if (typeof ResizeObserver !== "undefined") {
     observer = new ResizeObserver(() => tick());

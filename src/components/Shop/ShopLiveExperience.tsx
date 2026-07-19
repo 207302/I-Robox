@@ -783,7 +783,12 @@ export default function ShopLiveExperience({
             void loadMore();
           }
         },
-        { root, rootMargin: "320px 0px", threshold: 0 }
+        // Must exceed the mobile footer height (~1400px): when a scroll
+        // restore clamps to the very bottom of a partially loaded list, the
+        // sentinel sits an entire footer above the viewport. With a smaller
+        // margin it never intersects and the restore ladder deadlocks at the
+        // footer (same reasoning as useLoadMoreSentinel).
+        { root, rootMargin: "1800px 0px", threshold: 0 }
       );
       observer.observe(sentinel);
     };

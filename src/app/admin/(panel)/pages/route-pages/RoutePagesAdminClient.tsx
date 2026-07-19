@@ -39,23 +39,38 @@ function BannerEditor({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Brand description (brands tab only). savedDescription tracks the value
+  // persisted in the DB so the save button only lights up on real edits.
+  const [description, setDescription] = useState("");
+  const [savedDescription, setSavedDescription] = useState("");
+  const [savingDescription, setSavingDescription] = useState(false);
 
   const apiBase = kind === "brands" ? "/api/admin/brand-pages" : "/api/admin/category-pages";
 
   const loadPage = useCallback(async (id: string) => {
     if (!id) {
       setHeroImage(null);
+      setDescription("");
+      setSavedDescription("");
       return;
     }
     setLoading(true);
     try {
       const res = await fetchAdminWithRetry(`${apiBase}/${id}`);
-      const data = (await res.json()) as { heroImage?: string | null; error?: string };
+      const data = (await res.json()) as {
+        heroImage?: string | null;
+        description?: string | null;
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? "Failed to load");
       setHeroImage(data.heroImage ?? null);
+      setDescription(data.description ?? "");
+      setSavedDescription(data.description ?? "");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load");
       setHeroImage(null);
+      setDescription("");
+      setSavedDescription("");
     } finally {
       setLoading(false);
     }
@@ -83,6 +98,29 @@ function BannerEditor({
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveDescription() {
+    if (!selectedId) return;
+    setSavingDescription(true);
+    try {
+      const trimmed = description.trim();
+      const res = await fetchAdminWithRetry(`${apiBase}/${selectedId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: trimmed || null }),
+        credentials: "include",
+      });
+      const data = (await res.json()) as { error?: string; description?: string | null };
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setDescription(data.description ?? "");
+      setSavedDescription(data.description ?? "");
+      toast.success(trimmed ? "Description saved" : "Description cleared");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSavingDescription(false);
     }
   }
 
@@ -185,6 +223,35 @@ function BannerEditor({
               Remove banner
             </button>
           </div>
+
+          {kind === "brands" ? (
+            <div className="space-y-2 border-t border-gray-3 pt-4">
+              <label className="block">
+                <span className="text-sm font-medium">Brand description</span>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  maxLength={2000}
+                  disabled={loading || savingDescription}
+                  placeholder="Shown on the brand page and used as its meta description. Leave empty to use the auto-generated text."
+                  className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm disabled:bg-gray-1"
+                />
+              </label>
+              <p className="text-xs text-meta-3">
+                If left empty, the brand page shows an auto-generated description
+                built from the brand&apos;s categories and product count.
+              </p>
+              <button
+                type="button"
+                disabled={savingDescription || loading || description.trim() === savedDescription.trim()}
+                onClick={() => void saveDescription()}
+                className="rounded-lg bg-dark px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {savingDescription ? "Saving…" : "Save description"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

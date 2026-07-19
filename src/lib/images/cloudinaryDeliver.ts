@@ -99,9 +99,9 @@ const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 /** Desktop hero frame — matches md:aspect-[1440/520] container. */
 export const HERO_WIDTH_CEILING = 1440;
 export const HERO_HEIGHT_CEILING = 520;
-/** Mobile hero frame — matches aspect-[750/660] container. */
+/** Mobile hero frame — matches aspect-[750/700] container. */
 export const HERO_MOBILE_WIDTH = 750;
-export const HERO_MOBILE_HEIGHT = 660;
+export const HERO_MOBILE_HEIGHT = 700;
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).

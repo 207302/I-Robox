@@ -14,9 +14,8 @@ export type BrandPagePayload = {
     slug: string;
     description: string | null;
   };
-  /** Admin description when set, otherwise a generated per-brand blurb.
-   *  Always non-empty so brand pages never render as content-less (soft 404). */
-  blurb: string;
+  /** Admin-entered description, or null when not set (nothing is shown then). */
+  blurb: string | null;
   heroImage: string | null;
   logoImage: string | null;
   stats: {
@@ -26,34 +25,6 @@ export type BrandPagePayload = {
   };
   collections: BrandCollectionCard[];
 };
-
-function buildBrandBlurb(
-  name: string,
-  productCount: number,
-  collections: BrandCollectionCard[]
-): string {
-  const sentences: string[] = [
-    `Explore the ${name} collection at i-robox — RC toys, diecast models, and collectibles from a brand collectors trust.`,
-  ];
-  if (collections.length > 0) {
-    const top = collections.slice(0, 3).map((c) => c.name);
-    const list =
-      top.length === 1
-        ? top[0]
-        : `${top.slice(0, -1).join(", ")} and ${top[top.length - 1]}`;
-    sentences.push(`Popular ${name} ranges include ${list}.`);
-  }
-  if (productCount > 0) {
-    sentences.push(
-      `Browse ${productCount}+ ${name} products with secure checkout and fast delivery across India.`
-    );
-  } else {
-    sentences.push(
-      `${name} stock is currently being replenished — new arrivals land here first, so check back soon or explore similar brands in the shop.`
-    );
-  }
-  return sentences.join(" ");
-}
 
 export async function getBrandPagePayload(slug: string): Promise<BrandPagePayload | null> {
   const brand = await prisma.brands.findUnique({
@@ -138,9 +109,7 @@ export async function getBrandPagePayload(slug: string): Promise<BrandPagePayloa
       slug: brand.slug,
       description: brand.description,
     },
-    blurb:
-      brand.description?.trim() ||
-      buildBrandBlurb(brand.name, productCount, collections),
+    blurb: brand.description?.trim() || null,
     heroImage: brand.brand_pages?.hero_image ?? null,
     logoImage: brand.homepage_brand_rail[0]?.image_url ?? null,
     stats: {

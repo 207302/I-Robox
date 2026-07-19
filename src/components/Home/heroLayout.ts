@@ -1,9 +1,9 @@
 /** Shared hero dimensions — aspect-ratio matched to Cloudinary delivery crops. */
-export const HERO_ASPECT_CLASS = "aspect-[750/660] md:aspect-[1440/520]";
+export const HERO_ASPECT_CLASS = "aspect-[750/700] md:aspect-[1440/520]";
 
 /** Outer hero image box — aspect + min/max guards (no fixed h-[] that fights aspect). */
 export const HERO_HEIGHT_CLASS =
-  "aspect-[750/660] min-h-[280px] max-h-[460px] md:aspect-[1440/520] md:min-h-[440px] md:max-h-[640px]";
+  "aspect-[750/700] min-h-[280px] max-h-[480px] md:aspect-[1440/520] md:min-h-[440px] md:max-h-[640px]";
 
 /** @deprecated Prefer HERO_HEIGHT_CLASS — kept for any stray imports during transition. */
 export const HERO_MIN_HEIGHT_CLASS = HERO_HEIGHT_CLASS;

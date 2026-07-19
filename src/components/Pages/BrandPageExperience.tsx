@@ -162,11 +162,11 @@ export default function BrandPageExperience({ page, initialListing }: Props) {
                   )}
                   <BadgeCheck className="size-5 text-blue" aria-label="Verified brand" />
                 </div>
-                {/* Always render the blurb — an empty brand page with a bare
-                    "no products" message gets flagged as a soft 404 by Google. */}
-                <p className="mt-2 max-w-3xl text-sm text-meta-3 md:text-base">
-                  {blurb}
-                </p>
+                {blurb ? (
+                  <p className="mt-2 max-w-3xl text-sm text-meta-3 md:text-base">
+                    {blurb}
+                  </p>
+                ) : null}
                 <ul className="mt-4 flex flex-wrap gap-6 text-sm text-dark">
                   <li>
                     <span className="font-semibold">{stats.productCount}+</span> Products

@@ -234,13 +234,12 @@ function BannerEditor({
                   rows={4}
                   maxLength={2000}
                   disabled={loading || savingDescription}
-                  placeholder="Shown on the brand page and used as its meta description. Leave empty to use the auto-generated text."
+                  placeholder="Shown on the brand page and used as its meta description. Leave empty to hide the description."
                   className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm disabled:bg-gray-1"
                 />
               </label>
               <p className="text-xs text-meta-3">
-                If left empty, the brand page shows an auto-generated description
-                built from the brand&apos;s categories and product count.
+                Optional. Only shown on the brand page when filled in.
               </p>
               <button
                 type="button"

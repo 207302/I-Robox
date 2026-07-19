@@ -24,7 +24,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Brand not found | i-robox" };
   }
   const title = `${data.brand.name} | i-robox`;
-  const description = truncateMetaDescription(data.blurb, 155);
+  // Meta-only fallback: nothing is rendered on the page unless the admin
+  // filled in a description, but the <meta> tag should never be empty.
+  const description = truncateMetaDescription(
+    data.blurb ??
+      `Shop ${data.brand.name} RC toys, diecast models and collectibles at i-robox with secure checkout and fast delivery across India.`,
+    155
+  );
   return {
     title,
     description,

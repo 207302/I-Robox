@@ -14,16 +14,44 @@ type ScrollSnapshot = {
 type NavState = {
   /** Cancel token for in-flight restore retries. */
   restoreGeneration: number;
+  /**
+   * True while a restore is replaying scroll. Restore repeatedly applies a
+   * clamped position while infinite-scroll content is still loading; those
+   * programmatic scrolls fire real scroll events, and saving them would
+   * overwrite the good snapshot with a transient clamped-to-bottom value.
+   */
+  restoring: boolean;
 };
 
 const NAV_KEY = "__tronScrollNav__";
 const memory = new Map<string, ScrollSnapshot>();
+
+/**
+ * Opt-in diagnostics for on-device (mobile) testing without spamming normal
+ * users: run `localStorage.setItem("scroll-debug", "1")` in the console (or
+ * remote inspector), reload, and watch for `[scroll-debug]` lines.
+ */
+let debugEnabled: boolean | null = null;
+function scrollDebug(msg: string, data?: Record<string, unknown>) {
+  if (debugEnabled === null) {
+    try {
+      debugEnabled = localStorage.getItem("scroll-debug") === "1";
+    } catch {
+      debugEnabled = false;
+    }
+  }
+  if (!debugEnabled) return;
+  console.log(
+    `[scroll-debug] ${msg}${data === undefined ? "" : " " + JSON.stringify(data)}`
+  );
+}
 
 function getNav(): NavState {
   const w = window as Window & { [NAV_KEY]?: NavState };
   if (!w[NAV_KEY]) {
     w[NAV_KEY] = {
       restoreGeneration: 0,
+      restoring: false,
     };
   }
   return w[NAV_KEY];
@@ -60,7 +88,14 @@ function snapshotMeaningful(snap: ScrollSnapshot): boolean {
   return Object.values(snap.regions).some((y) => y > 0);
 }
 
-function saveSnapshot(key: string, snap?: ScrollSnapshot) {
+function saveSnapshot(key: string, snap?: ScrollSnapshot, reason?: string) {
+  // While a restore is replaying scroll, every position is transient (often
+  // clamped to the bottom of a not-yet-fully-loaded infinite-scroll list).
+  // Saving those would corrupt the very snapshot being restored.
+  if (getNav().restoring) {
+    scrollDebug("save-skipped (restoring)", { key, reason: reason ?? "scroll" });
+    return;
+  }
   const next = snap ?? captureSnapshot();
   // Never clobber a good snapshot with an empty one (Next often resets scroll before unmount).
   const prev = memory.get(key) ?? readStored(key);
@@ -68,11 +103,14 @@ function saveSnapshot(key: string, snap?: ScrollSnapshot) {
     return;
   }
   memory.set(key, next);
+  // Written synchronously on every save: mobile browsers can suspend the tab
+  // and tear down the JS context, leaving sessionStorage as the only survivor.
   try {
     sessionStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(next));
   } catch {
     /* private mode / quota */
   }
+  scrollDebug("save", { key, y: next.windowY, reason: reason ?? "scroll" });
 }
 
 function readStored(key: string): ScrollSnapshot | undefined {
@@ -161,35 +199,69 @@ function snapshotApplied(snap: ScrollSnapshot): boolean {
 }
 
 /**
- * Keep re-applying until layout/images grow enough for the saved offsets,
- * or until we give up. Cancels previous restore when a new navigation starts.
+ * Keep re-applying until layout/images/infinite-scroll pages grow enough for
+ * the saved offsets, or until the page stops growing. Cancels when a new
+ * navigation starts or the user takes over scrolling.
  */
 function restoreSnapshot(snap: ScrollSnapshot) {
   const nav = getNav();
   const generation = ++nav.restoreGeneration;
+  nav.restoring = true;
   const reenableSmooth = disableSmoothScroll();
   const timers: number[] = [];
   let observer: ResizeObserver | null = null;
   let finished = false;
+  let idleDeadline: number | null = null;
+  let lastHeight = 0;
 
   const finish = () => {
     if (finished) return;
     finished = true;
+    // Only unlock saves if no newer restore has taken over the flag.
+    if (generation === getNav().restoreGeneration) nav.restoring = false;
     observer?.disconnect();
     timers.forEach((id) => window.clearTimeout(id));
+    if (idleDeadline != null) window.clearTimeout(idleDeadline);
+    window.removeEventListener("wheel", onUserScroll);
+    window.removeEventListener("touchstart", onUserScroll);
     reenableSmooth();
   };
 
+  // The user grabbing the page mid-restore wins over the retry loop.
+  const onUserScroll = () => {
+    scrollDebug("restore-cancelled (user scroll)");
+    finish();
+  };
+
+  // Give up only after the page has stopped growing for a while. A fixed
+  // deadline loses to infinite-scroll lists that reload page-by-page on
+  // slow (mobile/dev) connections; each height increase buys more time.
+  const armIdleDeadline = () => {
+    if (idleDeadline != null) window.clearTimeout(idleDeadline);
+    idleDeadline = window.setTimeout(finish, 12000);
+  };
+
   const tick = () => {
+    if (finished) return;
     if (generation !== getNav().restoreGeneration) {
       finish();
       return;
     }
+    const height = document.documentElement.scrollHeight;
+    if (height !== lastHeight) {
+      lastHeight = height;
+      armIdleDeadline();
+    }
     applySnapshot(snap);
     if (snapshotApplied(snap)) {
+      scrollDebug("restore-applied", { target: snap.windowY, actual: window.scrollY });
       finish();
     }
   };
+
+  armIdleDeadline();
+  window.addEventListener("wheel", onUserScroll, { passive: true });
+  window.addEventListener("touchstart", onUserScroll, { passive: true });
 
   tick();
   requestAnimationFrame(() => {
@@ -201,7 +273,8 @@ function restoreSnapshot(snap: ScrollSnapshot) {
   for (const ms of delays) {
     timers.push(window.setTimeout(tick, ms));
   }
-  timers.push(window.setTimeout(finish, 3000));
+  // Absolute cap so a pathological layout can't hold the scroll hostage.
+  timers.push(window.setTimeout(finish, 45000));
 
   if (typeof ResizeObserver !== "undefined") {
     observer = new ResizeObserver(() => tick());
@@ -236,26 +309,36 @@ export default function ScrollOnNavigate() {
   const key = routeKey(pathname, search);
 
   useEffect(() => {
+    // Re-assert (already set pre-paint by the inline script in the root
+    // layout); some browsers reset it across bfcache restores.
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
+
+    // Log-only: lets on-device debugging show how popstate timing relates to
+    // the restore decision (iOS swipe-back fires it on gesture completion).
+    // Deliberately NOT used to gate restoration — see comment in the layout
+    // effect below.
+    const onPopState = () => scrollDebug("popstate", { url: liveRouteKey() });
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
-    const persist = () => saveSnapshot(liveRouteKey());
+    const persist = (reason: string) => saveSnapshot(liveRouteKey(), undefined, reason);
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (!target.closest("a[href]")) return;
-      persist();
+      persist("link-pointerdown");
     };
 
     const onClickCapture = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (!target.closest("a[href]")) return;
-      persist();
+      persist("link-click");
     };
 
     let ticking = false;
@@ -281,21 +364,31 @@ export default function ScrollOnNavigate() {
       });
     };
 
+    const onPageHide = () => persist("pagehide");
+    // Mobile safety net: app switch / screen lock / new tab often only fires
+    // visibilitychange→hidden (pagehide is unreliable there), and the JS
+    // context may be suspended right after — last chance to hit sessionStorage.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") persist("visibilitychange");
+    };
+
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("click", onClickCapture, true);
     window.addEventListener("scroll", onScroll, { passive: true });
     document.addEventListener("scroll", onRegionScroll, { passive: true, capture: true });
-    window.addEventListener("pagehide", persist);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     // Initial capture for this route (may be 0 right after forward nav — OK).
-    saveSnapshot(liveRouteKey());
+    saveSnapshot(liveRouteKey(), undefined, "mount");
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("click", onClickCapture, true);
       window.removeEventListener("scroll", onScroll);
       document.removeEventListener("scroll", onRegionScroll, true);
-      window.removeEventListener("pagehide", persist);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [key]);
 
@@ -314,6 +407,12 @@ export default function ScrollOnNavigate() {
     // real Back presses to the top even though the snapshot was in memory.
     const snap = getSnapshot(liveKey);
     const willRestore = !!(snap && snapshotMeaningful(snap));
+    scrollDebug("navigate", {
+      key: liveKey,
+      willRestore,
+      targetY: snap?.windowY ?? null,
+      fromMemory: memory.has(liveKey),
+    });
 
     if (willRestore) {
       restoreSnapshot(snap!);

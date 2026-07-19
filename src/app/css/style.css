@@ -335,6 +335,12 @@
 
   html {
     font-family: var(--font-sans);
+    /* Infinite-scroll listings append content above the footer/sentinel;
+       scroll anchoring then "follows" the footer downward, dragging the
+       viewport to the bottom page-by-page (worst on mobile after a
+       scroll-restore). Appends are always below the reading position, so
+       anchoring has no upside here. */
+    overflow-anchor: none;
   }
 
   body {

@@ -124,6 +124,7 @@ export default function CategoryPageExperience({
           item={shopListingItemToProduct(item)}
           cardImageSizes={SHOP_GRID_CARD_SIZES}
           shopListingImage={index === 0 ? "lcp" : index === 1 ? "eager" : "lazy"}
+          hideMobileCartButton
         />
       )),
     [listing.items]

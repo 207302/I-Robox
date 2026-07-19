@@ -40,6 +40,8 @@ type Props = {
    * Omit on home/other pages — default Next/image lazy behavior.
    */
   shopListingImage?: "lcp" | "eager" | "lazy";
+  /** Hide the Add to Cart overlay on mobile (< lg); desktop hover behavior unchanged. */
+  hideMobileCartButton?: boolean;
 };
 // add updated the type here
 function ProductItemInner({
@@ -47,6 +49,7 @@ function ProductItemInner({
   bgClr = "white",
   cardImageSizes = PRODUCT_CARD_GRID_SIZES,
   shopListingImage,
+  hideMobileCartButton = false,
 }: Props) {
   const displayTitle = item.title;
   const hasVariants = (item?.productVariants?.length ?? 0) > 0;
@@ -209,7 +212,13 @@ function ProductItemInner({
           )}
         </div>
 
-        <div className="product-item-card-actions absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full flex items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0">
+        {/* On mobile only the cart button is visible here (quick view / wishlist
+            are lg-only), so hiding the bar below lg removes just that button. */}
+        <div
+          className={`product-item-card-actions absolute left-0 bottom-0 translate-y-0 lg:translate-y-full w-full ${
+            hideMobileCartButton ? "hidden lg:flex" : "flex"
+          } items-center justify-center gap-2.5 pb-5 ease-linear duration-200 lg:group-hover:translate-y-0`}
+        >
           <div className="hidden lg:block">
             <Tooltip content="Quick View" placement="top">
             <button

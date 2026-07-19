@@ -15,7 +15,11 @@ export function useLoadMoreSentinel(
   loadMore: () => void | Promise<void>,
   hasMore: boolean,
   resetKey: unknown,
-  rootMargin = "400px 0px"
+  // Must exceed the mobile footer height (~1400px): if the user (or a
+  // scroll-position restore) lands at the very bottom of the page, the
+  // sentinel sits an entire footer above the viewport. With a smaller
+  // margin it never intersects and infinite scroll stalls at the footer.
+  rootMargin = "1800px 0px"
 ) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef(loadMore);

@@ -62,6 +62,17 @@ export default function RootLayout({
 
       <head>
 
+        {/* Must run before first paint: mobile browsers apply native
+            scroll-restoration on back/reload earlier and more aggressively than
+            desktop. ScrollOnNavigate re-asserts this later, but it mounts after
+            hydration (inside Suspense) — too late to preempt the native jump. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{if("scrollRestoration"in history)history.scrollRestoration="manual"}catch(e){}',
+          }}
+        />
+
         <link rel="preconnect" href="https://api.fontshare.com" crossOrigin="anonymous" />
 
         <link href={CLASH_DISPLAY_STYLESHEET} rel="stylesheet" />

@@ -27,7 +27,7 @@ export default function HeroSlideImage({ slide, isLcp }: Props) {
         src={mobileSrc}
         alt={slide.title ?? "Hero banner"}
         fill
-        className="object-cover object-top md:hidden"
+        className="object-cover object-center md:hidden"
         sizes="(max-width: 767px) 100vw, 0vw"
         priority={isLcp}
         loading={loading}

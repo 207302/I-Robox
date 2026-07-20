@@ -23,7 +23,7 @@ export function cloudinaryDeliverUrl(
     dpr?: number;
     quality?: CloudinaryQuality;
     crop?: "limit" | "fill";
-    gravity?: "auto" | "north";
+    gravity?: "auto" | "north" | "center";
   }
 ): string {
   const trimmed = url?.trim();
@@ -37,7 +37,13 @@ export function cloudinaryDeliverUrl(
   const q = opts?.quality ?? "auto";
   const transforms = [
     opts?.crop === "limit" ? "c_limit" : opts?.crop === "fill" ? "c_fill" : null,
-    opts?.gravity === "auto" ? "g_auto" : opts?.gravity === "north" ? "g_north" : null,
+    opts?.gravity === "auto"
+      ? "g_auto"
+      : opts?.gravity === "north"
+        ? "g_north"
+        : opts?.gravity === "center"
+          ? "g_center"
+          : null,
     "f_auto",
     qualityTransform(q),
     w ? `w_${w}` : null,
@@ -99,9 +105,12 @@ const HERO_SRCSET_LAYOUT_WIDTHS = [390, 640, 828, 1080, 1280, 1440] as const;
 /** Desktop hero frame — matches md:aspect-[1440/520] container. */
 export const HERO_WIDTH_CEILING = 1440;
 export const HERO_HEIGHT_CEILING = 520;
-/** Mobile hero frame — matches aspect-[750/700] container. */
+/**
+ * Mobile hero frame — close to authored 1370×1148, nudged slightly taller.
+ * Centered fill keeps side content intact (no g_auto subject bias).
+ */
 export const HERO_MOBILE_WIDTH = 750;
-export const HERO_MOBILE_HEIGHT = 700;
+export const HERO_MOBILE_HEIGHT = Math.round((750 * 1180) / 1370); // ~646
 
 /**
  * Single hero source URL for next/image — width ceiling only (no dpr).
@@ -122,14 +131,14 @@ export function cloudinaryHeroSlideUrl(url: string, isLcp: boolean): string {
   });
 }
 
-/** Mobile hero source: fixed crop to mobile banner frame, AI subject-aware gravity. */
+/** Mobile hero source: same centered frame for every slide (no AI subject bias). */
 export function cloudinaryHeroMobileUrl(src: string, isLcp: boolean = false): string {
   return cloudinaryDeliverUrl(cloudinaryUrlWithoutTransforms(src), {
     width: HERO_MOBILE_WIDTH,
     height: HERO_MOBILE_HEIGHT,
     quality: isLcp ? "auto:best" : "auto:good",
     crop: "fill",
-    gravity: "auto",
+    gravity: "center",
   });
 }
 

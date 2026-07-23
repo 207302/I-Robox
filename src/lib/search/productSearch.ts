@@ -21,9 +21,19 @@ export function normalizeSearchText(value: string): string {
     .trim();
 }
 
-/** Letters/digits only — matches "hot wheels" to "hotwheels". */
+/** Letters/digits only — used for alternate compact query terms (e.g. "F 1" → "f1"). */
 export function compactSearchText(value: string): string {
   return normalizeSearchText(value).replace(/\s+/g, "");
+}
+
+function wordsOf(value: string): string[] {
+  return normalizeSearchText(value).split(" ").filter(Boolean);
+}
+
+/** Whole-word or whole-word-prefix match (never mid-token substring). */
+export function wordOrPrefixMatch(fieldWords: string[], term: string): boolean {
+  if (!term) return false;
+  return fieldWords.some((w) => w === term || w.startsWith(term));
 }
 
 function searchableFields(item: ProductSearchItem): string[] {
@@ -40,46 +50,46 @@ function searchableFields(item: ProductSearchItem): string[] {
   ].filter(Boolean);
 }
 
-function fieldHaystack(fields: string[]): { spaced: string; compact: string } {
-  const joined = fields.join(" ");
-  return { spaced: normalizeSearchText(joined), compact: compactSearchText(joined) };
-}
-
-/** Lightweight fuzzy match: substring, compact match, or all query tokens present. */
+/**
+ * Match if every query word is a whole-word/prefix hit on some field word,
+ * OR the compacted query (e.g. "F 1" → "f1") is a whole-word/prefix hit.
+ * Does not strip spaces from field text before matching — "F-150" → words
+ * ["f","150"], so "f1" no longer matches.
+ */
 export function fuzzyMatchProduct(query: string, item: ProductSearchItem): boolean {
   const q = normalizeSearchText(query);
   if (!q) return true;
 
+  const andWords = q.split(" ").filter(Boolean);
   const qCompact = compactSearchText(query);
-  const tokens = q.split(" ").filter(Boolean);
+  // "F 1" splits to ["f","1"] whose join equals compact "f1" — still treat as
+  // one code token so we don't AND-match every product that has both "f…" and "1…".
+  const compactOnly =
+    Boolean(qCompact) &&
+    andWords.length > 1 &&
+    andWords.every((w) => w.length <= 2) &&
+    qCompact.length <= 4;
 
   const fields = searchableFields(item);
-  for (const field of fields) {
-    const n = normalizeSearchText(field);
-    const c = compactSearchText(field);
-    if (n.includes(q) || c.includes(qCompact)) return true;
-    if (tokens.length > 1 && tokens.every((t) => n.includes(t) || c.includes(compactSearchText(t)))) {
-      return true;
+
+  const matchesTerms = (terms: string[]) => {
+    for (const field of fields) {
+      const fieldWords = wordsOf(field);
+      if (terms.every((t) => wordOrPrefixMatch(fieldWords, t))) return true;
     }
-    if (qCompact.length >= 4 && subsequenceMatch(c, qCompact)) return true;
-  }
-
-  if (tokens.length > 1) {
-    const { spaced, compact } = fieldHaystack(fields);
-    if (tokens.every((t) => spaced.includes(t) || compact.includes(compactSearchText(t)))) {
-      return true;
+    if (terms.length > 1) {
+      const allWords = fields.flatMap((f) => wordsOf(f));
+      if (terms.every((t) => wordOrPrefixMatch(allWords, t))) return true;
     }
+    return false;
+  };
+
+  if (compactOnly) {
+    return matchesTerms([qCompact]);
   }
 
-  return false;
-}
-
-function subsequenceMatch(haystack: string, needle: string): boolean {
-  let i = 0;
-  for (const ch of haystack) {
-    if (ch === needle[i]) i += 1;
-    if (i === needle.length) return true;
-  }
+  if (matchesTerms(andWords)) return true;
+  if (qCompact && qCompact !== andWords.join("") && matchesTerms([qCompact])) return true;
   return false;
 }
 
@@ -89,6 +99,7 @@ export function fuzzyMatchScore(query: string, item: ProductSearchItem): number 
   if (!q) return 0;
 
   const qCompact = compactSearchText(query);
+  const andWords = q.split(" ").filter(Boolean);
   let score = 0;
 
   const weighted: { value: string | null; weight: number }[] = [
@@ -105,20 +116,15 @@ export function fuzzyMatchScore(query: string, item: ProductSearchItem): number 
 
   for (const { value, weight } of weighted) {
     if (!value) continue;
-    const n = normalizeSearchText(value);
-    const c = compactSearchText(value);
-    if (n === q || c === qCompact) score += weight * 4;
-    else if (n.startsWith(q) || c.startsWith(qCompact)) score += weight * 3;
-    else if (n.includes(q) || c.includes(qCompact)) score += weight * 2;
-    else if (qCompact.length >= 3 && subsequenceMatch(c, qCompact)) score += weight;
+    const fieldWords = wordsOf(value);
+    if (andWords.every((t) => fieldWords.some((w) => w === t))) score += weight * 4;
+    else if (andWords.every((t) => wordOrPrefixMatch(fieldWords, t))) score += weight * 3;
+    else if (qCompact && wordOrPrefixMatch(fieldWords, qCompact)) score += weight * 2;
   }
 
-  const tokens = q.split(" ").filter(Boolean);
-  if (tokens.length > 1) {
-    const { spaced, compact } = fieldHaystack(searchableFields(item));
-    if (tokens.every((t) => spaced.includes(t) || compact.includes(compactSearchText(t)))) {
-      score += 5;
-    }
+  if (andWords.length > 1) {
+    const allWords = searchableFields(item).flatMap((f) => wordsOf(f));
+    if (andWords.every((t) => wordOrPrefixMatch(allWords, t))) score += 5;
   }
 
   return score;

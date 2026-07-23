@@ -453,8 +453,21 @@ export default function ShopLiveExperience({
     const parsed = parseShopQueryString(queryString);
     /** Infinite scroll always loads from page 1; later pages append via loadMore. */
     if (clientFuzzyIds !== null) {
+      if (clientFuzzyIds.length > 0) {
+        const usp = new URLSearchParams(buildListingQueryString({ ...parsed, q: "", page: 1 }));
+        usp.set("ids", clientFuzzyIds.join(","));
+        return usp.toString();
+      }
+      // Zero client hits: for longer queries, fall back to server waterfall
+      // (FTS → word-boundary → trigram) so typos like "farrari" still resolve.
+      const qTrim = debouncedSearchInput.trim();
+      const compact = qTrim.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (compact.length >= 4) {
+        return buildListingQueryString({ ...parsed, q: qTrim, page: 1 });
+      }
+      // Short query, no matches — force an empty id list (don't dump the whole catalog).
       const usp = new URLSearchParams(buildListingQueryString({ ...parsed, q: "", page: 1 }));
-      if (clientFuzzyIds.length > 0) usp.set("ids", clientFuzzyIds.join(","));
+      usp.set("ids", "00000000-0000-4000-8000-000000000000");
       return usp.toString();
     }
     return buildListingQueryString({ ...parsed, q: debouncedSearchInput, page: 1 });

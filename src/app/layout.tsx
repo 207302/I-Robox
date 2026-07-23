@@ -85,6 +85,35 @@ export default function RootLayout({
 
         <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
 
+        <script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=AW-18293191068"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `     window.dataLayer = window.dataLayer || [];
+     function gtag(){dataLayer.push(arguments);}
+     gtag('js', new Date());
+     gtag('config', 'AW-18293191068');`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `     function gtagSendEvent(url) {
+       var callback = function () {
+         if (typeof url === 'string') {
+           window.location = url;
+         }
+       };
+       gtag('event', 'conversion_event_purchase', {
+         'event_callback': callback,
+         'event_timeout': 2000,
+       });
+       return false;
+     }`,
+          }}
+        />
+
       </head>
 
       <body suppressHydrationWarning={true} className="font-sans antialiased">

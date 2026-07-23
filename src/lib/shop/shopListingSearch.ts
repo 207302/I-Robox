@@ -9,8 +9,8 @@ function normalizeSearchTerm(raw: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function escapeIlikePattern(value: string): string {
-  return value.replace(/[%_\\]/g, "\\$&");
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getSearchVariants(raw: string): string[] {
@@ -22,60 +22,35 @@ function getSearchVariants(raw: string): string[] {
   return [...new Set([trimmed, noSpaces, withSpaces, spaced])].filter(Boolean);
 }
 
-async function resolveNormalizedIlikeSearchIds(rawQ: string, profile: ShopListingProfile): Promise<string[]> {
-  const compact = normalizeSearchTerm(rawQ);
-  const spaced = rawQ.toLowerCase().trim();
-  if (!compact && !spaced) return [];
+/** Punctuation-split words from a query (no space-stripping of the field itself). */
+function queryWords(raw: string): string[] {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
 
-  const compactPattern = `%${escapeIlikePattern(compact)}%`;
-  const spacedPattern = `%${escapeIlikePattern(spaced)}%`;
-
-  const extraSpacedPatterns = getSearchVariants(rawQ)
-    .map((v) => v.toLowerCase().trim())
-    .filter((v) => v.length > 0 && v !== spaced && v !== compact)
-    .slice(0, 4)
-    .map((v) => `%${escapeIlikePattern(v)}%`);
-
-  const extraClauseParts = extraSpacedPatterns.flatMap((pattern) => [
-    Prisma.sql`OR LOWER(p.name) ILIKE ${pattern}`,
-    Prisma.sql`OR LOWER(COALESCE(b.name, '')) ILIKE ${pattern}`,
-    Prisma.sql`OR LOWER(COALESCE(p.short_description, '')) ILIKE ${pattern}`,
-    Prisma.sql`OR LOWER(COALESCE(st.name, '')) ILIKE ${pattern}`,
-  ]);
-  const extraClauses =
-    extraClauseParts.length > 0 ? Prisma.join(extraClauseParts, " ") : Prisma.sql``;
-
-  const rows = await profiledQuery(profile, "search.ilike", () =>
-    prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT DISTINCT p.id
-      FROM products p
-      LEFT JOIN brands b ON p.brand_id = b.id
-      LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN product_subtypes st ON p.subtype_id = st.id
-      WHERE p.is_active = true
-        AND (
-          LOWER(REPLACE(p.name, ' ', '')) ILIKE ${compactPattern}
-          OR LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')) ILIKE ${compactPattern}
-          OR LOWER(REPLACE(COALESCE(p.description, ''), ' ', '')) ILIKE ${compactPattern}
-          OR LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')) ILIKE ${compactPattern}
-          OR LOWER(REPLACE(COALESCE(c.name, ''), ' ', '')) ILIKE ${compactPattern}
-          OR LOWER(REPLACE(COALESCE(st.name, ''), ' ', '')) ILIKE ${compactPattern}
-          OR LOWER(p.name) ILIKE ${spacedPattern}
-          OR LOWER(COALESCE(p.short_description, '')) ILIKE ${spacedPattern}
-          OR LOWER(COALESCE(p.description, '')) ILIKE ${spacedPattern}
-          OR LOWER(COALESCE(b.name, '')) ILIKE ${spacedPattern}
-          OR LOWER(COALESCE(c.name, '')) ILIKE ${spacedPattern}
-          OR LOWER(COALESCE(st.name, '')) ILIKE ${spacedPattern}
-          ${extraClauses}
-        )
-      LIMIT 500 -- raised from 200; aligns closer to fuzzy index result set size
-    `)
-  );
-  return rows.map((r) => r.id);
+/**
+ * Whole-word or whole-word-prefix regex for Postgres ~*.
+ * "f1" matches token "f1" or "f1team", but not "xf1" or mid-token "of1970".
+ * "F-150" tokenizes as f + 150, so "f1" does not match.
+ */
+function wordPrefixRegex(term: string): string {
+  const t = escapeRegex(term.toLowerCase());
+  return `(^|[^a-z0-9])${t}[a-z0-9]*($|[^a-z0-9])`;
 }
 
 async function resolveFtsSearchIds(rawQ: string, profile: ShopListingProfile): Promise<string[]> {
-  const variants = getSearchVariants(rawQ).filter((v) => /[a-z0-9]/i.test(v));
+  const compact = normalizeSearchTerm(rawQ);
+  // Short alphanumeric queries ("F1", "F 1"): only search the compact token.
+  // plainto_tsquery('F 1') → 'f' & '1', which falsely matches "F-150".
+  const variants =
+    compact.length > 0 && compact.length <= 3
+      ? [compact]
+      : getSearchVariants(rawQ).filter((v) => /[a-z0-9]/i.test(v));
   const ids: string[] = [];
   const seen = new Set<string>();
 
@@ -88,7 +63,7 @@ async function resolveFtsSearchIds(rawQ: string, profile: ShopListingProfile): P
           WHERE p.is_active = true
             AND p.search_vector @@ plainto_tsquery('english', ${term})
           ORDER BY ts_rank(p.search_vector, plainto_tsquery('english', ${term})) DESC
-          LIMIT 500 -- raised from 200; aligns closer to fuzzy index result set size
+          LIMIT 500
         `)
       );
       for (const row of rows) {
@@ -105,10 +80,87 @@ async function resolveFtsSearchIds(rawQ: string, profile: ShopListingProfile): P
   return ids;
 }
 
+/**
+ * Word-boundary / whole-word-prefix match on name, brand, category, SKU only.
+ * Never searches description (too noisy — "of 1970s" → false "f1").
+ * Short queries (compact ≤3) use the same field list; no looser path.
+ */
+async function resolveWordBoundarySearchIds(
+  rawQ: string,
+  profile: ShopListingProfile
+): Promise<string[]> {
+  const words = queryWords(rawQ);
+  const compact = normalizeSearchTerm(rawQ);
+  if (words.length === 0 && !compact) return [];
+
+  // Match paths: (all query words AND) OR (compact as a single term, e.g. "F 1" → f1).
+  // For short compact codes, skip AND of tiny tokens ("f" & "1") — too loose.
+  const compactOnly =
+    Boolean(compact) &&
+    words.length > 1 &&
+    words.every((w) => w.length <= 2) &&
+    compact.length <= 4;
+
+  const termSets: string[][] = [];
+  if (compactOnly) {
+    termSets.push([compact]);
+  } else {
+    if (words.length > 0) termSets.push(words);
+    if (compact && compact !== words.join("")) termSets.push([compact]);
+    if (termSets.length === 0 && compact) termSets.push([compact]);
+  }
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const terms of termSets) {
+    const andClauses = terms.map((term) => {
+      const pattern = wordPrefixRegex(term);
+      return Prisma.sql`(
+        LOWER(COALESCE(p.name, '')) ~* ${pattern}
+        OR LOWER(COALESCE(b.name, '')) ~* ${pattern}
+        OR LOWER(COALESCE(c.name, '')) ~* ${pattern}
+        OR LOWER(COALESCE(p.sku, '')) ~* ${pattern}
+        OR LOWER(COALESCE(pv.sku, '')) ~* ${pattern}
+      )`;
+    });
+
+    const whereAnd =
+      andClauses.length === 1 ? andClauses[0]! : Prisma.sql`(${Prisma.join(andClauses, " AND ")})`;
+
+    const rows = await profiledQuery(profile, "search.wordBoundary", () =>
+      prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT DISTINCT p.id
+        FROM products p
+        LEFT JOIN brands b ON p.brand_id = b.id
+        LEFT JOIN categories c ON p.category_id = c.id
+        LEFT JOIN product_variants pv ON pv.product_id = p.id
+        WHERE p.is_active = true
+          AND ${whereAnd}
+        LIMIT 500
+      `)
+    );
+
+    for (const row of rows) {
+      if (!seen.has(row.id)) {
+        seen.add(row.id);
+        ids.push(row.id);
+        if (ids.length >= 200) return ids;
+      }
+    }
+  }
+
+  return ids;
+}
+
 async function resolveTrigramSearchIds(rawQ: string, profile: ShopListingProfile): Promise<string[]> {
   const compact = normalizeSearchTerm(rawQ);
-  if (compact.length < 3) return [];
+  // Typo safety net only for longer queries; short queries stay word-boundary only.
+  if (compact.length < 4) return [];
 
+  // word_similarity matches a typo against a single word inside the name
+  // (e.g. "farrari" ↔ "Ferrari F1 Racing…"); plain similarity on the whole
+  // compacted name is too diluted for short typos.
   const rows = await profiledQuery(profile, "search.trigram", () =>
     prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
       SELECT p.id
@@ -116,16 +168,16 @@ async function resolveTrigramSearchIds(rawQ: string, profile: ShopListingProfile
       LEFT JOIN brands b ON p.brand_id = b.id
       WHERE p.is_active = true
         AND (
-          similarity(LOWER(REPLACE(p.name, ' ', '')), ${compact}) > 0.3
+          word_similarity(${compact}, LOWER(p.name)) > 0.4
           OR similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}) > 0.3
-          OR similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact}) > 0.3
+          OR word_similarity(${compact}, LOWER(COALESCE(p.short_description, ''))) > 0.4
         )
       ORDER BY GREATEST(
-        similarity(LOWER(REPLACE(p.name, ' ', '')), ${compact}),
+        word_similarity(${compact}, LOWER(p.name)),
         similarity(LOWER(REPLACE(COALESCE(b.name, ''), ' ', '')), ${compact}),
-        similarity(LOWER(REPLACE(COALESCE(p.short_description, ''), ' ', '')), ${compact})
+        word_similarity(${compact}, LOWER(COALESCE(p.short_description, '')))
       ) DESC
-      LIMIT 500 -- raised from 200; aligns closer to fuzzy index result set size
+      LIMIT 500
     `)
   );
   return rows.map((r) => r.id);
@@ -148,7 +200,11 @@ async function resolveSkuSearchIds(term: string, profile: ShopListingProfile): P
   return skuRows.map((r) => r.id);
 }
 
-/** Search waterfall — first non-empty result wins (FTS → ILIKE → trigram → SKU). */
+/**
+ * Search waterfall — first non-empty result wins:
+ * FTS → word-boundary (name/brand/category/SKU) → trigram (≥4 chars) → exact SKU.
+ * Returned IDs are in relevance order and must be preserved by the listing layer.
+ */
 export async function resolveSearchProductIds(
   searchTerm: string,
   profile: ShopListingProfile
@@ -164,10 +220,10 @@ export async function resolveSearchProductIds(
   }
 
   try {
-    const normalized = await resolveNormalizedIlikeSearchIds(rawQ, profile);
-    if (normalized.length > 0) return normalized;
+    const wordBoundary = await resolveWordBoundarySearchIds(rawQ, profile);
+    if (wordBoundary.length > 0) return wordBoundary;
   } catch (err) {
-    console.error("[shopListing] normalized ILIKE search failed", err);
+    console.error("[shopListing] word-boundary search failed", err);
   }
 
   try {

@@ -214,6 +214,8 @@ export async function prepareShopListingRequest(
       finishShopListingProfile(profile, { ok: true, total: 0, empty: "search" });
       return { kind: "complete", data };
     }
+    // Preserve FTS / word-boundary / trigram rank order (same path as client fuzzy ids).
+    searchIdOrder = searchIds;
     where.id = { in: searchIds };
   }
   if (ageGroups.length) where.age_group = { in: ageGroups };

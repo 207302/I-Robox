@@ -197,20 +197,27 @@ function ProductItemInner({
             unoptimized={isCloudinaryDeliveryUrl(cardImageDelivery.src)}
           />
         </Link>
-        <div className="pointer-events-none absolute right-1.5 top-1.5 z-10 flex h-[20px] w-[3.5rem] shrink-0 items-center justify-end sm:right-2 sm:top-2 sm:h-[26px] sm:w-[4.5rem]">
-          {item.quantity < 1 ? (
-            <span className="pointer-events-auto rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white sm:px-2 sm:py-1 sm:text-xs sm:leading-normal">
-              Out of Stock
+        {item.quantity < 1 ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-1/2 z-10 -translate-y-1/2"
+            aria-hidden
+          >
+            <span className="block w-full bg-blue py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm sm:py-1.5 sm:text-xs">
+              Out of stock
             </span>
-          ) : item?.discountedPrice && item?.discountedPrice > 0 ? (
-            <span className="pointer-events-auto rounded-full bg-blue px-1.5 py-0.5 text-[10px] font-medium leading-none text-white tabular-nums sm:px-2 sm:py-1 sm:text-xs sm:leading-normal">
-              {calculateDiscountPercentage(item.discountedPrice, item.price)}%
-              OFF
-            </span>
-          ) : (
-            <span className="h-[20px] w-px shrink-0 opacity-0 sm:h-[26px]" aria-hidden />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="pointer-events-none absolute right-1.5 top-1.5 z-10 flex h-[20px] w-[3.5rem] shrink-0 items-center justify-end sm:right-2 sm:top-2 sm:h-[26px] sm:w-[4.5rem]">
+            {item?.discountedPrice && item?.discountedPrice > 0 ? (
+              <span className="pointer-events-auto rounded-full bg-blue px-1.5 py-0.5 text-[10px] font-medium leading-none text-white tabular-nums sm:px-2 sm:py-1 sm:text-xs sm:leading-normal">
+                {calculateDiscountPercentage(item.discountedPrice, item.price)}%
+                OFF
+              </span>
+            ) : (
+              <span className="h-[20px] w-px shrink-0 opacity-0 sm:h-[26px]" aria-hidden />
+            )}
+          </div>
+        )}
 
         {/* On mobile only the cart button is visible here (quick view / wishlist
             are lg-only), so hiding the bar below lg removes just that button. */}

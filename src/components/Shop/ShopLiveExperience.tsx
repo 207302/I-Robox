@@ -605,6 +605,9 @@ export default function ShopLiveExperience({
           return next;
         });
         if (trackProgress) completeSearchProgress();
+        // Desktop: products live in an overflow pane — reset that pane on replace.
+        // Mobile scrolls the window; search-driven window reset is handled separately
+        // (see scrollShopListingToTop) so back-nav restore is not clobbered here.
         if (!append) {
           productsPaneRef.current?.scrollTo({ top: 0, behavior: "auto" });
         }
@@ -626,19 +629,78 @@ export default function ShopLiveExperience({
     return () => cancelHoverPrefetch();
   }, [cancelHoverPrefetch]);
 
+  /**
+   * After a committed search `q` change: put new results where the user can see them.
+   *
+   * Desktop (≥1024px): products scroll inside a sticky overflow pane, but the window can
+   * still reach the site footer below the shop section — so we always reset the pane and
+   * only move the window when the results area is off-screen (footer / past the grid).
+   * Mobile: the pane is not an overflow root; window movement is what matters.
+   *
+   * Does not touch layout.tsx. If ScrollOnNavigate is mid-restore, cancel that one restore
+   * generation so it cannot fight this jump (one restore covers window + all regions,
+   * including filters — searching means the user wants a new context, same as wheel/touch
+   * canceling restore).
+   */
+  const scrollShopListingToTop = useCallback(() => {
+    const nav = (
+      window as Window & {
+        __tronScrollNav__?: { restoreGeneration: number; restoring: boolean };
+      }
+    ).__tronScrollNav__;
+    if (nav?.restoring) {
+      nav.restoreGeneration += 1;
+      nav.restoring = false;
+    }
+
+    // Always start the (desktop) products list at the first result.
+    productsPaneRef.current?.scrollTo({ top: 0, behavior: "auto" });
+
+    const anchor = productsPaneRef.current ?? shopSectionRef.current;
+    if (!anchor) return;
+
+    const rect = anchor.getBoundingClientRect();
+    // Mid-page with the grid already on screen: keep window position (no jump-to-top).
+    const resultsVisible =
+      rect.top < window.innerHeight * 0.65 && rect.bottom > 120;
+    if (resultsVisible) return;
+
+    const html = document.documentElement;
+    const prevAttr = html.getAttribute("data-scroll-behavior");
+    const prevInline = html.style.scrollBehavior;
+    html.setAttribute("data-scroll-behavior", "auto");
+    html.style.scrollBehavior = "auto";
+
+    // Footer / off-screen: bring the listing under the sticky header (scroll-mt on pane).
+    anchor.scrollIntoView({ block: "start", behavior: "auto" });
+
+    window.requestAnimationFrame(() => {
+      if (prevAttr == null) html.removeAttribute("data-scroll-behavior");
+      else html.setAttribute("data-scroll-behavior", prevAttr);
+      html.style.scrollBehavior = prevInline;
+    });
+  }, []);
+
   useEffect(() => {
     const onQuery = (event: Event) => {
       const detail = (event as CustomEvent<{ queryString: string }>).detail;
       const next = detail?.queryString ?? "";
+      const prevQ = parseShopQueryString(clientQueryRef.current).q;
+      const nextQ = parseShopQueryString(next).q;
       clientQueryRef.current = next;
       setQueryString(next);
+      // Header search (and any applyShopQuery that didn't pre-update clientQueryRef).
+      // popstate does not fire this event — back/forward restore stays intact.
+      if (prevQ !== nextQ) {
+        scrollShopListingToTop();
+      }
       if (isSearchProgressPending()) {
         void fetchListing(next);
       }
     };
     window.addEventListener(SHOP_QUERY_EVENT, onQuery);
     return () => window.removeEventListener(SHOP_QUERY_EVENT, onQuery);
-  }, [fetchListing]);
+  }, [fetchListing, scrollShopListingToTop]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -669,11 +731,17 @@ export default function ShopLiveExperience({
   useEffect(() => {
     const parsed = parseShopQueryString(clientQueryRef.current);
     if (parsed.q === debouncedSearchInput) return;
+    const prevQ = parsed.q;
     const next = buildListingQueryString({ ...parsed, q: debouncedSearchInput, page: 1 });
+    // Pre-update before applyShopQuery so the SHOP_QUERY listener won't double-scroll
+    // (it would see prevQ === nextQ). Trigger the visibility-aware scroll here instead.
     clientQueryRef.current = next;
     setQueryString(next);
     applyShopQuery(pathname, next);
-  }, [debouncedSearchInput, pathname]);
+    if (prevQ !== debouncedSearchInput) {
+      scrollShopListingToTop();
+    }
+  }, [debouncedSearchInput, pathname, scrollShopListingToTop]);
 
   useEffect(() => {
     if (!isSearchProgressPending()) return;

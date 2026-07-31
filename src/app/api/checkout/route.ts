@@ -534,6 +534,7 @@ export async function POST(req: NextRequest) {
         passwordSetupIncluded: Boolean(newAccountPasswordSetup),
         /** True when this request created a new `customers` row (may still lack password link if token DB failed). */
         newAccountCreated: checkoutLinkedAs === "new_customer",
+        // COD stays payment PENDING until staff confirms — do not emit GA4 purchase here.
       },
       { status: 201 }
     );

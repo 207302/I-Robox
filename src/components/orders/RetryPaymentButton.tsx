@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { PAYMENT_RETRY_MAX_ATTEMPTS } from "@/lib/orders/paymentRetry";
+import { trackPurchase, type PurchaseAnalyticsPayload } from "@/lib/analytics/trackPurchase";
 import { toRazorpayPrefillContact } from "@/lib/marketing/contactPhoneUtils";
 
 type RazorpayCtor = new (options: Record<string, unknown>) => {
@@ -120,6 +121,12 @@ export default function RetryPaymentButton({
             });
             const verifyData = await verifyRes.json().catch(() => ({}));
             if (!verifyRes.ok) throw new Error(verifyData?.error || "Payment verification failed");
+            if (
+              verifyData?.purchase &&
+              typeof (verifyData.purchase as PurchaseAnalyticsPayload).transaction_id === "string"
+            ) {
+              trackPurchase(verifyData.purchase as PurchaseAnalyticsPayload);
+            }
             toast.success("Payment successful!");
             const tokenQuery =
               typeof verifyData?.accessToken === "string" && verifyData.accessToken

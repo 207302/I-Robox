@@ -10,19 +10,27 @@ export default async function AdminAnalyticsPage() {
   const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+  const paidFilter = { payment_status: "SUCCEEDED" as const };
+
   const [paid7d, paid30d, topProducts] = await Promise.all([
     prisma.orders.aggregate({
-      where: { payment_status: "SUCCEEDED", created_at: { gte: since7d } },
+      where: { ...paidFilter, created_at: { gte: since7d } },
       _sum: { total_amount: true },
       _count: { _all: true },
     }),
     prisma.orders.aggregate({
-      where: { payment_status: "SUCCEEDED", created_at: { gte: since30d } },
+      where: { ...paidFilter, created_at: { gte: since30d } },
       _sum: { total_amount: true },
       _count: { _all: true },
     }),
     prisma.order_items.groupBy({
       by: ["product_id", "product_name"],
+      where: {
+        orders: {
+          ...paidFilter,
+          created_at: { gte: since30d },
+        },
+      },
       _sum: { quantity: true, subtotal_amount: true },
       orderBy: { _sum: { quantity: "desc" } },
       take: 10,
@@ -35,6 +43,14 @@ export default async function AdminAnalyticsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-dark">Analytics</h1>
+      <p className="text-sm text-meta-3">
+        Store database figures (paid Razorpay / confirmed orders). For Google Analytics traffic and
+        GA4 purchase revenue, use the Dashboard site-traffic cards or the full{" "}
+        <a href="/analytics" className="text-blue hover:underline">
+          GA4 dashboard
+        </a>
+        .
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-gray-3 bg-white p-5">
@@ -50,7 +66,9 @@ export default async function AdminAnalyticsPage() {
       </div>
 
       <div className="rounded-2xl border border-gray-3 bg-white p-5">
-        <h2 className="text-lg font-semibold text-dark">Top products (by quantity)</h2>
+        <h2 className="text-lg font-semibold text-dark">
+          Top products (by quantity, paid · 30 days)
+        </h2>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -73,7 +91,7 @@ export default async function AdminAnalyticsPage() {
               {topProducts.length === 0 ? (
                 <tr>
                   <td className="py-6 text-sm text-meta-3" colSpan={3}>
-                    No data yet.
+                    No paid orders in the last 30 days.
                   </td>
                 </tr>
               ) : null}
@@ -84,4 +102,3 @@ export default async function AdminAnalyticsPage() {
     </div>
   );
 }
-

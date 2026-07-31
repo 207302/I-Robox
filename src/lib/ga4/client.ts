@@ -52,6 +52,75 @@ export function dimensionString(
   return row?.dimensionValues?.[index]?.value?.trim() ?? "";
 }
 
+/**
+ * Map metrics by header name (not array index). Prefers `rows[0]`, falls back to
+ * `totals[0]` when GA4 returns aggregates only in totals — index-only parsing
+ * silently yielded zeros in that case.
+ *
+ * GA4 Data API returns currency metrics (purchaseRevenue, itemRevenue, etc.) as
+ * ordinary decimal strings in the property currency — not micros. Do not divide.
+ */
+export function metricsByName(
+  response: {
+    metricHeaders?: Array<{ name?: string | null } | null> | null;
+    rows?: Array<google.analytics.data.v1beta.IRow | null> | null;
+    totals?: Array<google.analytics.data.v1beta.IRow | null> | null;
+  },
+  metricNames: readonly string[]
+): Record<string, number> {
+  const headers = response.metricHeaders ?? [];
+  const indexByName = new Map<string, number>();
+  headers.forEach((header, index) => {
+    const name = header?.name?.trim();
+    if (name) indexByName.set(name, index);
+  });
+
+  const row =
+    response.rows?.find((candidate) => (candidate?.metricValues?.length ?? 0) > 0) ??
+    response.totals?.find((candidate) => (candidate?.metricValues?.length ?? 0) > 0) ??
+    null;
+
+  const out: Record<string, number> = {};
+  for (const name of metricNames) {
+    const fromHeader = indexByName.get(name);
+    if (fromHeader != null) {
+      out[name] = metricNumber(row, fromHeader);
+      continue;
+    }
+    // Fallback: requested order when headers are missing (should be rare).
+    const fallbackIndex = metricNames.indexOf(name);
+    out[name] = fallbackIndex >= 0 ? metricNumber(row, fallbackIndex) : 0;
+  }
+  return out;
+}
+
+export function dimensionsByName(
+  response: {
+    dimensionHeaders?: Array<{ name?: string | null } | null> | null;
+  },
+  row: google.analytics.data.v1beta.IRow | null | undefined,
+  dimensionNames: readonly string[]
+): Record<string, string> {
+  const headers = response.dimensionHeaders ?? [];
+  const indexByName = new Map<string, number>();
+  headers.forEach((header, index) => {
+    const name = header?.name?.trim();
+    if (name) indexByName.set(name, index);
+  });
+
+  const out: Record<string, string> = {};
+  for (const name of dimensionNames) {
+    const fromHeader = indexByName.get(name);
+    if (fromHeader != null) {
+      out[name] = dimensionString(row, fromHeader);
+      continue;
+    }
+    const fallbackIndex = dimensionNames.indexOf(name);
+    out[name] = fallbackIndex >= 0 ? dimensionString(row, fallbackIndex) : "";
+  }
+  return out;
+}
+
 function wrapGa4Error(error: unknown, label: string): Error {
   const message = formatGa4ApiError(error);
   return new Error(`${label}: ${message}`);

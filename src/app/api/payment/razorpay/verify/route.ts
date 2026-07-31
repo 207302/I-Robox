@@ -18,6 +18,7 @@ import { allocateNextOrderNumber } from "@/lib/orders/orderNumber";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
+import { buildPurchaseAnalyticsPayload } from "@/lib/analytics/buildPurchaseAnalytics";
 
 const REFUND_ERROR_MAX = 2000;
 const OUT_OF_STOCK_PREFIX = "OUT_OF_STOCK:";
@@ -278,7 +279,18 @@ export async function POST(req: NextRequest) {
             orderId: retryOrderId,
             orderNumber: retryOrder.order_number,
             accessToken: accessTokenOut,
+            checkoutLinkedAs: retryCtx.checkoutLinkedAs,
+            passwordSetupIncluded: Boolean(retryCtx.newAccountPasswordSetup),
+            newAccountCreated: retryCtx.checkoutLinkedAs === "new_customer",
             retried: true,
+            purchase: buildPurchaseAnalyticsPayload({
+              transactionId: retryOrder.order_number || retryOrderId,
+              value: Number(retryOrder.total_amount),
+              currency: "INR",
+              shipping: retryCtx.shipping,
+              coupon: retryCtx.coupon?.code ?? null,
+              lineItems: retryCtx.lineItems,
+            }),
           },
           { status: 200 }
         );
@@ -463,6 +475,14 @@ export async function POST(req: NextRequest) {
           checkoutLinkedAs: ctx.checkoutLinkedAs,
           passwordSetupIncluded: Boolean(ctx.newAccountPasswordSetup),
           newAccountCreated: ctx.checkoutLinkedAs === "new_customer",
+          purchase: buildPurchaseAnalyticsPayload({
+            transactionId: created.order_number || created.id,
+            value: ctx.total,
+            currency: "INR",
+            shipping: ctx.shipping,
+            coupon: ctx.coupon?.code ?? null,
+            lineItems: ctx.lineItems,
+          }),
         },
         { status: 201 }
       );

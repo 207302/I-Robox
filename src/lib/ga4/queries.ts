@@ -1,7 +1,13 @@
 import "server-only";
 import { format, parseISO } from "date-fns";
 import { buildCacheKey, getCached, setCached } from "./cache";
-import { dimensionString, formatGa4ApiError, metricNumber, runRealtimeReport, runReport } from "./client";
+import {
+  dimensionsByName,
+  formatGa4ApiError,
+  metricsByName,
+  runRealtimeReport,
+  runReport,
+} from "./client";
 import { formatGaDate } from "./formatters";
 import { getPreviousDateRange } from "./validateDateRange";
 import type {
@@ -50,23 +56,42 @@ const SUMMARY_METRICS = [
 ] as const;
 
 async function fetchMetricSnapshot(range: DateRange): Promise<MetricSnapshot> {
-  const response = await runReport({
+  const request = {
     dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
     metrics: SUMMARY_METRICS.map((name) => ({ name })),
-  });
+  };
+  const response = await runReport(request);
+  const m = metricsByName(response, SUMMARY_METRICS);
 
-  const row = response.rows?.[0];
-  const sessions = metricNumber(row, 0);
-  const transactions = metricNumber(row, 6);
-  const purchaseRevenue = metricNumber(row, 5);
-  const averagePurchaseRevenue = metricNumber(row, 7);
+  const sessions = m.sessions ?? 0;
+  const transactions = m.transactions ?? 0;
+  const purchaseRevenue = m.purchaseRevenue ?? 0;
+  const averagePurchaseRevenue = m.averagePurchaseRevenue ?? 0;
+
+  if (
+    process.env.NODE_ENV !== "production" ||
+    process.env.GA4_DEBUG_LOG === "1"
+  ) {
+    console.info("[ga4] fetchMetricSnapshot", {
+      range,
+      metricHeaders: (response.metricHeaders ?? []).map((h) => h?.name),
+      rowCount: response.rows?.length ?? 0,
+      hasTotals: Boolean(response.totals?.length),
+      parsed: {
+        totalUsers: m.totalUsers,
+        purchaseRevenue,
+        transactions,
+        sessions,
+      },
+    });
+  }
 
   return {
     sessions,
-    totalUsers: metricNumber(row, 1),
-    newUsers: metricNumber(row, 2),
-    engagedSessions: metricNumber(row, 3),
-    averageSessionDuration: metricNumber(row, 4),
+    totalUsers: m.totalUsers ?? 0,
+    newUsers: m.newUsers ?? 0,
+    engagedSessions: m.engagedSessions ?? 0,
+    averageSessionDuration: m.averageSessionDuration ?? 0,
     purchaseRevenue,
     transactions,
     averagePurchaseRevenue:
@@ -136,7 +161,9 @@ export async function getAnalyticsDashboardBundle(
     if (result.status === "fulfilled") {
       partial[key] = result.value;
     } else {
-      sectionErrors[key] = formatGa4ApiError(result.reason);
+      const message = formatGa4ApiError(result.reason);
+      sectionErrors[key] = message;
+      console.error(`[ga4] dashboard section "${key}" failed`, message, result.reason);
     }
   });
 
@@ -163,7 +190,10 @@ export async function getAnalyticsDashboardBundle(
     ...(Object.keys(sectionErrors).length > 0 ? { sectionErrors } : {}),
   };
 
-  setCached(cacheKey, data);
+  // Never cache a partially-failed bundle as healthy zeros for 5 minutes.
+  if (Object.keys(sectionErrors).length === 0) {
+    setCached(cacheKey, data);
+  }
   return data;
 }
 
@@ -185,14 +215,20 @@ export async function getTrafficAcquisition(range: DateRange): Promise<TrafficAc
     limit: 25,
   });
 
+  const metricNames = ["totalUsers", "sessions", "purchaseRevenue", "transactions"] as const;
   const rows: TrafficRow[] = (response.rows ?? []).map((row) => {
-    const sessions = metricNumber(row, 1);
-    const transactions = metricNumber(row, 3);
+    const dims = dimensionsByName(response, row, ["sessionDefaultChannelGroup"]);
+    const m = metricsByName(
+      { metricHeaders: response.metricHeaders, rows: [row] },
+      metricNames
+    );
+    const sessions = m.sessions ?? 0;
+    const transactions = m.transactions ?? 0;
     return {
-      channel: dimensionString(row, 0) || "Unassigned",
-      users: metricNumber(row, 0),
+      channel: dims.sessionDefaultChannelGroup || "Unassigned",
+      users: m.totalUsers ?? 0,
       sessions,
-      revenue: metricNumber(row, 2),
+      revenue: m.purchaseRevenue ?? 0,
       conversionRate: sessions > 0 ? (transactions / sessions) * 100 : 0,
       percentOfSessions: 0,
     };
@@ -238,7 +274,10 @@ export async function getEcommercePerformance(range: DateRange): Promise<Ecommer
       metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
       limit: 10,
-    }).catch(() => ({ rows: [] })),
+    }).catch((err) => {
+      console.error("[ga4] top products report failed", formatGa4ApiError(err));
+      return { rows: [], metricHeaders: [], dimensionHeaders: [] };
+    }),
     runReport({
       dateRanges: [{ startDate: range.startDate, endDate: range.endDate }],
       dimensions: [{ name: "date" }],
@@ -247,26 +286,43 @@ export async function getEcommercePerformance(range: DateRange): Promise<Ecommer
     }),
   ]);
 
-  const summaryRow = summaryResponse.rows?.[0];
-  const transactions = metricNumber(summaryRow, 0);
-  const purchaseRevenue = metricNumber(summaryRow, 1);
-  const averagePurchaseRevenue = metricNumber(summaryRow, 2);
-  const sessions = metricNumber(summaryRow, 3);
+  const summaryMetrics = metricsByName(summaryResponse, [
+    "transactions",
+    "purchaseRevenue",
+    "averagePurchaseRevenue",
+    "sessions",
+  ]);
+  const transactions = summaryMetrics.transactions ?? 0;
+  const purchaseRevenue = summaryMetrics.purchaseRevenue ?? 0;
+  const averagePurchaseRevenue = summaryMetrics.averagePurchaseRevenue ?? 0;
+  const sessions = summaryMetrics.sessions ?? 0;
 
-  const topProducts: ProductRow[] = (productsResponse.rows ?? []).map((row, index) => ({
-    rank: index + 1,
-    name: dimensionString(row, 0) || "(not set)",
-    category: "—",
-    revenue: metricNumber(row, 0),
-    quantity: metricNumber(row, 1),
-  }));
+  const topProducts: ProductRow[] = (productsResponse.rows ?? []).map((row, index) => {
+    const dims = dimensionsByName(productsResponse, row, ["itemName"]);
+    const m = metricsByName(
+      { metricHeaders: productsResponse.metricHeaders, rows: [row] },
+      ["itemRevenue", "itemsPurchased"]
+    );
+    return {
+      rank: index + 1,
+      name: dims.itemName || "(not set)",
+      category: "—",
+      revenue: m.itemRevenue ?? 0,
+      quantity: m.itemsPurchased ?? 0,
+    };
+  });
 
   const revenueTrend: RevenueTrendPoint[] = (trendResponse.rows ?? []).map((row) => {
-    const date = dimensionString(row, 0);
+    const dims = dimensionsByName(trendResponse, row, ["date"]);
+    const m = metricsByName(
+      { metricHeaders: trendResponse.metricHeaders, rows: [row] },
+      ["purchaseRevenue"]
+    );
+    const date = dims.date || "";
     return {
       date,
       label: formatGaDate(date),
-      revenue: metricNumber(row, 0),
+      revenue: m.purchaseRevenue ?? 0,
     };
   });
 
@@ -306,14 +362,21 @@ export async function getLandingPageAnalysis(range: DateRange): Promise<LandingP
     limit: 50,
   });
 
-  const rows: LandingPageRow[] = (response.rows ?? []).map((row) => ({
-    page: dimensionString(row, 0) || "/",
-    users: metricNumber(row, 0),
-    sessions: metricNumber(row, 1),
-    engagementRate: metricNumber(row, 2) * 100,
-    conversions: 0,
-    revenue: metricNumber(row, 3),
-  }));
+  const rows: LandingPageRow[] = (response.rows ?? []).map((row) => {
+    const dims = dimensionsByName(response, row, ["landingPage"]);
+    const m = metricsByName(
+      { metricHeaders: response.metricHeaders, rows: [row] },
+      ["totalUsers", "sessions", "engagementRate", "purchaseRevenue"]
+    );
+    return {
+      page: dims.landingPage || "/",
+      users: m.totalUsers ?? 0,
+      sessions: m.sessions ?? 0,
+      engagementRate: (m.engagementRate ?? 0) * 100,
+      conversions: 0,
+      revenue: m.purchaseRevenue ?? 0,
+    };
+  });
 
   const data = { rows };
   setCached(cacheKey, data);
@@ -337,15 +400,22 @@ export async function getGeographicData(range: DateRange): Promise<GeographicDat
     limit: 100,
   });
 
-  const rows: GeoRow[] = (response.rows ?? []).map((row, index) => ({
-    rank: index + 1,
-    country: dimensionString(row, 0) || "Unknown",
-    city: dimensionString(row, 1) || "—",
-    countryCode: "",
-    users: metricNumber(row, 0),
-    revenue: metricNumber(row, 1),
-    transactions: metricNumber(row, 2),
-  }));
+  const rows: GeoRow[] = (response.rows ?? []).map((row, index) => {
+    const dims = dimensionsByName(response, row, ["country", "city"]);
+    const m = metricsByName(
+      { metricHeaders: response.metricHeaders, rows: [row] },
+      ["totalUsers", "purchaseRevenue", "transactions"]
+    );
+    return {
+      rank: index + 1,
+      country: dims.country || "Unknown",
+      city: dims.city || "—",
+      countryCode: "",
+      users: m.totalUsers ?? 0,
+      revenue: m.purchaseRevenue ?? 0,
+      transactions: m.transactions ?? 0,
+    };
+  });
 
   const data = { rows };
   setCached(cacheKey, data);
@@ -370,14 +440,19 @@ export async function getDeviceData(range: DateRange): Promise<DeviceData> {
   });
 
   const rows: DeviceRow[] = (response.rows ?? []).map((row) => {
-    const sessions = metricNumber(row, 1);
-    const transactions = metricNumber(row, 2);
+    const dims = dimensionsByName(response, row, ["deviceCategory"]);
+    const m = metricsByName(
+      { metricHeaders: response.metricHeaders, rows: [row] },
+      ["totalUsers", "sessions", "transactions", "purchaseRevenue"]
+    );
+    const sessions = m.sessions ?? 0;
+    const transactions = m.transactions ?? 0;
     return {
-      device: dimensionString(row, 0) || "unknown",
-      users: metricNumber(row, 0),
+      device: dims.deviceCategory || "unknown",
+      users: m.totalUsers ?? 0,
       sessions,
       conversionRate: sessions > 0 ? (transactions / sessions) * 100 : 0,
-      revenue: metricNumber(row, 3),
+      revenue: m.purchaseRevenue ?? 0,
     };
   });
 
@@ -412,11 +487,16 @@ export async function getUserBehaviour(range: DateRange): Promise<UserBehaviourD
   });
 
   const rows: BehaviourRow[] = (response.rows ?? []).map((row) => {
-    const pageViews = metricNumber(row, 0);
-    const engagementSeconds = metricNumber(row, 1);
-    const users = metricNumber(row, 2);
+    const dims = dimensionsByName(response, row, ["pagePath"]);
+    const m = metricsByName(
+      { metricHeaders: response.metricHeaders, rows: [row] },
+      ["screenPageViews", "userEngagementDuration", "totalUsers"]
+    );
+    const pageViews = m.screenPageViews ?? 0;
+    const engagementSeconds = m.userEngagementDuration ?? 0;
+    const users = m.totalUsers ?? 0;
     return {
-      pagePath: dimensionString(row, 0) || "/",
+      pagePath: dims.pagePath || "/",
       pageViews,
       avgTime: users > 0 ? engagementSeconds / users : engagementSeconds,
       exitRate: 0,
@@ -443,8 +523,9 @@ export async function getRealtimeUsers(options?: { fresh?: boolean }): Promise<R
     metrics: [{ name: "activeUsers" }],
   });
 
+  const m = metricsByName(response, ["activeUsers"]);
   const data: RealtimeUsersData = {
-    activeUsers: metricNumber(response.rows?.[0], 0),
+    activeUsers: m.activeUsers ?? 0,
     fetchedAt: new Date().toISOString(),
   };
 

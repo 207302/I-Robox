@@ -27,12 +27,19 @@ import {
   sanitizeIndianPinInput,
 } from "@/lib/validation/address";
 import { validateEmailAddress } from "@/lib/validation/rules";
+import { trackPurchase, type PurchaseAnalyticsPayload } from "@/lib/analytics/trackPurchase";
 
 declare global {
   interface Window {
     Razorpay?: new (options: Record<string, unknown>) => {
       open: () => void;
     };
+  }
+}
+
+function firePurchaseIfPresent(data: { purchase?: PurchaseAnalyticsPayload | null }) {
+  if (data?.purchase && typeof data.purchase.transaction_id === "string") {
+    trackPurchase(data.purchase);
   }
 }
 
@@ -448,6 +455,7 @@ export default function CheckoutPage() {
                 duration: 6500,
               });
             }
+            firePurchaseIfPresent(verifyData);
             clearCart();
             const tokenQuery =
               typeof verifyData?.accessToken === "string" && verifyData.accessToken

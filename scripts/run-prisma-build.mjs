@@ -71,10 +71,15 @@ if (pingUrl) {
     await client.connect();
     await client.query("SELECT 1");
     console.log("[build] Neon wake-up ping OK (direct URL)");
-    await client.end();
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.warn("[build] Neon wake-up ping failed (continuing):", message);
+  } finally {
+    try {
+      await client.end();
+    } catch {
+      /* ignore */
+    }
   }
 } else {
   console.warn("[build] Neon wake-up ping skipped: DATABASE_URL not set");
@@ -101,3 +106,9 @@ if (siteBase) {
     console.warn("[build] shop listing pre-warm skipped:", message);
   }
 }
+
+// Hostinger (and some CI runners) treat a hung Node process after a green
+// `next build` as a failed deploy — pg/fetch keep-alives can leave the event
+// loop open even when the last log line looks successful.
+console.log("[build] complete");
+process.exit(0);

@@ -2,9 +2,10 @@ import { readFile } from "fs/promises";
 import path from "path";
 import type { PDFDocument, PDFImage } from "pdf-lib";
 
+/** Keep paths scoped under public/ so Turbopack NFT does not trace the whole repo. */
 const BRAND_LOGO_CANDIDATES = [
-  path.join(process.cwd(), "public", "images", "favicon.png"),
-  path.join(process.cwd(), "public", "images", "logo", "logo.png"),
+  path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "images", "favicon.png"),
+  path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "images", "logo", "logo.png"),
 ];
 
 export async function embedInvoiceBrandLogo(pdfDoc: PDFDocument): Promise<PDFImage | null> {

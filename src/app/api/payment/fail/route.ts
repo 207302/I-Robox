@@ -10,6 +10,7 @@ import { rateLimit } from "@/lib/security/rateLimit";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { releaseFlashSaleClaimForOrder } from "@/lib/flashSale/claims";
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
@@ -50,7 +51,15 @@ export async function POST(req: NextRequest) {
           Boolean(accessToken) && verifyOrderAccessToken(accessToken, orderId);
         if (!isOwner && !hasCheckoutAccess) throw new Error("FORBIDDEN");
         if (order.payment_status === "FAILED") return false;
-  
+        // Never move a completed/refunded payment backwards (would also free flash-sale claims).
+        if (
+          order.payment_status === "SUCCEEDED" ||
+          order.payment_status === "REFUNDED" ||
+          order.payment_status === "PARTIALLY_REFUNDED"
+        ) {
+          return false;
+        }
+
         previousStatus = String(order.status);
         const prevShipRow = await tx.shipments.findUnique({
           where: { order_id: orderId },
@@ -92,6 +101,7 @@ export async function POST(req: NextRequest) {
           where: { id: orderId },
           data: { payment_status: "FAILED", status: "PAYMENT_FAILED" },
         });
+        await releaseFlashSaleClaimForOrder(orderId, tx);
         return true;
       });
     } catch (e: any) {

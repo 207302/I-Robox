@@ -23,6 +23,12 @@ import {
 } from "@/lib/validation/input";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
+  assertCustomerCanClaimFlashSale,
+  claimFlashSaleForOrderInTx,
+  FlashSaleClaimError,
+  resolveFlashSaleCartClaim,
+} from "@/lib/flashSale/claims";
+import {
   couponDiscountFromLines,
   couponTimingError,
   couponUsageErrors,
@@ -365,6 +371,24 @@ export async function POST(req: NextRequest) {
           : "One or more items are out of stock";
       return NextResponse.json({ error: msg }, { status: 400 });
     }
+
+    const flashClaimResolved = await resolveFlashSaleCartClaim(
+      lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
+    );
+    if (!flashClaimResolved.ok) {
+      return NextResponse.json({ error: flashClaimResolved.error }, { status: 400 });
+    }
+    if (!checkoutUserId) {
+      return NextResponse.json({ error: "Customer account is required" }, { status: 400 });
+    }
+    try {
+      await assertCustomerCanClaimFlashSale(checkoutUserId, flashClaimResolved.claim);
+    } catch (e: unknown) {
+      if (e instanceof FlashSaleClaimError) {
+        return NextResponse.json({ error: e.message }, { status: 409 });
+      }
+      throw e;
+    }
   
     // Transaction: create address, order, items, reserve inventory.
     let order;
@@ -452,10 +476,22 @@ export async function POST(req: NextRequest) {
           },
         });
       }
+
+      await claimFlashSaleForOrderInTx(tx, {
+        customerId: checkoutUserId!,
+        orderId: createdOrder.id,
+        lines: lineItems.map((li) => ({
+          productId: li.productId,
+          quantity: li.quantity,
+        })),
+      });
   
       return createdOrder;
     }, PRISMA_TRANSACTION_OPTIONS);
     } catch (e: unknown) {
+      if (e instanceof FlashSaleClaimError) {
+        return NextResponse.json({ error: e.message }, { status: 409 });
+      }
       const msg = e instanceof Error ? e.message : "";
       if (msg === "OUT_OF_STOCK") {
         return NextResponse.json(

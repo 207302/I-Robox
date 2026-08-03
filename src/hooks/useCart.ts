@@ -21,6 +21,7 @@ import {
     maxOrderQuantityError,
     resolveMaxOrderQuantity,
 } from "@/lib/cart/maxOrderQuantity";
+import { cartFlashSaleError } from "@/lib/cart/flashSaleCart";
 import toast from "react-hot-toast";
 
 export const useCart = () => {
@@ -37,6 +38,17 @@ export const useCart = () => {
     const addItem = (item: CartItem): boolean => {
         const addQty = item.quantity || 1;
         const existingItem = cartItems.find((i) => i.id === item.id);
+        const flashSaleTag = item.flashSaleTag ?? existingItem?.flashSaleTag ?? null;
+        const flashErr = cartFlashSaleError(cartItems, {
+            id: item.id,
+            flashSaleTag,
+            quantity: addQty,
+        });
+        if (flashErr) {
+            toast.error(flashErr);
+            return false;
+        }
+
         const targetQty = existingItem ? existingItem.quantity + addQty : addQty;
         const maxOrderQty = resolveMaxOrderQuantity(
             item.maxOrderQuantity ?? existingItem?.maxOrderQuantity
@@ -72,6 +84,7 @@ export const useCart = () => {
 
         dispatch(addItemToCart({
             ...item,
+            flashSaleTag,
             maxOrderQuantity: item.maxOrderQuantity ?? existingItem?.maxOrderQuantity,
             quantity: addQty,
         }));
@@ -85,6 +98,15 @@ export const useCart = () => {
     const incrementItemQuantity = (id: string | number) => {
         const existingItem = cartItems.find((item) => item.id === id);
         if (!existingItem) return;
+
+        if (existingItem.flashSaleTag) {
+            toast.error(cartFlashSaleError(cartItems, {
+                id: existingItem.id,
+                flashSaleTag: existingItem.flashSaleTag,
+                quantity: 1,
+            }, { replacingQty: existingItem.quantity + 1 }) || "Flash sale items are limited to quantity 1.");
+            return;
+        }
 
         const check = canIncreaseCartQuantity({
             items: cartItems,

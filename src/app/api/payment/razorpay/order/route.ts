@@ -8,6 +8,7 @@ import { sealCheckoutContext } from "@/lib/checkout/checkoutSeal";
 import { getRazorpayClient, razorpayPublicConfig } from "@/lib/payments/razorpay";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { StockValidationError } from "@/lib/inventory/cartStock";
+import { FlashSaleClaimError } from "@/lib/flashSale/claims";
 
 export async function POST(req: NextRequest) {
   return runApiRoute(async () => {
@@ -103,6 +104,9 @@ export async function POST(req: NextRequest) {
           },
           { status: 409 }
         );
+      }
+      if (e instanceof FlashSaleClaimError) {
+        return NextResponse.json({ error: e.message }, { status: 409 });
       }
       return NextResponse.json({ error: message || "Could not initiate payment" }, { status: 400 });
     }

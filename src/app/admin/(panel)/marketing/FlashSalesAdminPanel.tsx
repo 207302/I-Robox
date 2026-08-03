@@ -10,6 +10,7 @@ import type { FlashDiscountType } from "@/lib/pricing/flashSaleTypes";
 type FlashSaleRow = {
   id: string;
   name: string | null;
+  sale_tag: string | null;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -42,6 +43,7 @@ function scopeSummary(row: FlashSaleRow): string {
 
 const emptyForm = {
   name: "",
+  sale_tag: "",
   discount_type: "FIXED" as FlashDiscountType,
   discount_value: "",
   is_active: true,
@@ -69,6 +71,7 @@ export default function FlashSalesAdminPanel({
     setEditingId(row.id);
     setForm({
       name: row.name ?? "",
+      sale_tag: row.sale_tag ?? "",
       discount_type: row.discount_type,
       discount_value: String(row.discount_value),
       is_active: row.is_active,
@@ -102,6 +105,7 @@ export default function FlashSalesAdminPanel({
     try {
       const payload = {
         name: form.name.trim() || null,
+        sale_tag: form.sale_tag.trim() || null,
         discount_type: form.discount_type,
         discount_value,
         is_active: form.is_active,
@@ -147,7 +151,8 @@ export default function FlashSalesAdminPanel({
       <h2 className="text-lg font-semibold">Flash sales</h2>
       <p className="text-sm text-meta-3">
         Set a fixed sale price or percentage off for multiple products, categories, or brands.
-        When several rules match, customers get the lowest price.
+        When several rules match, customers get the lowest price. Each customer may purchase
+        only one item from a flash sale (shared across sales with the same sale tag).
       </p>
       {marketingSelectAllBar("flash sale")}
       <ul className="divide-y divide-gray-3 text-sm">
@@ -161,6 +166,7 @@ export default function FlashSalesAdminPanel({
                 </span>
                 <span className="block text-meta-3 truncate">
                   {formatFlashDiscount(row.discount_type, row.discount_value)} — {scopeSummary(row)}
+                  {row.sale_tag ? ` · tag: ${row.sale_tag}` : ""}
                   {!row.is_active ? " · Inactive" : ""}
                 </span>
               </span>
@@ -202,6 +208,19 @@ export default function FlashSalesAdminPanel({
               placeholder="e.g. Hot Wheels weekend"
               className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
             />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="text-sm font-medium">Sale tag (optional)</span>
+            <input
+              value={form.sale_tag}
+              onChange={(e) => setForm((f) => ({ ...f, sale_tag: e.target.value }))}
+              placeholder="e.g. weekend-flash — shared across sales for one claim"
+              className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-xs text-meta-3">
+              Leave blank to limit one purchase per this flash sale only. Same tag = one claim
+              across those sales.
+            </span>
           </label>
           <label>
             <span className="text-sm font-medium">Discount type</span>

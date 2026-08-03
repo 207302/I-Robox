@@ -33,6 +33,7 @@ export type ProductDetailViewProps = {
     description: string;
     price: number;
     discountedPrice: number | null;
+    flashSaleTag?: string | null;
     quantity: number;
     shippingPerUnit: number;
     brandId: string | null;
@@ -245,6 +246,7 @@ export default function ProductDetailView({
             slug={product.slug}
             price={product.price}
             discountedPrice={product.discountedPrice}
+            flashSaleTag={product.flashSaleTag}
             quantity={product.quantity}
             shippingPerUnit={product.shippingPerUnit}
             brandId={product.brandId}

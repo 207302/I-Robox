@@ -11,6 +11,8 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
+import { useFlashSaleClaimed } from "@/hooks/useFlashSaleClaims";
+import { FLASH_SALE_ALREADY_CLAIMED_MESSAGE } from "@/lib/flashSale/messages";
 import dynamic from "next/dynamic";
 import WishlistButton from "../Wishlist/AddWishlistButton";
 import { PRODUCT_CARD_GRID_SIZES } from "@/lib/shop/productCardGridSizes";
@@ -95,6 +97,8 @@ function ProductItemInner({
   const dispatch = useDispatch<AppDispatch>();
 
   const { addItem, cartDetails, incrementItem, decrementItem } = useCart();
+  const { claimed: flashClaimed } = useFlashSaleClaimed(item.flashSaleTag);
+  const purchaseBlocked = flashClaimed;
 
   const isAlradyAdded = Boolean(cartDetails?.[cartLineId]);
   const currentQty = (cartDetails?.[cartLineId]?.quantity ?? 0) as number;
@@ -112,7 +116,8 @@ function ProductItemInner({
       image: cardImage,
       slug: item?.slug,
       availableQuantity: item.quantity,
-      maxOrderQuantity: item.maxOrderQuantity,
+      maxOrderQuantity: item.flashSaleTag ? 1 : item.maxOrderQuantity,
+      flashSaleTag: item.flashSaleTag ?? null,
       brandId: item.brandId ?? null,
       color: cartVariant?.color ? cartVariant.color : "",
       size: cartVariant?.size ? cartVariant.size : "",
@@ -130,13 +135,17 @@ function ProductItemInner({
   }, [dispatch, item]);
 
   const handleAddToCart = useCallback(() => {
+    if (purchaseBlocked) {
+      toast.error(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+      return;
+    }
     if (item.quantity > 0) {
       const added = addItem(cartItem);
       if (added) toast.success("Product added to cart!");
     } else {
       toast.error("This product is out of stock!");
     }
-  }, [addItem, cartItem, item.quantity]);
+  }, [addItem, cartItem, item.quantity, purchaseBlocked]);
 
   const handleQuickViewOpen = useCallback(() => {
     openModal();
@@ -272,15 +281,21 @@ function ProductItemInner({
             <button
               type="button"
               onClick={handleAddToCart}
-              disabled={item.quantity < 1}
+              disabled={item.quantity < 1 || purchaseBlocked}
               aria-label={
-                item.quantity > 0
-                  ? `Add ${displayTitle} to cart`
-                  : `${displayTitle} is out of stock`
+                purchaseBlocked
+                  ? `${displayTitle} flash sale already used`
+                  : item.quantity > 0
+                    ? `Add ${displayTitle} to cart`
+                    : `${displayTitle} is out of stock`
               }
               className="inline-flex px-5 py-2 font-medium h-[38px] text-white duration-200 ease-out rounded-lg text-custom-sm bg-blue hover:bg-blue-dark active:scale-[0.98] disabled:opacity-60"
             >
-              {item.quantity > 0 ? "Add to Cart" : "Out of Stock"}
+              {purchaseBlocked
+                ? "Already claimed"
+                : item.quantity > 0
+                  ? "Add to Cart"
+                  : "Out of Stock"}
             </button>
           )}
           {/* wishlist button */}

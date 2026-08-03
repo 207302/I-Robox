@@ -387,6 +387,7 @@ model orders {
   coupon_usages                                   coupon_usages[]
   inventory_reservations                          inventory_reservations[]
   order_items                                     order_items[]
+  flash_sale_claims                               flash_sale_claims?
   addresses_orders_billing_address_idToaddresses  addresses?               @relation("orders_billing_address_idToaddresses", fields: [billing_address_id], references: [id], onUpdate: NoAction)
   coupons                                         coupons?                 @relation(fields: [coupon_id], references: [id], onUpdate: NoAction)
   addresses_orders_shipping_address_idToaddresses addresses?               @relation("orders_shipping_address_idToaddresses", fields: [shipping_address_id], references: [id], onUpdate: NoAction)
@@ -601,6 +602,7 @@ model customers {
   returns           returns[]
   reviews           reviews[]
   wishlists         wishlists?
+  flash_sale_claims flash_sale_claims[]
   signup_email_otps              signup_email_otps[]
   customer_password_setup_tokens customer_password_setup_tokens[]
   phone_change_otps              phone_change_otps[]
@@ -888,6 +890,9 @@ model marketing_popups {
 model flash_sales {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name           String?   @db.VarChar(120)
+  /// Optional shared claim key. When set, one purchase per customer across all sales with this tag.
+  /// When null, claims use this flash sale's id.
+  sale_tag       String?   @db.VarChar(80)
   discount_type  String    @db.VarChar(20)
   discount_value Decimal   @db.Decimal(10, 2)
   is_active      Boolean   @default(true)
@@ -898,9 +903,28 @@ model flash_sales {
   products       flash_sale_products[]
   categories     flash_sale_categories[]
   brands         flash_sale_brands[]
+  claims         flash_sale_claims[]
 
   @@index([is_active], map: "idx_flash_sales_is_active")
   @@index([active_until], map: "idx_flash_sales_active_until")
+  @@index([sale_tag], map: "idx_flash_sales_sale_tag")
+}
+
+/// One flash-sale purchase claim per customer per sale_tag (or flash sale id).
+model flash_sale_claims {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id   String      @db.Uuid
+  sale_tag      String      @db.VarChar(80)
+  flash_sale_id String?     @db.Uuid
+  order_id      String      @unique @db.Uuid
+  created_at    DateTime    @default(now()) @db.Timestamptz(6)
+  customers     customers   @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  flash_sales   flash_sales? @relation(fields: [flash_sale_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  orders        orders      @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([customer_id, sale_tag], map: "flash_sale_claims_customer_sale_tag_key")
+  @@index([customer_id], map: "idx_flash_sale_claims_customer_id")
+  @@index([sale_tag], map: "idx_flash_sale_claims_sale_tag")
 }
 
 /// Products included in a flash sale rule (many per campaign).

@@ -25,6 +25,7 @@ type Props = {
   slug: string;
   price: number;
   discountedPrice?: number | null;
+  flashSaleTag?: string | null;
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
@@ -40,6 +41,7 @@ export default function ProductVariantPurchase({
   slug,
   price,
   discountedPrice,
+  flashSaleTag = null,
   quantity,
   shippingPerUnit = 0,
   brandId = null,
@@ -85,6 +87,7 @@ export default function ProductVariantPurchase({
         image={displayImage}
         price={price}
         discountedPrice={discountedPrice}
+        flashSaleTag={flashSaleTag}
         quantity={quantity}
         shippingPerUnit={shippingPerUnit}
         brandId={brandId}

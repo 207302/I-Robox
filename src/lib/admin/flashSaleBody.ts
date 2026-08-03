@@ -10,6 +10,7 @@ import {
 
 export type ParsedFlashSaleBody = {
   name: string | null;
+  sale_tag: string | null;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -19,6 +20,13 @@ export type ParsedFlashSaleBody = {
   category_ids: string[];
   brand_ids: string[];
 };
+
+function parseSaleTag(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const tag = String(value).trim().slice(0, 80);
+  return tag || null;
+}
 
 function parseUuidList(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -57,6 +65,7 @@ export function parseFlashSaleBody(
 
   const nameRaw = body.name == null ? null : String(body.name).trim();
   const name = nameRaw ? nameRaw.slice(0, 120) : null;
+  const sale_tag = parseSaleTag(body.sale_tag) ?? null;
   const is_active = body.is_active === undefined ? true : Boolean(body.is_active);
 
   const active_from =
@@ -85,6 +94,7 @@ export function parseFlashSaleBody(
     ok: true,
     data: {
       name,
+      sale_tag: sale_tag ?? null,
       discount_type,
       discount_value,
       is_active,
@@ -136,6 +146,7 @@ export async function replaceFlashSaleScope(
 export function serializeFlashSaleRow(row: {
   id: string;
   name: string | null;
+  sale_tag?: string | null;
   discount_type: string;
   discount_value: { toString(): string } | number;
   is_active: boolean;
@@ -150,6 +161,7 @@ export function serializeFlashSaleRow(row: {
   return {
     id: row.id,
     name: row.name,
+    sale_tag: row.sale_tag ?? null,
     discount_type: row.discount_type,
     discount_value: Number(row.discount_value),
     is_active: row.is_active,

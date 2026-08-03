@@ -5,6 +5,8 @@ export type Product = {
   title: string;
   price: number;
   discountedPrice?: number | null;
+  /** Present when price is from an active flash sale (one-purchase claim key). */
+  flashSaleTag?: string | null;
   shippingPerUnit?: number;
   slug: string;
   quantity: number;

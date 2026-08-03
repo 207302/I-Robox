@@ -11,6 +11,11 @@ import {
 } from "@/lib/validation/input";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
+  assertCustomerCanClaimFlashSale,
+  FlashSaleClaimError,
+  resolveFlashSaleCartClaim,
+} from "@/lib/flashSale/claims";
+import {
   couponDiscountFromLines,
   couponTimingError,
   couponUsageErrors,
@@ -241,6 +246,17 @@ export async function buildCheckoutContext(input: {
     lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
     new Map(lineItems.map((li) => [li.productId, li.productName]))
   );
+
+  const flashClaimResolved = await resolveFlashSaleCartClaim(
+    lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
+  );
+  if (!flashClaimResolved.ok) {
+    throw new FlashSaleClaimError(flashClaimResolved.error);
+  }
+  if (!checkoutUserId) {
+    throw new Error("Customer account is required");
+  }
+  await assertCustomerCanClaimFlashSale(checkoutUserId, flashClaimResolved.claim);
 
   const subtotal = lineItems.reduce((s, li) => s + li.subtotal, 0);
   let discount = 0;

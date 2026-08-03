@@ -133,6 +133,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               description: product.description,
               price: product.price,
               discountedPrice: product.discountedPrice,
+              flashSaleTag: product.flashSaleTag ?? null,
               quantity: product.quantity,
               shippingPerUnit: product.shippingPerUnit ?? 0,
               brandId: product.brandId ?? null,

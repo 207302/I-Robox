@@ -19,6 +19,10 @@ import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
 import { buildPurchaseAnalyticsPayload } from "@/lib/analytics/buildPurchaseAnalytics";
+import {
+  claimFlashSaleForOrderInTx,
+  FlashSaleClaimError,
+} from "@/lib/flashSale/claims";
 
 const REFUND_ERROR_MAX = 2000;
 const OUT_OF_STOCK_PREFIX = "OUT_OF_STOCK:";
@@ -221,32 +225,73 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Order details are incomplete" }, { status: 400 });
         }
 
-        await prisma.$transaction(async (tx) => {
-          await confirmReservedInventoryAsSold(retryOrderId, tx);
-          await tx.orders.update({
-            where: { id: retryOrderId },
-            data: {
-              payment_status: "SUCCEEDED",
-              status: "CONFIRMED",
-              external_payment_id: razorpayPaymentId,
-              payment_provider: "razorpay",
-            },
-          });
-          if (retryOrder.coupon_id) {
-            const usageCount = await tx.coupon_usages.count({
-              where: { order_id: retryOrderId, coupon_id: retryOrder.coupon_id },
+        try {
+          await prisma.$transaction(async (tx) => {
+            await confirmReservedInventoryAsSold(retryOrderId, tx);
+            await tx.orders.update({
+              where: { id: retryOrderId },
+              data: {
+                payment_status: "SUCCEEDED",
+                status: "CONFIRMED",
+                external_payment_id: razorpayPaymentId,
+                payment_provider: "razorpay",
+              },
             });
-            if (usageCount === 0) {
-              await tx.coupon_usages.create({
-                data: {
-                  coupon_id: retryOrder.coupon_id,
-                  customer_id: retryOrder.customer_id,
-                  order_id: retryOrderId,
-                },
+            if (retryOrder.coupon_id) {
+              const usageCount = await tx.coupon_usages.count({
+                where: { order_id: retryOrderId, coupon_id: retryOrder.coupon_id },
               });
+              if (usageCount === 0) {
+                await tx.coupon_usages.create({
+                  data: {
+                    coupon_id: retryOrder.coupon_id,
+                    customer_id: retryOrder.customer_id,
+                    order_id: retryOrderId,
+                  },
+                });
+              }
             }
+            if (retryOrder.customer_id) {
+              const existingClaim = await tx.flash_sale_claims.findUnique({
+                where: { order_id: retryOrderId },
+                select: { id: true },
+              });
+              if (!existingClaim) {
+                await claimFlashSaleForOrderInTx(tx, {
+                  customerId: retryOrder.customer_id,
+                  orderId: retryOrderId,
+                  lines: retryCtx.lineItems.map((li) => ({
+                    productId: li.productId,
+                    quantity: li.quantity,
+                  })),
+                });
+              }
+            }
+          }, PRISMA_TRANSACTION_OPTIONS);
+        } catch (claimErr) {
+          if (claimErr instanceof FlashSaleClaimError) {
+            let userMessage = claimErr.message;
+            try {
+              const refund = await razorpay.payments.refund(razorpayPaymentId, {
+                amount: expectedRetryPaise,
+              });
+              const refundId = String((refund as { id?: string }).id ?? "").trim();
+              userMessage = `${claimErr.message} Your payment has been refunded automatically.`;
+              console.info("[razorpay/verify] auto-refund after flash claim failure (retry)", {
+                paymentId: razorpayPaymentId,
+                refundId,
+              });
+            } catch (refundErr) {
+              console.error("[razorpay/verify] auto-refund failed after flash claim failure (retry)", {
+                paymentId: razorpayPaymentId,
+                refundErr,
+              });
+              userMessage = `${claimErr.message} We could not complete your order — please contact support for a refund.`;
+            }
+            return NextResponse.json({ error: userMessage }, { status: 409 });
           }
-        }, PRISMA_TRANSACTION_OPTIONS);
+          throw claimErr;
+        }
 
         const accessTokenOut = createOrderAccessToken(retryOrderId);
         const productIds = retryCtx.lineItems.map((li) => li.productId);
@@ -436,6 +481,18 @@ export async function POST(req: NextRequest) {
             },
           });
         }
+
+        if (!ctx.checkoutUserId) {
+          throw new FlashSaleClaimError("Customer account is required");
+        }
+        await claimFlashSaleForOrderInTx(tx, {
+          customerId: ctx.checkoutUserId,
+          orderId: order.id,
+          lines: ctx.lineItems.map((li) => ({
+            productId: li.productId,
+            quantity: li.quantity,
+          })),
+        });
   
         return order;
       }, PRISMA_TRANSACTION_OPTIONS);
@@ -503,6 +560,27 @@ export async function POST(req: NextRequest) {
           },
           { status: 409 }
         );
+      }
+      if (e instanceof FlashSaleClaimError) {
+        let userMessage = e.message;
+        try {
+          const refund = await razorpay.payments.refund(razorpayPaymentId, {
+            amount: Number(payment.amount),
+          });
+          const refundId = String((refund as { id?: string }).id ?? "").trim();
+          console.info("[razorpay/verify] auto-refund after flash claim failure", {
+            paymentId: razorpayPaymentId,
+            refundId,
+          });
+          userMessage = `${e.message} Your payment has been refunded automatically.`;
+        } catch (refundErr) {
+          console.error("[razorpay/verify] auto-refund failed after flash claim failure", {
+            paymentId: razorpayPaymentId,
+            refundErr,
+          });
+          userMessage = `${e.message} We could not complete your order — please contact support for a refund.`;
+        }
+        return NextResponse.json({ error: userMessage }, { status: 409 });
       }
       const msg = String(e?.message ?? "");
       if (msg.startsWith("MAX_ORDER_QTY_EXCEEDED:")) {

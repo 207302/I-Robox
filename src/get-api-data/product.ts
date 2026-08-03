@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
-import { flashSaleUnitPriceForProduct } from "@/lib/pricing/flashSale";
+import { flashSaleUnitPriceAndTagForProduct } from "@/lib/pricing/flashSale";
 import { Prisma } from "@prisma/client";
 import { PRODUCT_PAGE_REVALIDATE_SECONDS } from "@/lib/cache/constants";
 import { ORDERS_TAG, PRODUCT_CATALOG_TAG, productSlugTag } from "@/lib/cache/tags";
@@ -300,7 +300,7 @@ async function loadProductBySlug(slug: string) {
     },
   });
   if (!product || !product.is_active) return null;
-  const flashPrice = await flashSaleUnitPriceForProduct(product);
+  const flashInfo = await flashSaleUnitPriceAndTagForProduct(product);
   return {
     id: product.id,
     title: product.name,
@@ -310,7 +310,10 @@ async function loadProductBySlug(slug: string) {
     description: product.description ?? "",
     body: "",
     price: Number(product.base_price),
-    discountedPrice: flashPrice ?? (product.discounted_price ? Number(product.discounted_price) : null),
+    discountedPrice:
+      flashInfo?.unitPrice ??
+      (product.discounted_price ? Number(product.discounted_price) : null),
+    flashSaleTag: flashInfo?.saleTag ?? null,
     slug: product.slug,
     quantity: getInventoryQuantity(product.inventory),
     maxOrderQuantity: product.max_order_quantity ?? 99,

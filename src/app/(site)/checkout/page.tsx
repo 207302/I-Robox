@@ -28,6 +28,7 @@ import {
 } from "@/lib/validation/address";
 import { validateEmailAddress } from "@/lib/validation/rules";
 import { trackPurchase, type PurchaseAnalyticsPayload } from "@/lib/analytics/trackPurchase";
+import { invalidateFlashSaleClaimsCache } from "@/hooks/useFlashSaleClaims";
 
 declare global {
   interface Window {
@@ -394,6 +395,7 @@ export default function CheckoutPage() {
         });
         const codData = await codRes.json().catch(() => ({}));
         if (!codRes.ok) throw new Error(codData?.error || "Could not place COD order");
+        invalidateFlashSaleClaimsCache();
         clearCart();
         const tokenQuery =
           typeof codData?.accessToken === "string" && codData.accessToken
@@ -456,6 +458,7 @@ export default function CheckoutPage() {
               });
             }
             firePurchaseIfPresent(verifyData);
+            invalidateFlashSaleClaimsCache();
             clearCart();
             const tokenQuery =
               typeof verifyData?.accessToken === "string" && verifyData.accessToken

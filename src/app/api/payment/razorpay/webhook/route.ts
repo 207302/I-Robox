@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { verifyRazorpayWebhookSignature } from "@/lib/payments/razorpay";
 import { runApiRoute } from "@/lib/api/runApiRoute";
+import { releaseFlashSaleClaimForOrder } from "@/lib/flashSale/claims";
 
 type RazorpayWebhookEvent = {
   event?: string;
@@ -82,9 +83,12 @@ export async function POST(req: NextRequest) {
       // If already succeeded, do not move it backwards.
       if (order && order.payment_status !== "SUCCEEDED") {
         if (order.status !== "PAYMENT_FAILED" || order.payment_status !== "FAILED") {
-          await prisma.orders.update({
-            where: { id: order.id },
-            data: { payment_status: "FAILED", status: "PAYMENT_FAILED" },
+          await prisma.$transaction(async (tx) => {
+            await tx.orders.update({
+              where: { id: order.id },
+              data: { payment_status: "FAILED", status: "PAYMENT_FAILED" },
+            });
+            await releaseFlashSaleClaimForOrder(order.id, tx);
           });
         }
         await writeAuditLog({

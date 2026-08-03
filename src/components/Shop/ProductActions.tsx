@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useDispatch } from "react-redux";
 import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
+import { useFlashSaleClaimed } from "@/hooks/useFlashSaleClaims";
+import { FLASH_SALE_ALREADY_CLAIMED_MESSAGE } from "@/lib/flashSale/messages";
 import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { AppDispatch, useAppSelector } from "@/redux/store";
 
@@ -18,6 +20,7 @@ type ProductActionsProps = {
   image: string;
   price: number;
   discountedPrice?: number | null;
+  flashSaleTag?: string | null;
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
@@ -33,11 +36,12 @@ export default function ProductActions(props: ProductActionsProps) {
   const wishlistItems = useAppSelector((state) => state.wishlistReducer.items);
   const isAlreadyWishlisted = wishlistItems.some((w) => w.id === props.productId);
   const [localQty, setLocalQty] = useState(1);
+  const { claimed: flashClaimed } = useFlashSaleClaimed(props.flashSaleTag);
+  const purchaseBlocked = flashClaimed;
 
-  const maxQty = Math.min(
-    props.maxOrderQuantity ?? 99,
-    Math.max(props.quantity, 0) || 1
-  );
+  const maxQty = props.flashSaleTag
+    ? 1
+    : Math.min(props.maxOrderQuantity ?? 99, Math.max(props.quantity, 0) || 1);
 
   function buildCartPayload(qty: number) {
     return {
@@ -51,7 +55,8 @@ export default function ProductActions(props: ProductActionsProps) {
       image: props.image,
       slug: props.slug,
       availableQuantity: props.quantity,
-      maxOrderQuantity: props.maxOrderQuantity,
+      maxOrderQuantity: props.flashSaleTag ? 1 : props.maxOrderQuantity,
+      flashSaleTag: props.flashSaleTag ?? null,
       shippingPerUnit: Number(props.shippingPerUnit ?? 0),
       brandId: props.brandId ?? null,
       color: props.color ?? "",
@@ -61,6 +66,10 @@ export default function ProductActions(props: ProductActionsProps) {
   }
 
   function handleAddToCart() {
+    if (purchaseBlocked) {
+      toast.error(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+      return;
+    }
     if (props.quantity < 1) {
       toast.error("This product is out of stock!");
       return;
@@ -71,6 +80,10 @@ export default function ProductActions(props: ProductActionsProps) {
   }
 
   function handleBuyNow() {
+    if (purchaseBlocked) {
+      toast.error(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+      return;
+    }
     if (props.quantity < 1) {
       toast.error("This product is out of stock!");
       return;
@@ -141,21 +154,29 @@ export default function ProductActions(props: ProductActionsProps) {
         <button
           type="button"
           onClick={handleAddToCart}
-          disabled={props.quantity < 1}
+          disabled={props.quantity < 1 || purchaseBlocked}
           className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg bg-blue px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-dark disabled:opacity-60"
         >
-          {props.quantity > 0 ? "Add to Cart" : "Out of Stock"}
+          {purchaseBlocked
+            ? "Already claimed"
+            : props.quantity > 0
+              ? "Add to Cart"
+              : "Out of Stock"}
         </button>
 
         <button
           type="button"
           onClick={handleBuyNow}
-          disabled={props.quantity < 1}
+          disabled={props.quantity < 1 || purchaseBlocked}
           className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-dark transition hover:bg-gray-50 disabled:opacity-60"
         >
-          Buy Now
+          {purchaseBlocked ? "Already claimed" : "Buy Now"}
         </button>
       </div>
+
+      {purchaseBlocked ? (
+        <p className="mt-2 text-sm text-meta-3">{FLASH_SALE_ALREADY_CLAIMED_MESSAGE}</p>
+      ) : null}
 
       <button
         type="button"

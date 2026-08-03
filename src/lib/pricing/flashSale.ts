@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
+  bestFlashSaleMatch,
   bestFlashUnitPrice,
+  flashSaleClaimTag,
   type FlashProductContext,
   type FlashSaleRule,
 } from "@/lib/pricing/flashSaleTypes";
@@ -14,6 +16,7 @@ const flashSaleInclude = {
 
 function mapFlashSaleRow(row: {
   id: string;
+  sale_tag?: string | null;
   discount_type: string;
   discount_value: { toString(): string } | number;
   is_active: boolean;
@@ -25,6 +28,7 @@ function mapFlashSaleRow(row: {
 }): FlashSaleRule {
   return {
     id: row.id,
+    sale_tag: row.sale_tag?.trim() ? row.sale_tag.trim() : null,
     discount_type: row.discount_type as FlashSaleRule["discount_type"],
     discount_value: Number(row.discount_value),
     is_active: row.is_active,
@@ -47,9 +51,17 @@ export async function loadActiveFlashSaleRules(now = new Date()): Promise<FlashS
     .filter((rule) => isActiveInWindow(rule.is_active, rule.active_from, rule.active_until, now));
 }
 
-/** Product id → flash sale unit price (lowest matching active rule). */
-export async function flashSalePriceMap(productIds: string[]): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
+export type FlashSaleProductInfo = {
+  unitPrice: number;
+  saleTag: string;
+  flashSaleId: string;
+};
+
+/** Product id → winning flash sale price + claim tag. */
+export async function flashSaleInfoMap(
+  productIds: string[]
+): Promise<Map<string, FlashSaleProductInfo>> {
+  const map = new Map<string, FlashSaleProductInfo>();
   if (productIds.length === 0) return map;
 
   const now = new Date();
@@ -78,11 +90,51 @@ export async function flashSalePriceMap(productIds: string[]): Promise<Map<strin
       brand_id: product.brand_id,
       catalog_unit: catalogUnit,
     };
-    const flashPrice = bestFlashUnitPrice(ctx, rules, isLive);
-    if (flashPrice != null) map.set(product.id, flashPrice);
+    const match = bestFlashSaleMatch(ctx, rules, isLive);
+    if (match) {
+      map.set(product.id, {
+        unitPrice: match.unitPrice,
+        saleTag: flashSaleClaimTag(match.rule),
+        flashSaleId: match.rule.id,
+      });
+    }
   }
 
   return map;
+}
+
+/** Product id → flash sale unit price (lowest matching active rule). */
+export async function flashSalePriceMap(productIds: string[]): Promise<Map<string, number>> {
+  const info = await flashSaleInfoMap(productIds);
+  const map = new Map<string, number>();
+  for (const [id, row] of info) map.set(id, row.unitPrice);
+  return map;
+}
+
+export async function flashSaleUnitPriceAndTagForProduct(
+  product: {
+    id: string;
+    category_id: string | null;
+    brand_id: string | null;
+    base_price: { toString(): string } | number;
+    discounted_price: { toString(): string } | number | null;
+  },
+  now = new Date()
+): Promise<{ unitPrice: number; saleTag: string } | null> {
+  const rules = await loadActiveFlashSaleRules(now);
+  if (rules.length === 0) return null;
+  const catalogUnit = Number(product.discounted_price ?? product.base_price);
+  const ctx: FlashProductContext = {
+    id: product.id,
+    category_id: product.category_id,
+    brand_id: product.brand_id,
+    catalog_unit: catalogUnit,
+  };
+  const isLive = (rule: FlashSaleRule) =>
+    isActiveInWindow(rule.is_active, rule.active_from, rule.active_until, now);
+  const match = bestFlashSaleMatch(ctx, rules, isLive);
+  if (!match) return null;
+  return { unitPrice: match.unitPrice, saleTag: flashSaleClaimTag(match.rule) };
 }
 
 export function unitPriceWithFlashSale(

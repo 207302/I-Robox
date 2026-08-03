@@ -29,6 +29,8 @@ export type CartItem = {
   slug?: string;
   availableQuantity?: number;
   maxOrderQuantity?: number;
+  /** Claim key when line is priced via an active flash sale. */
+  flashSaleTag?: string | null;
   color?: string;
   size?: string;
   attribute?: any;
@@ -74,6 +76,9 @@ export const cart = createSlice({
         }
         if (item.brandId !== undefined) {
           existingItem.brandId = item.brandId ?? null;
+        }
+        if (item.flashSaleTag !== undefined) {
+          existingItem.flashSaleTag = item.flashSaleTag ?? null;
         }
       } else {
         state.items.push({

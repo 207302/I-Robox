@@ -3,6 +3,8 @@ export type FlashDiscountType = (typeof FLASH_DISCOUNT_TYPES)[number];
 
 export type FlashSaleRule = {
   id: string;
+  /** Optional shared claim key; when null/empty, claims use `id`. */
+  sale_tag: string | null;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -12,6 +14,12 @@ export type FlashSaleRule = {
   category_ids: string[];
   brand_ids: string[];
 };
+
+/** Claim identity for one-purchase-per-customer enforcement. */
+export function flashSaleClaimTag(rule: Pick<FlashSaleRule, "id" | "sale_tag">): string {
+  const tag = (rule.sale_tag ?? "").trim();
+  return tag || rule.id;
+}
 
 export type FlashProductContext = {
   id: string;
@@ -48,19 +56,33 @@ export function computeFlashUnitPrice(
   return Math.max(0, catalogUnit * (1 - pct / 100));
 }
 
+export function bestFlashSaleMatch(
+  product: FlashProductContext,
+  rules: FlashSaleRule[],
+  isLive: (rule: FlashSaleRule) => boolean
+): { unitPrice: number; rule: FlashSaleRule } | null {
+  let best: { unitPrice: number; rule: FlashSaleRule } | null = null;
+  for (const rule of rules) {
+    if (!isLive(rule) || !productMatchesFlashSale(product, rule)) continue;
+    const candidate = computeFlashUnitPrice(
+      product.catalog_unit,
+      rule.discount_type,
+      rule.discount_value
+    );
+    if (!(candidate < product.catalog_unit)) continue;
+    if (best === null || candidate < best.unitPrice) {
+      best = { unitPrice: candidate, rule };
+    }
+  }
+  return best;
+}
+
 export function bestFlashUnitPrice(
   product: FlashProductContext,
   rules: FlashSaleRule[],
   isLive: (rule: FlashSaleRule) => boolean
 ): number | null {
-  let best: number | null = null;
-  for (const rule of rules) {
-    if (!isLive(rule) || !productMatchesFlashSale(product, rule)) continue;
-    const candidate = computeFlashUnitPrice(product.catalog_unit, rule.discount_type, rule.discount_value);
-    if (!(candidate < product.catalog_unit)) continue;
-    if (best === null || candidate < best) best = candidate;
-  }
-  return best;
+  return bestFlashSaleMatch(product, rules, isLive)?.unitPrice ?? null;
 }
 
 export function formatFlashDiscount(

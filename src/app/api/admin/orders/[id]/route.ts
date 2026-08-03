@@ -4,6 +4,7 @@ import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { deleteOrderById } from "@/lib/admin/deleteOrder";
 import { restoreSoldInventoryForOrder, orderPaymentCountedAsSold } from "@/lib/inventory/orderInventoryRestore";
+import { releaseFlashSaleClaimForOrder } from "@/lib/flashSale/claims";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { requireAdmin, requireSuperAdmin } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
@@ -414,7 +415,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
           }
         });
       } else {
-        await prisma.orders.update({ where: { id }, data: { status: status as any } });
+        await prisma.$transaction(async (tx) => {
+          await tx.orders.update({ where: { id }, data: { status: status as any } });
+          if (status === "CANCELLED" || status === "PAYMENT_FAILED") {
+            await releaseFlashSaleClaimForOrder(id, tx);
+          }
+        }, PRISMA_TRANSACTION_OPTIONS);
       }
       nextOrderStatusForNotify = status;
     }

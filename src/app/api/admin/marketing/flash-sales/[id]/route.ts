@@ -50,6 +50,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     ) {
       const merged = {
         name: body.name !== undefined ? body.name : existing.name,
+        sale_tag: body.sale_tag !== undefined ? body.sale_tag : existing.sale_tag,
         discount_type: body.discount_type ?? existing.discount_type,
         discount_value: body.discount_value ?? existing.discount_value,
         is_active: body.is_active !== undefined ? body.is_active : existing.is_active,
@@ -96,6 +97,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           where: { id },
           data: {
             name: data.name,
+            sale_tag: data.sale_tag,
             discount_type: data.discount_type,
             discount_value: data.discount_value,
             is_active: data.is_active,

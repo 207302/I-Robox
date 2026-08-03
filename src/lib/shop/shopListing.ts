@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { flashSalePriceMap } from "@/lib/pricing/flashSale";
+import { flashSaleInfoMap, type FlashSaleProductInfo } from "@/lib/pricing/flashSale";
 import { paginateDiscountFilteredProductIds } from "@/lib/shop/shopFacets";
 import { loadListingFacets, type ListingFacetsBundle } from "@/lib/shop/shopListingFacets";
 import {
@@ -24,6 +24,8 @@ export type ShopListingItem = {
   diecastScale: string | null;
   price: number;
   discountedPrice: number | null;
+  /** Present when the discounted price comes from an active flash sale (claim key). */
+  flashSaleTag?: string | null;
   shippingPerUnit: number;
   slug: string;
   quantity: number;
@@ -88,16 +90,16 @@ function mapProductsToItems(
     }[];
     inventory: { available_quantity: number }[];
   }[],
-  flashMap: Map<string, number>
+  flashMap: Map<string, FlashSaleProductInfo>
 ): ShopListingItem[] {
   return products.map((p) => {
     const images = p.product_images.slice().sort((a, b) => a.sort_order - b.sort_order);
     const image = images[0]?.url ?? "";
     const quantity = p.inventory.reduce((sum, r) => sum + r.available_quantity, 0);
-    const flashPrice = flashMap.get(p.id);
+    const flashInfo = flashMap.get(p.id);
     const basePrice = Number(p.base_price);
     const regularDiscounted = p.discounted_price ? Number(p.discounted_price) : null;
-    const effectiveDiscounted = flashPrice ?? regularDiscounted;
+    const effectiveDiscounted = flashInfo?.unitPrice ?? regularDiscounted;
     return {
       id: p.id,
       title: p.name,
@@ -108,6 +110,7 @@ function mapProductsToItems(
       diecastScale: p.diecast_scales?.ratio ?? null,
       price: basePrice,
       discountedPrice: effectiveDiscounted,
+      flashSaleTag: flashInfo?.saleTag ?? null,
       shippingPerUnit: Number(p.shipping_per_unit ?? 0),
       slug: p.slug,
       quantity,
@@ -369,8 +372,8 @@ async function executeShopListingFromState(
   const productIds = products.map((p) => p.id);
   const flashMap =
     !requestOptions?.skipFlashSales && productIds.length > 0
-      ? await profiledQuery(profile, "listing.flashSales", () => flashSalePriceMap(productIds))
-      : new Map<string, number>();
+      ? await profiledQuery(profile, "listing.flashSales", () => flashSaleInfoMap(productIds))
+      : new Map<string, FlashSaleProductInfo>();
 
   const finalItems = mapProductsToItems(products, flashMap);
 

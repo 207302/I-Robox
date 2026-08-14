@@ -99,11 +99,14 @@ function ProductItemInner({
 
   const { addItem, cartDetails, cartItems, incrementItem, decrementItem } = useCart();
   const purchaseLimit = item.flashSalePurchaseLimit ?? 0;
-  const { used } = useFlashSaleClaimUsage(item.flashSaleTag);
+  const flashSaleTag =
+    item.flashSaleTag ??
+    (purchaseLimit > 0 && item.flashSaleId ? item.flashSaleId : null);
+  const { used } = useFlashSaleClaimUsage(flashSaleTag);
   const remainingAfterOrders =
     purchaseLimit > 0 ? Math.max(0, purchaseLimit - used) : 0;
   const sameTagOtherCartQty = cartItems.reduce((sum, cartLine) => {
-    if (!cartLine.flashSaleTag || cartLine.flashSaleTag !== item.flashSaleTag) return sum;
+    if (!cartLine.flashSaleTag || cartLine.flashSaleTag !== flashSaleTag) return sum;
     if (String(cartLine.id) === String(cartLineId)) return sum;
     return sum + cartLine.quantity;
   }, 0);
@@ -113,7 +116,7 @@ function ProductItemInner({
     catalogMax: item.maxOrderQuantity ?? 99,
     sameTagOtherCartQty: purchaseLimit > 0 ? sameTagOtherCartQty : 0,
   });
-  const purchaseBlocked = Boolean(item.flashSaleTag) && purchaseLimit > 0 && flashMaxQty < 1;
+  const purchaseBlocked = Boolean(flashSaleTag) && purchaseLimit > 0 && flashMaxQty < 1;
   const limitMessage = flashSaleLimitReachedMessage(purchaseLimit);
 
   const isAlradyAdded = Boolean(cartDetails?.[cartLineId]);
@@ -132,8 +135,8 @@ function ProductItemInner({
       image: cardImage,
       slug: item?.slug,
       availableQuantity: item.quantity,
-      maxOrderQuantity: purchaseLimit > 0 ? remainingAfterOrders : item.maxOrderQuantity,
-      flashSaleTag: item.flashSaleTag ?? null,
+      maxOrderQuantity: item.maxOrderQuantity,
+      flashSaleTag,
       flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       brandId: item.brandId ?? null,
       color: cartVariant?.color ? cartVariant.color : "",
@@ -147,6 +150,7 @@ function ProductItemInner({
       cartVariant,
       purchaseLimit,
       remainingAfterOrders,
+      flashSaleTag,
     ]
   );
 

@@ -121,7 +121,7 @@ const QuickViewModal = () => {
       image: cardImage,
       slug: product?.slug,
       availableQuantity: product.quantity,
-      maxOrderQuantity: purchaseLimit > 0 ? remainingAfterOrders : maxOrderQty,
+      maxOrderQuantity: maxOrderQty,
       flashSaleTag: product.flashSaleTag ?? null,
       flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       brandId: (product as { brandId?: string | null }).brandId ?? null,

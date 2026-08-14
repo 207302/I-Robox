@@ -9,6 +9,7 @@ export type Product = {
   flashSaleTag?: string | null;
   /** Max units per customer for the matching flash sale; 0/omitted = unlimited. */
   flashSalePurchaseLimit?: number | null;
+  flashSaleId?: string | null;
   shippingPerUnit?: number;
   slug: string;
   quantity: number;

@@ -948,6 +948,7 @@ export default function ShopLiveExperience({
             discountedPrice: item.discountedPrice,
             flashSaleTag: item.flashSaleTag ?? null,
             flashSalePurchaseLimit: item.flashSalePurchaseLimit ?? 0,
+            flashSaleId: item.flashSaleId ?? null,
             slug: item.slug,
             quantity: item.quantity,
             maxOrderQuantity: item.maxOrderQuantity,

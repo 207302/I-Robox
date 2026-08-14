@@ -53,12 +53,13 @@ export function cartFlashSaleError(
     opts?.replacingQty ??
     (existing ? existing.quantity + (incoming.quantity || 1) : incoming.quantity || 1);
 
-  const total = sameTagCartQty(items, tag, incoming.id) + nextQty;
+  // Total units across every cart line in this flash sale (not per product).
+  const total = sameTagCartQty(items, tag, incoming.id) + Math.max(0, nextQty);
   const limits = [
     incoming.flashSalePurchaseLimit,
     existing?.flashSalePurchaseLimit,
     ...items.filter((i) => i.flashSaleTag === tag).map((i) => i.flashSalePurchaseLimit),
-  ].filter((n): n is number => typeof n === "number" && n > 0);
+  ].filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0);
   const limit = limits.length ? Math.min(...limits) : 1;
   if (total > limit) {
     return flashSaleQtyLimitMessage(limit);

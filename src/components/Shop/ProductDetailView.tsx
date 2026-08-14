@@ -35,6 +35,7 @@ export type ProductDetailViewProps = {
     discountedPrice: number | null;
     flashSaleTag?: string | null;
     flashSalePurchaseLimit?: number | null;
+    flashSaleId?: string | null;
     quantity: number;
     shippingPerUnit: number;
     brandId: string | null;
@@ -249,6 +250,7 @@ export default function ProductDetailView({
             discountedPrice={product.discountedPrice}
             flashSaleTag={product.flashSaleTag}
             flashSalePurchaseLimit={product.flashSalePurchaseLimit}
+            flashSaleId={product.flashSaleId}
             quantity={product.quantity}
             shippingPerUnit={product.shippingPerUnit}
             brandId={product.brandId}

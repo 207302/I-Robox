@@ -315,6 +315,7 @@ async function loadProductBySlug(slug: string) {
       (product.discounted_price ? Number(product.discounted_price) : null),
     flashSaleTag: flashInfo?.saleTag ?? null,
     flashSalePurchaseLimit: flashInfo?.purchaseLimit ?? 0,
+    flashSaleId: flashInfo?.flashSaleId ?? null,
     slug: product.slug,
     quantity: getInventoryQuantity(product.inventory),
     maxOrderQuantity: product.max_order_quantity ?? 99,

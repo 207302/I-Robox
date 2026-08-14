@@ -79,7 +79,7 @@ export default function ProductActions(props: ProductActionsProps) {
       image: props.image,
       slug: props.slug,
       availableQuantity: props.quantity,
-      maxOrderQuantity: purchaseLimit > 0 ? remainingAfterOrders : props.maxOrderQuantity,
+      maxOrderQuantity: props.maxOrderQuantity,
       flashSaleTag: props.flashSaleTag ?? null,
       flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       shippingPerUnit: Number(props.shippingPerUnit ?? 0),

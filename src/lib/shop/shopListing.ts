@@ -27,6 +27,7 @@ export type ShopListingItem = {
   /** Present when the discounted price comes from an active flash sale (claim key). */
   flashSaleTag?: string | null;
   flashSalePurchaseLimit?: number | null;
+  flashSaleId?: string | null;
   shippingPerUnit: number;
   slug: string;
   quantity: number;
@@ -113,6 +114,7 @@ function mapProductsToItems(
       discountedPrice: effectiveDiscounted,
       flashSaleTag: flashInfo?.saleTag ?? null,
       flashSalePurchaseLimit: flashInfo?.purchaseLimit ?? 0,
+      flashSaleId: flashInfo?.flashSaleId ?? null,
       shippingPerUnit: Number(p.shipping_per_unit ?? 0),
       slug: p.slug,
       quantity,

@@ -135,6 +135,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               discountedPrice: product.discountedPrice,
               flashSaleTag: product.flashSaleTag ?? null,
               flashSalePurchaseLimit: product.flashSalePurchaseLimit ?? 0,
+              flashSaleId: product.flashSaleId ?? null,
               quantity: product.quantity,
               shippingPerUnit: product.shippingPerUnit ?? 0,
               brandId: product.brandId ?? null,

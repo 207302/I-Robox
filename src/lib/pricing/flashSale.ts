@@ -124,7 +124,12 @@ export async function flashSaleUnitPriceAndTagForProduct(
     discounted_price: { toString(): string } | number | null;
   },
   now = new Date()
-): Promise<{ unitPrice: number; saleTag: string | null; purchaseLimit: number } | null> {
+): Promise<{
+  unitPrice: number;
+  saleTag: string | null;
+  purchaseLimit: number;
+  flashSaleId: string;
+} | null> {
   const rules = await loadActiveFlashSaleRules(now);
   if (rules.length === 0) return null;
   const catalogUnit = Number(product.discounted_price ?? product.base_price);
@@ -142,6 +147,7 @@ export async function flashSaleUnitPriceAndTagForProduct(
     unitPrice: match.unitPrice,
     saleTag: flashSaleClaimTagIfLimited(match.rule),
     purchaseLimit: match.rule.purchase_limit,
+    flashSaleId: match.rule.id,
   };
 }
 

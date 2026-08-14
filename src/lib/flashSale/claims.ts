@@ -3,9 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import { loadActiveFlashSaleRules } from "@/lib/pricing/flashSale";
 import {
-  bestFlashSaleMatch,
   flashSaleClaimTag,
-  flashSaleIsLimited,
+  resolveFlashSaleClaimRule,
   type FlashSaleRule,
 } from "@/lib/pricing/flashSaleTypes";
 import {
@@ -73,7 +72,7 @@ export async function resolveFlashSaleCartClaim(
     const product = productMap.get(line.productId);
     if (!product) continue;
     const catalogUnit = Number(product.discounted_price ?? product.base_price);
-    const match = bestFlashSaleMatch(
+    const claimRule = resolveFlashSaleClaimRule(
       {
         id: product.id,
         category_id: product.category_id,
@@ -83,23 +82,23 @@ export async function resolveFlashSaleCartClaim(
       rules,
       isLive
     );
-    if (!match || !flashSaleIsLimited(match.rule.purchase_limit)) continue;
+    if (!claimRule) continue;
     const qty = Math.max(0, Math.trunc(line.quantity));
     if (qty < 1) continue;
-    const saleTag = flashSaleClaimTag(match.rule);
+    const saleTag = flashSaleClaimTag(claimRule);
     if (claim && claim.saleTag !== saleTag) {
       return { ok: false, error: FLASH_SALE_ONE_ITEM_MESSAGE };
     }
     if (!claim) {
       claim = {
         saleTag,
-        flashSaleId: match.rule.id,
+        flashSaleId: claimRule.id,
         quantity: qty,
-        purchaseLimit: match.rule.purchase_limit,
+        purchaseLimit: claimRule.purchase_limit,
       };
     } else {
       claim.quantity += qty;
-      claim.purchaseLimit = Math.min(claim.purchaseLimit, match.rule.purchase_limit);
+      claim.purchaseLimit = Math.min(claim.purchaseLimit, claimRule.purchase_limit);
     }
   }
 

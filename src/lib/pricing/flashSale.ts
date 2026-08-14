@@ -3,7 +3,8 @@ import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
   bestFlashSaleMatch,
   bestFlashUnitPrice,
-  flashSaleClaimTagIfLimited,
+  flashSaleClaimTag,
+  resolveFlashSaleClaimRule,
   type FlashProductContext,
   type FlashSaleRule,
 } from "@/lib/pricing/flashSaleTypes";
@@ -93,15 +94,15 @@ export async function flashSaleInfoMap(
       brand_id: product.brand_id,
       catalog_unit: catalogUnit,
     };
-    const match = bestFlashSaleMatch(ctx, rules, isLive);
-    if (match) {
-      map.set(product.id, {
-        unitPrice: match.unitPrice,
-        saleTag: flashSaleClaimTagIfLimited(match.rule),
-        purchaseLimit: match.rule.purchase_limit,
-        flashSaleId: match.rule.id,
-      });
-    }
+    const priceMatch = bestFlashSaleMatch(ctx, rules, isLive);
+    const claimRule = resolveFlashSaleClaimRule(ctx, rules, isLive);
+    if (!priceMatch && !claimRule) continue;
+    map.set(product.id, {
+      unitPrice: priceMatch?.unitPrice ?? catalogUnit,
+      saleTag: claimRule ? flashSaleClaimTag(claimRule) : null,
+      purchaseLimit: claimRule?.purchase_limit ?? 0,
+      flashSaleId: (claimRule ?? priceMatch!.rule).id,
+    });
   }
 
   return map;
@@ -141,13 +142,14 @@ export async function flashSaleUnitPriceAndTagForProduct(
   };
   const isLive = (rule: FlashSaleRule) =>
     isActiveInWindow(rule.is_active, rule.active_from, rule.active_until, now);
-  const match = bestFlashSaleMatch(ctx, rules, isLive);
-  if (!match) return null;
+  const priceMatch = bestFlashSaleMatch(ctx, rules, isLive);
+  const claimRule = resolveFlashSaleClaimRule(ctx, rules, isLive);
+  if (!priceMatch && !claimRule) return null;
   return {
-    unitPrice: match.unitPrice,
-    saleTag: flashSaleClaimTagIfLimited(match.rule),
-    purchaseLimit: match.rule.purchase_limit,
-    flashSaleId: match.rule.id,
+    unitPrice: priceMatch?.unitPrice ?? catalogUnit,
+    saleTag: claimRule ? flashSaleClaimTag(claimRule) : null,
+    purchaseLimit: claimRule?.purchase_limit ?? 0,
+    flashSaleId: (claimRule ?? priceMatch!.rule).id,
   };
 }
 

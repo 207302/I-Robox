@@ -88,6 +88,54 @@ export function bestFlashSaleMatch(
   return best;
 }
 
+/**
+ * Limited flash sale for per-customer claim/quota.
+ * Matches by scope even when the flash price does not beat catalog
+ * (e.g. ₹1 test products with a FIXED ₹1 sale price).
+ */
+export function bestLimitedFlashSaleMatch(
+  product: Pick<FlashProductContext, "id" | "category_id" | "brand_id"> & {
+    catalog_unit?: number;
+  },
+  rules: FlashSaleRule[],
+  isLive: (rule: FlashSaleRule) => boolean
+): FlashSaleRule | null {
+  let best: FlashSaleRule | null = null;
+  let bestPrice = Infinity;
+  const catalogUnit = product.catalog_unit ?? 0;
+  for (const rule of rules) {
+    if (!isLive(rule) || !flashSaleIsLimited(rule.purchase_limit)) continue;
+    if (!productMatchesFlashSale(product, rule)) continue;
+    const candidate = computeFlashUnitPrice(
+      catalogUnit,
+      rule.discount_type,
+      rule.discount_value
+    );
+    if (
+      best === null ||
+      candidate < bestPrice ||
+      (candidate === bestPrice && rule.purchase_limit < best.purchase_limit)
+    ) {
+      best = rule;
+      bestPrice = candidate;
+    }
+  }
+  return best;
+}
+
+/** Prefer the price-winning limited rule; otherwise any matching limited sale. */
+export function resolveFlashSaleClaimRule(
+  product: FlashProductContext,
+  rules: FlashSaleRule[],
+  isLive: (rule: FlashSaleRule) => boolean
+): FlashSaleRule | null {
+  const priceMatch = bestFlashSaleMatch(product, rules, isLive);
+  if (priceMatch && flashSaleIsLimited(priceMatch.rule.purchase_limit)) {
+    return priceMatch.rule;
+  }
+  return bestLimitedFlashSaleMatch(product, rules, isLive);
+}
+
 export function bestFlashUnitPrice(
   product: FlashProductContext,
   rules: FlashSaleRule[],

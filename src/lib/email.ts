@@ -95,8 +95,8 @@ export function createPooledEmailTransporter() {
   return nodemailer.createTransport({
     ...smtpConfig(),
     pool: true,
-    maxConnections: 5,
-    maxMessages: 500,
+    maxConnections: 2,
+    maxMessages: 80,
   });
 }
 
@@ -126,6 +126,26 @@ export function getSmtpErrorHint(err: unknown): string | null {
   }
   if (combined.includes("554 5.7.1")) {
     return "SMTP server blocked sending (554). Check Hostinger email settings or use Gmail SMTP.";
+  }
+  const lower = combined.toLowerCase();
+  if (
+    lower.includes("421") ||
+    lower.includes("450") ||
+    lower.includes("451") ||
+    lower.includes("rate limit") ||
+    lower.includes("too many") ||
+    lower.includes("try again later")
+  ) {
+    return "SMTP rate limit — remaining contacts will be sent in the next batch.";
+  }
+  if (
+    lower.includes("etimedout") ||
+    lower.includes("econnreset") ||
+    lower.includes("econnection") ||
+    lower.includes("connection closed") ||
+    lower.includes("socket")
+  ) {
+    return "SMTP connection dropped — remaining contacts will be sent in the next batch.";
   }
   return null;
 }

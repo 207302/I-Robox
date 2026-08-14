@@ -893,6 +893,8 @@ model flash_sales {
   /// Optional shared claim key. When set, one purchase per customer across all sales with this tag.
   /// When null, claims use this flash sale's id.
   sale_tag       String?   @db.VarChar(80)
+  /// When true, each customer may purchase only one item from this sale (see sale_tag for shared limits).
+  limit_one_per_customer Boolean @default(true)
   discount_type  String    @db.VarChar(20)
   discount_value Decimal   @db.Decimal(10, 2)
   is_active      Boolean   @default(true)

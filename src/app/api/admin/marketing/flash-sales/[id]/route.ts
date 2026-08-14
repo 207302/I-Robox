@@ -51,6 +51,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       const merged = {
         name: body.name !== undefined ? body.name : existing.name,
         sale_tag: body.sale_tag !== undefined ? body.sale_tag : existing.sale_tag,
+        limit_one_per_customer:
+          body.limit_one_per_customer !== undefined
+            ? body.limit_one_per_customer
+            : existing.limit_one_per_customer,
         discount_type: body.discount_type ?? existing.discount_type,
         discount_value: body.discount_value ?? existing.discount_value,
         is_active: body.is_active !== undefined ? body.is_active : existing.is_active,
@@ -98,6 +102,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           data: {
             name: data.name,
             sale_tag: data.sale_tag,
+            limit_one_per_customer: data.limit_one_per_customer,
             discount_type: data.discount_type,
             discount_value: data.discount_value,
             is_active: data.is_active,
@@ -122,6 +127,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       data.name = nameRaw ? nameRaw.slice(0, 120) : null;
     }
     if (typeof body.is_active === "boolean") data.is_active = body.is_active;
+    if (typeof body.limit_one_per_customer === "boolean") {
+      data.limit_one_per_customer = body.limit_one_per_customer;
+    }
+    if (body.sale_tag !== undefined) {
+      const tag =
+        body.sale_tag === null || body.sale_tag === ""
+          ? null
+          : String(body.sale_tag).trim().slice(0, 80) || null;
+      data.sale_tag = tag;
+    }
     if (body.active_from !== undefined) {
       const d = parseOptionalDate(body.active_from);
       if (d === undefined && body.active_from !== null && body.active_from !== "") {

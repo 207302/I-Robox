@@ -89,16 +89,16 @@ The homepage shows:
 1. Open **Shop** from the main menu.
 2. Use the search box in the header (or on the shop page) to find products by name, brand, and related wording.
 3. Use the filter sidebar (or mobile filters) for:
-   - **Min / Max price**
-   - **Age groups**
-   - **Categories**
-   - **Brands**
-   - **Sub categories**
-   - **Collections**
-   - **Discount**
-   - **Scales** (shown when browsing diecast / toy cars style categories)
-   - **In stock only**
-   - **Sort** (price low→high or high→low)
+  - **Min / Max price**
+  - **Age groups**
+  - **Categories**
+  - **Brands**
+  - **Sub categories**
+  - **Collections**
+  - **Discount**
+  - **Scales** (shown when browsing diecast / toy cars style categories)
+  - **In stock only**
+  - **Sort** (price low→high or high→low)
 4. Tap **Apply filters**. Use **Clear filters** to reset.
 5. Scroll to load more products as you browse.
 
@@ -165,14 +165,14 @@ You do **not** need to be signed in to place an order.
 
 1. Go to **Checkout**.
 2. Enter a **shipping address**, or pick a **Saved address** if you are signed in (or choose “Enter a new address”).
-   - Indian mobile (10 digits starting 6–9) and 6-digit PIN code are required.
-   - A common email provider (Gmail, Yahoo, Outlook, etc.) is expected when placing the order.
+  - Indian mobile (10 digits starting 6–9) and 6-digit PIN code are required.
+  - A common email provider (Gmail, Yahoo, Outlook, etc.) is expected when placing the order.
 3. Optional: tick **Mark this order as a gift** and add a gift message.
 4. Review the order summary and delivery charge.
 5. Optional: apply a **coupon** (see next section).
 6. Choose payment:
-   - **Pay online** — pay securely with Razorpay (cards, UPI, netbanking, and other methods Razorpay shows).
-   - **Cash on Delivery** — only available when every item in the cart is allowed for COD (based on brands/categories the store has enabled). If COD is not available, it stays disabled with a reason.
+  - **Pay online** — pay securely with Razorpay (cards, UPI, netbanking, and other methods Razorpay shows).
+  - **Cash on Delivery** — only available when every item in the cart is allowed for COD (based on brands/categories the store has enabled). If COD is not available, it stays disabled with a reason.
 7. Tap **Pay now** (online) or **Place COD order**.
 
 [SCREENSHOT: checkout payment options]
@@ -243,11 +243,11 @@ On the order page you can see:
 - Order status and payment status
 - Shipping address and gift message (if any)
 - A tracking timeline:
-  1. Order Placed  
-  2. Pickup Generated  
-  3. In Transit  
-  4. Out for Delivery  
-  5. Delivered  
+  1. Order Placed
+  2. Pickup Generated
+  3. In Transit
+  4. Out for Delivery
+  5. Delivered
 - Tracking number (AWB), carrier, and a public tracking link when available
 
 Tracking updates when the store pushes the shipment to ShipMozo and as the courier progresses. Opening the order refreshes status when possible.
@@ -298,8 +298,8 @@ Guests are prompted to sign in before reviewing.
 1. Read the returns policy page (**Return & Cancellation** / similar footer link).
 2. Sign in and open **Returns** to see any return requests already on file (quantity and status).
 3. Contact the store to start a return:
-   - Use **Contact** (message opens WhatsApp with a topic such as Return & refund), or
-   - Message via the floating WhatsApp button.
+  - Use **Contact** (message opens WhatsApp with a topic such as Return & refund), or
+  - Message via the floating WhatsApp button.
 
 [SCREENSHOT: returns list page]
 
@@ -329,14 +329,16 @@ Staff manage these signups under Marketing → **Latest drop signups** and can e
 
 ## Other helpful storefront features
 
-| Feature | What it does |
-| --- | --- |
-| Marketing popups | Occasional offers/coupons with optional “show once per device / session / every visit” |
-| Announcement bar | Short messages in the header utility / marquee area |
-| WhatsApp float | Chat with the store |
-| Contact page | Choose a topic and continue in WhatsApp |
-| FAQ, About, Shipping, Privacy, Terms | Policy and info pages from the footer |
-| Flash sales | Temporary sale prices when staff have configured them |
+
+| Feature                              | What it does                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| Marketing popups                     | Occasional offers/coupons with optional “show once per device / session / every visit” |
+| Announcement bar                     | Short messages in the header utility / marquee area                                    |
+| WhatsApp float                       | Chat with the store                                                                    |
+| Contact page                         | Choose a topic and continue in WhatsApp                                                |
+| FAQ, About, Shipping, Privacy, Terms | Policy and info pages from the footer                                                  |
+| Flash sales                          | Temporary sale prices when staff have configured them                                  |
+
 
 ---
 
@@ -375,7 +377,7 @@ Roles in plain terms:
 - **Super Admin** — full access, including user management and order deletion  
 - **Manager** — products, orders, coupons, and day-to-day ops  
 - **Staff** — read plus basic edits  
-- **Support** — focused on orders and reviews  
+- **Support** — focused on orders and reviews
 
 There is no “edit password/role” screen after create — remove and recreate if needed, or have the person reset via your internal process.
 
@@ -397,16 +399,16 @@ There is no “edit password/role” screen after create — remove and recreate
 
 1. Open **Products** → **New** (or open an existing product).
 2. Fill in:
-   - Name (web address/slug is generated from the name)
-   - Base price and discounted price
-   - Shipping per unit, max order quantity, SKU
-   - Tax: **HSN** (required) and **GST %** (0 / 5 / 12 / 18 / 28) — used on invoices and shipping
-   - Short description and full description
-   - **Active** toggle (controls storefront visibility)
+  - Name (web address/slug is generated from the name)
+  - Base price and discounted price
+  - Shipping per unit, max order quantity, SKU
+  - Tax: **HSN** (required) and **GST %** (0 / 5 / 12 / 18 / 28) — used on invoices and shipping
+  - Short description and full description
+  - **Active** toggle (controls storefront visibility)
 3. Set classification:
-   - Category, Sub category, Collection, Brand  
-   - Age group  
-   - Diecast scale (when the category is the toy cars / vehicles type)
+  - Category, Sub category, Collection, Brand  
+  - Age group  
+  - Diecast scale (when the category is the toy cars / vehicles type)
 4. Add **colour variants** if needed (set a default colour; attach images per variant).
 5. Upload or pick **product images** (reorder, delete; file size limit applies).
 6. Set **available quantity** and **low-stock threshold**.
@@ -497,23 +499,23 @@ If no banner is set, the storefront shows a default gradient.
 1. Review customer, address, gift wrap/message, payment method & status, transaction IDs, totals, and line items.
 2. **Download invoice** for your records or the customer.
 3. **Update status** as the order progresses, for example:
-   - Pending  
-   - Payment failed  
-   - Confirmed  
-   - Cancelled  
-   - Shipped  
-   - Delivered  
-   - Return requested / approved / rejected  
-   - Refunded / Partial refund  
+  - Pending  
+  - Payment failed  
+  - Confirmed  
+  - Cancelled  
+  - Shipped  
+  - Delivered  
+  - Return requested / approved / rejected  
+  - Refunded / Partial refund
 
 Choosing **Refunded** or **Partial Refund** updates payment status and emails the customer — confirm carefully; it cannot be undone from that prompt.
 
-4. If the order is **Delivered**, you can **Send review request email** immediately.
-5. **ShipMozo**
-   - **Push to ShipMozo** to create/book the shipment.
-   - **Refresh from ShipMozo** to pull the latest tracking (also refreshes when you open the page / periodically).
-6. Or set shipment details manually: shipment status (aligned with customer timeline), carrier, tracking number.
-7. Super Admins can **delete** an order (stock is restored). Bulk delete on the list is also Super Admin only.
+1. If the order is **Delivered**, you can **Send review request email** immediately.
+2. **ShipMozo**
+  - **Push to ShipMozo** to create/book the shipment.
+  - **Refresh from ShipMozo** to pull the latest tracking (also refreshes when you open the page / periodically).
+3. Or set shipment details manually: shipment status (aligned with customer timeline), carrier, tracking number.
+4. Super Admins can **delete** an order (stock is restored). Bulk delete on the list is also Super Admin only.
 
 [SCREENSHOT: admin order detail with ShipMozo buttons]
 
@@ -527,14 +529,14 @@ Choosing **Refunded** or **Partial Refund** updates payment status and emails th
 
 1. Open **Coupons** → create new or edit existing.
 2. Set:
-   - Code  
-   - Type: percentage or fixed amount  
-   - Value  
-   - Minimum cart  
-   - Max total uses / max uses per customer  
-   - Start and end dates  
-   - Active toggle  
-   - Scope: which categories, brands, and/or products the coupon applies to (with select-all helpers)
+  - Code  
+  - Type: percentage or fixed amount  
+  - Value  
+  - Minimum cart  
+  - Max total uses / max uses per customer  
+  - Start and end dates  
+  - Active toggle  
+  - Scope: which categories, brands, and/or products the coupon applies to (with select-all helpers)
 3. Save. Delete from the coupon detail when retiring a code.
 
 [SCREENSHOT: admin coupon edit form]
@@ -596,7 +598,7 @@ You cannot edit the customer’s wording — only approve, reject, or delete.
 ### Discover by category
 
 - Pick a category, optional label, image, sort, active.  
-  (If empty, the storefront can fall back to a default set.)
+(If empty, the storefront can fall back to a default set.)
 
 ### Announcements
 
@@ -628,17 +630,19 @@ You cannot edit the customer’s wording — only approve, reject, or delete.
 
 Configure:
 
-| Setting | What it controls |
-| --- | --- |
-| Accent colour | Storefront accent |
-| Free shipping threshold | Cart total (₹) for free shipping; `0` turns free shipping off |
-| Free shipping exclusions | Brands that never get free shipping even when the cart qualifies |
-| Abandoned cart reminders | On/off, idle hours, and **Run reminders now** |
-| Review request emails | On/off, delay hours after delivery, and **Send now** |
+
+| Setting                     | What it controls                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Accent colour               | Storefront accent                                                                                                                                                        |
+| Free shipping threshold     | Cart total (₹) for free shipping; `0` turns free shipping off                                                                                                            |
+| Free shipping exclusions    | Brands that never get free shipping even when the cart qualifies                                                                                                         |
+| Abandoned cart reminders    | On/off, idle hours, and **Run reminders now**                                                                                                                            |
+| Review request emails       | On/off, delay hours after delivery, and **Send now**                                                                                                                     |
 | Cash on Delivery allow list | Brands and categories allowed for COD. **Leave both empty to turn COD off entirely.** COD only works when every cart item matches at least one allowed brand or category |
-| First-visit coupon | Which active coupon to suggest to first-time visitors |
-| Quick Links content | About, Privacy, Terms, Returns, FAQ, Contact page title/subtitle/HTML |
-| Footer | Help & Support email, Business email, social links |
+| First-visit coupon          | Which active coupon to suggest to first-time visitors                                                                                                                    |
+| Quick Links content         | About, Privacy, Terms, Returns, FAQ, Contact page title/subtitle/HTML                                                                                                    |
+| Footer                      | Help & Support email, Business email, social links                                                                                                                       |
+
 
 [SCREENSHOT: marketing settings — COD and free shipping]
 
@@ -705,22 +709,24 @@ The Dashboard itself also shows live users (when configured), order KPIs, pendin
 
 ## Admin menu cheat sheet
 
-| Menu | Use it for |
-| --- | --- |
-| Dashboard | KPIs and quick health check |
-| Products | Catalog create/edit, images, variants, taxonomy |
-| Inventory | Stock levels and thresholds |
-| Orders | Fulfilment, refunds, ShipMozo, invoices |
-| Customers | Lookup, edit contact info, password reset email |
-| Coupons | Discount codes and rules |
-| Marketing | Homepage, popups, flash sales, settings, drop signups |
-| Pages | Brand & category hero banners |
-| Reviews | Approve / reject / delete |
-| CSV Upload | Bulk products & inventory |
-| Media upload | Image library |
-| Analytics | Paid order / top product summary |
-| Security | Your 2FA |
-| Admin Users | Staff accounts (Super Admin) |
+
+| Menu         | Use it for                                            |
+| ------------ | ----------------------------------------------------- |
+| Dashboard    | KPIs and quick health check                           |
+| Products     | Catalog create/edit, images, variants, taxonomy       |
+| Inventory    | Stock levels and thresholds                           |
+| Orders       | Fulfilment, refunds, ShipMozo, invoices               |
+| Customers    | Lookup, edit contact info, password reset email       |
+| Coupons      | Discount codes and rules                              |
+| Marketing    | Homepage, popups, flash sales, settings, drop signups |
+| Pages        | Brand & category hero banners                         |
+| Reviews      | Approve / reject / delete                             |
+| CSV Upload   | Bulk products & inventory                             |
+| Media upload | Image library                                         |
+| Analytics    | Paid order / top product summary                      |
+| Security     | Your 2FA                                              |
+| Admin Users  | Staff accounts (Super Admin)                          |
+
 
 ---
 
@@ -788,7 +794,7 @@ Check Marketing → Settings:
 
 - Free shipping threshold amount  
 - Whether the brand is under **Free shipping exclusions**  
-- Whether the cart total (eligible items only) actually met the threshold  
+- Whether the cart total (eligible items only) actually met the threshold
 
 ### “ShipMozo push failed”
 
@@ -825,7 +831,7 @@ Confirm payment method is COD, then set status to **Confirmed** when you accept 
 
 ## Quick contact path for customers
 
-1. Floating **WhatsApp** button, or  
+1. Floating **WhatsApp** button, or
 2. **Contact** page → pick a topic (product inquiry, order tracking, return & refund, bulk, feedback, ads) → continue in WhatsApp.
 
 Staff should monitor that WhatsApp number as the primary support inbox.

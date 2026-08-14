@@ -11,6 +11,7 @@ import {
 export type ParsedFlashSaleBody = {
   name: string | null;
   sale_tag: string | null;
+  limit_one_per_customer: boolean;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -67,6 +68,10 @@ export function parseFlashSaleBody(
   const name = nameRaw ? nameRaw.slice(0, 120) : null;
   const sale_tag = parseSaleTag(body.sale_tag) ?? null;
   const is_active = body.is_active === undefined ? true : Boolean(body.is_active);
+  const limit_one_per_customer =
+    body.limit_one_per_customer === undefined
+      ? false
+      : Boolean(body.limit_one_per_customer);
 
   const active_from =
     body.active_from === undefined ? null : parseOptionalDate(body.active_from) ?? null;
@@ -94,7 +99,8 @@ export function parseFlashSaleBody(
     ok: true,
     data: {
       name,
-      sale_tag: sale_tag ?? null,
+      sale_tag: limit_one_per_customer ? (sale_tag ?? null) : null,
+      limit_one_per_customer,
       discount_type,
       discount_value,
       is_active,
@@ -147,6 +153,7 @@ export function serializeFlashSaleRow(row: {
   id: string;
   name: string | null;
   sale_tag?: string | null;
+  limit_one_per_customer?: boolean;
   discount_type: string;
   discount_value: { toString(): string } | number;
   is_active: boolean;
@@ -162,6 +169,7 @@ export function serializeFlashSaleRow(row: {
     id: row.id,
     name: row.name,
     sale_tag: row.sale_tag ?? null,
+    limit_one_per_customer: row.limit_one_per_customer ?? true,
     discount_type: row.discount_type,
     discount_value: Number(row.discount_value),
     is_active: row.is_active,

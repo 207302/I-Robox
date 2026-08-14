@@ -11,6 +11,7 @@ type FlashSaleRow = {
   id: string;
   name: string | null;
   sale_tag: string | null;
+  limit_one_per_customer: boolean;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -44,6 +45,7 @@ function scopeSummary(row: FlashSaleRow): string {
 const emptyForm = {
   name: "",
   sale_tag: "",
+  limit_one_per_customer: false,
   discount_type: "FIXED" as FlashDiscountType,
   discount_value: "",
   is_active: true,
@@ -72,6 +74,7 @@ export default function FlashSalesAdminPanel({
     setForm({
       name: row.name ?? "",
       sale_tag: row.sale_tag ?? "",
+      limit_one_per_customer: row.limit_one_per_customer,
       discount_type: row.discount_type,
       discount_value: String(row.discount_value),
       is_active: row.is_active,
@@ -105,7 +108,8 @@ export default function FlashSalesAdminPanel({
     try {
       const payload = {
         name: form.name.trim() || null,
-        sale_tag: form.sale_tag.trim() || null,
+        sale_tag: form.limit_one_per_customer ? form.sale_tag.trim() || null : null,
+        limit_one_per_customer: form.limit_one_per_customer,
         discount_type: form.discount_type,
         discount_value,
         is_active: form.is_active,
@@ -151,8 +155,8 @@ export default function FlashSalesAdminPanel({
       <h2 className="text-lg font-semibold">Flash sales</h2>
       <p className="text-sm text-meta-3">
         Set a fixed sale price or percentage off for multiple products, categories, or brands.
-        When several rules match, customers get the lowest price. Each customer may purchase
-        only one item from a flash sale (shared across sales with the same sale tag).
+        When several rules match, customers get the lowest price. Optionally limit each customer
+        to one purchase per sale (or per shared sale tag).
       </p>
       {marketingSelectAllBar("flash sale")}
       <ul className="divide-y divide-gray-3 text-sm">
@@ -166,6 +170,7 @@ export default function FlashSalesAdminPanel({
                 </span>
                 <span className="block text-meta-3 truncate">
                   {formatFlashDiscount(row.discount_type, row.discount_value)} — {scopeSummary(row)}
+                  {row.limit_one_per_customer ? " · 1 per customer" : ""}
                   {row.sale_tag ? ` · tag: ${row.sale_tag}` : ""}
                   {!row.is_active ? " · Inactive" : ""}
                 </span>
@@ -209,19 +214,35 @@ export default function FlashSalesAdminPanel({
               className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
             />
           </label>
-          <label className="sm:col-span-2">
-            <span className="text-sm font-medium">Sale tag (optional)</span>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input
-              value={form.sale_tag}
-              onChange={(e) => setForm((f) => ({ ...f, sale_tag: e.target.value }))}
-              placeholder="e.g. weekend-flash — shared across sales for one claim"
-              className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+              type="checkbox"
+              checked={form.limit_one_per_customer}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  limit_one_per_customer: e.target.checked,
+                  sale_tag: e.target.checked ? f.sale_tag : "",
+                }))
+              }
             />
-            <span className="mt-1 block text-xs text-meta-3">
-              Leave blank to limit one purchase per this flash sale only. Same tag = one claim
-              across those sales.
-            </span>
+            Limit to one purchase per customer
           </label>
+          {form.limit_one_per_customer ? (
+            <label className="sm:col-span-2">
+              <span className="text-sm font-medium">Sale tag (optional)</span>
+              <input
+                value={form.sale_tag}
+                onChange={(e) => setForm((f) => ({ ...f, sale_tag: e.target.value }))}
+                placeholder="e.g. weekend-flash — shared across sales for one claim"
+                className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block text-xs text-meta-3">
+                Leave blank to limit one purchase per this flash sale only. Same tag = one claim
+                across those sales.
+              </span>
+            </label>
+          ) : null}
           <label>
             <span className="text-sm font-medium">Discount type</span>
             <select
@@ -271,6 +292,7 @@ export default function FlashSalesAdminPanel({
           onCategoryIdsChange={(category_ids) => setForm((f) => ({ ...f, category_ids }))}
           onBrandIdsChange={(brand_ids) => setForm((f) => ({ ...f, brand_ids }))}
           onProductIdsChange={(product_ids) => setForm((f) => ({ ...f, product_ids }))}
+          enableInactiveProductFilter
         />
 
         <div className="flex flex-wrap gap-2">

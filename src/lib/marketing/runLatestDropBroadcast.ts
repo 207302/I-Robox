@@ -37,25 +37,57 @@ export type LatestDropBroadcastResult =
       sent: number;
       failed: number;
       failures: LatestDropBroadcastFailure[];
-      /** Left in queue when a blocking SMTP error stopped the run. */
+      /** Left in this batch when a blocking SMTP error stopped the run. */
       notAttempted?: LatestDropBroadcastFailure[];
       productCount: number;
       smtpError?: string;
+      offset: number;
+      limit: number;
+      nextOffset: number;
+      remaining: number;
+      done: boolean;
       ranAt: string;
     };
 
-const SEND_CONCURRENCY = 5;
+export const LATEST_DROP_BATCH_SIZE = 40;
+const SEND_CONCURRENCY = 2;
+const SEND_GAP_MS = 250;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 function failureMessage(err: unknown): string {
   const hint = getSmtpErrorHint(err);
   if (hint) return hint;
-  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (err instanceof Error && err.message.trim()) return err.message.trim().slice(0, 240);
   return "Send failed";
 }
 
-/** Send latest-drop email to every notify-signup (products fetched fresh at send time). */
-export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResult> {
+export function parseBroadcastBatchInput(body: Record<string, unknown> | null): {
+  offset: number;
+  limit: number;
+} {
+  const offsetRaw = Number(body?.offset ?? 0);
+  const limitRaw = Number(body?.limit ?? LATEST_DROP_BATCH_SIZE);
+  const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.trunc(offsetRaw)) : 0;
+  const limit = Number.isFinite(limitRaw)
+    ? Math.min(80, Math.max(1, Math.trunc(limitRaw)))
+    : LATEST_DROP_BATCH_SIZE;
+  return { offset, limit };
+}
+
+/** Send latest-drop email to a slice of notify-signups (products fetched fresh at send time). */
+export async function runLatestDropBroadcast(input?: {
+  offset?: number;
+  limit?: number;
+}): Promise<LatestDropBroadcastResult> {
   const ranAt = new Date().toISOString();
+  const offset = Math.max(0, Math.trunc(input?.offset ?? 0));
+  const limit = Math.min(
+    80,
+    Math.max(1, Math.trunc(input?.limit ?? LATEST_DROP_BATCH_SIZE))
+  );
 
   if (!isEmailConfigured()) {
     return { ok: true, skipped: true, reason: "smtp_not_configured", ranAt };
@@ -84,9 +116,11 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
   }
 
   const shopUrl = latestDropShopUrl();
-  const queue = signups
+  const all = signups
     .map((s) => ({ email: s.email.trim(), full_name: s.full_name }))
     .filter((s) => s.email.length > 0);
+  const batch = all.slice(offset, offset + limit);
+  const queue = [...batch];
 
   let sent = 0;
   const failures: LatestDropBroadcastFailure[] = [];
@@ -117,6 +151,7 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
       try {
         await sendOne(signup);
         sent += 1;
+        await sleep(SEND_GAP_MS);
       } catch (err) {
         const error = failureMessage(err);
         failures.push({
@@ -134,9 +169,11 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
   }
 
   try {
-    await Promise.all(
-      Array.from({ length: Math.min(SEND_CONCURRENCY, queue.length) }, () => worker())
-    );
+    if (batch.length > 0) {
+      await Promise.all(
+        Array.from({ length: Math.min(SEND_CONCURRENCY, batch.length) }, () => worker())
+      );
+    }
   } finally {
     transporter.close();
   }
@@ -149,7 +186,11 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
       }))
     : [];
 
-  if (smtpError && sent === 0) {
+  const attempted = sent + failures.length;
+  const nextOffset = offset + attempted;
+  const remaining = Math.max(0, all.length - nextOffset);
+
+  if (smtpError && sent === 0 && offset === 0) {
     return {
       ok: true,
       skipped: true,
@@ -163,13 +204,18 @@ export async function runLatestDropBroadcast(): Promise<LatestDropBroadcastResul
 
   return {
     ok: true,
-    recipients: signups.length,
+    recipients: all.length,
     sent,
     failed: failures.length,
     failures,
     ...(notAttempted.length > 0 ? { notAttempted } : {}),
     productCount: products.length,
     ...(smtpError ? { smtpError } : {}),
+    offset,
+    limit,
+    nextOffset,
+    remaining,
+    done: remaining === 0,
     ranAt,
   };
 }

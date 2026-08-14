@@ -5,6 +5,8 @@ export type FlashSaleRule = {
   id: string;
   /** Optional shared claim key; when null/empty, claims use `id`. */
   sale_tag: string | null;
+  /** When true, enforce one purchase per customer for this sale (or sale_tag group). */
+  limit_one_per_customer: boolean;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -19,6 +21,14 @@ export type FlashSaleRule = {
 export function flashSaleClaimTag(rule: Pick<FlashSaleRule, "id" | "sale_tag">): string {
   const tag = (rule.sale_tag ?? "").trim();
   return tag || rule.id;
+}
+
+/** Claim tag when the sale has per-customer limits enabled; otherwise null. */
+export function flashSaleClaimTagIfLimited(
+  rule: Pick<FlashSaleRule, "id" | "sale_tag" | "limit_one_per_customer">
+): string | null {
+  if (!rule.limit_one_per_customer) return null;
+  return flashSaleClaimTag(rule);
 }
 
 export type FlashProductContext = {

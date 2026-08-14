@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { filterAndSortProducts, type ProductSearchItem } from "@/lib/search/productSearch";
 
 type TaxonomyItem = { id: string; name: string };
@@ -14,6 +14,8 @@ type AdminCouponScopeFieldsProps = {
   onCategoryIdsChange: (ids: string[]) => void;
   onBrandIdsChange: (ids: string[]) => void;
   onProductIdsChange: (ids: string[]) => void;
+  /** Flash sales: load inactive products and filter the allow-list by activity. */
+  enableInactiveProductFilter?: boolean;
 };
 
 export function AdminCouponScopeFields({
@@ -25,6 +27,7 @@ export function AdminCouponScopeFields({
   onCategoryIdsChange,
   onBrandIdsChange,
   onProductIdsChange,
+  enableInactiveProductFilter = false,
 }: AdminCouponScopeFieldsProps) {
   const selectedCategories = new Set(categoryIds);
   const selectedBrands = new Set(brandIds);
@@ -32,38 +35,54 @@ export function AdminCouponScopeFields({
 
   const [products, setProducts] = useState<ProductSearchItem[]>([]);
   const [productQuery, setProductQuery] = useState("");
+  const [showInactiveOnly, setShowInactiveOnly] = useState(false);
   const deferredProductQuery = useDeferredValue(productQuery);
 
   useEffect(() => {
-    void fetch("/api/products/search-index")
+    const url = enableInactiveProductFilter
+      ? "/api/admin/products/search-index"
+      : "/api/products/search-index";
+    void fetch(url, { credentials: "same-origin" })
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data?.items)) setProducts(data.items);
       })
       .catch(() => {});
-  }, []);
+  }, [enableInactiveProductFilter]);
+
+  const productPool = useMemo(() => {
+    if (!enableInactiveProductFilter) return products;
+    return products.filter((p) =>
+      showInactiveOnly ? p.isActive === false : p.isActive !== false
+    );
+  }, [enableInactiveProductFilter, products, showInactiveOnly]);
 
   const filteredProducts = useMemo(
-    () => filterAndSortProducts(products, deferredProductQuery),
-    [products, deferredProductQuery]
+    () => filterAndSortProducts(productPool, deferredProductQuery),
+    [productPool, deferredProductQuery]
   );
 
   const visibleProducts = useMemo(() => {
-    const selected = products.filter((p) => selectedProducts.has(p.id));
+    const selected = productPool.filter((p) => selectedProducts.has(p.id));
     const merged = new Map<string, ProductSearchItem>();
     for (const p of selected) merged.set(p.id, p);
     for (const p of filteredProducts.slice(0, 80)) merged.set(p.id, p);
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [products, filteredProducts, selectedProducts]);
+  }, [productPool, filteredProducts, selectedProducts]);
 
   const allCategoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
   const allBrandIds = useMemo(() => brands.map((b) => b.id), [brands]);
-  const allProductIds = useMemo(() => products.map((p) => p.id), [products]);
+  const poolProductIds = useMemo(() => productPool.map((p) => p.id), [productPool]);
+  const selectedInPoolCount = useMemo(
+    () => productIds.filter((id) => poolProductIds.includes(id)).length,
+    [productIds, poolProductIds]
+  );
 
   const allCategoriesSelected =
     categories.length > 0 && categoryIds.length === categories.length;
   const allBrandsSelected = brands.length > 0 && brandIds.length === brands.length;
-  const allProductsSelected = products.length > 0 && productIds.length === products.length;
+  const allProductsSelected =
+    poolProductIds.length > 0 && selectedInPoolCount === poolProductIds.length;
 
   function ScopeSelectAllBar({
     selectedCount,
@@ -71,23 +90,26 @@ export function AdminCouponScopeFields({
     allSelected,
     onSelectAll,
     onClear,
+    extra,
   }: {
     selectedCount: number;
     totalCount: number;
     allSelected: boolean;
     onSelectAll: () => void;
     onClear: () => void;
+    extra?: ReactNode;
   }) {
-    if (totalCount === 0) return null;
+    if (totalCount === 0 && !extra) return null;
     return (
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-meta-3">
-          {selectedCount} of {totalCount} selected
+          {totalCount === 0 ? "0 selected" : `${selectedCount} of ${totalCount} selected`}
         </span>
         <div className="flex items-center gap-3 text-xs font-medium">
+          {extra}
           <button
             type="button"
-            disabled={allSelected}
+            disabled={totalCount === 0 || allSelected}
             onClick={onSelectAll}
             className="text-blue hover:underline disabled:opacity-50 disabled:no-underline"
           >
@@ -192,17 +214,40 @@ export function AdminCouponScopeFields({
           className="mb-2 w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
         />
         <ScopeSelectAllBar
-          selectedCount={productIds.length}
-          totalCount={products.length}
+          selectedCount={selectedInPoolCount}
+          totalCount={poolProductIds.length}
           allSelected={allProductsSelected}
-          onSelectAll={() => onProductIdsChange(allProductIds)}
-          onClear={() => onProductIdsChange([])}
+          extra={
+            enableInactiveProductFilter ? (
+              <label className="flex items-center gap-1.5 font-normal text-meta-3">
+                <input
+                  type="checkbox"
+                  checked={showInactiveOnly}
+                  onChange={(e) => setShowInactiveOnly(e.target.checked)}
+                />
+                Show inactive products
+              </label>
+            ) : null
+          }
+          onSelectAll={() => {
+            const poolSet = new Set(poolProductIds);
+            const keep = productIds.filter((id) => !poolSet.has(id));
+            onProductIdsChange([...keep, ...poolProductIds]);
+          }}
+          onClear={() => {
+            const poolSet = new Set(poolProductIds);
+            onProductIdsChange(productIds.filter((id) => !poolSet.has(id)));
+          }}
         />
         <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
           {products.length === 0 ? (
             <p className="text-sm text-meta-3">Loading products…</p>
           ) : visibleProducts.length === 0 ? (
-            <p className="text-sm text-meta-3">No products match your search.</p>
+            <p className="text-sm text-meta-3">
+              {enableInactiveProductFilter && showInactiveOnly
+                ? "No inactive products found."
+                : "No products match your search."}
+            </p>
           ) : (
             visibleProducts.map((p) => (
               <label key={p.id} className="flex items-start gap-2 text-sm">
@@ -220,6 +265,9 @@ export function AdminCouponScopeFields({
                 <span>
                   {p.name}
                   {p.brand ? <span className="text-meta-3"> — {p.brand}</span> : null}
+                  {enableInactiveProductFilter && p.isActive === false ? (
+                    <span className="text-meta-3"> · Inactive</span>
+                  ) : null}
                 </span>
               </label>
             ))

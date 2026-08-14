@@ -3,7 +3,7 @@ import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
   bestFlashSaleMatch,
   bestFlashUnitPrice,
-  flashSaleClaimTag,
+  flashSaleClaimTagIfLimited,
   type FlashProductContext,
   type FlashSaleRule,
 } from "@/lib/pricing/flashSaleTypes";
@@ -17,6 +17,7 @@ const flashSaleInclude = {
 function mapFlashSaleRow(row: {
   id: string;
   sale_tag?: string | null;
+  limit_one_per_customer?: boolean;
   discount_type: string;
   discount_value: { toString(): string } | number;
   is_active: boolean;
@@ -29,6 +30,7 @@ function mapFlashSaleRow(row: {
   return {
     id: row.id,
     sale_tag: row.sale_tag?.trim() ? row.sale_tag.trim() : null,
+    limit_one_per_customer: row.limit_one_per_customer ?? true,
     discount_type: row.discount_type as FlashSaleRule["discount_type"],
     discount_value: Number(row.discount_value),
     is_active: row.is_active,
@@ -53,7 +55,8 @@ export async function loadActiveFlashSaleRules(now = new Date()): Promise<FlashS
 
 export type FlashSaleProductInfo = {
   unitPrice: number;
-  saleTag: string;
+  /** Present only when this sale limits one purchase per customer. */
+  saleTag: string | null;
   flashSaleId: string;
 };
 
@@ -94,7 +97,7 @@ export async function flashSaleInfoMap(
     if (match) {
       map.set(product.id, {
         unitPrice: match.unitPrice,
-        saleTag: flashSaleClaimTag(match.rule),
+        saleTag: flashSaleClaimTagIfLimited(match.rule),
         flashSaleId: match.rule.id,
       });
     }
@@ -120,7 +123,7 @@ export async function flashSaleUnitPriceAndTagForProduct(
     discounted_price: { toString(): string } | number | null;
   },
   now = new Date()
-): Promise<{ unitPrice: number; saleTag: string } | null> {
+): Promise<{ unitPrice: number; saleTag: string | null } | null> {
   const rules = await loadActiveFlashSaleRules(now);
   if (rules.length === 0) return null;
   const catalogUnit = Number(product.discounted_price ?? product.base_price);
@@ -134,7 +137,10 @@ export async function flashSaleUnitPriceAndTagForProduct(
     isActiveInWindow(rule.is_active, rule.active_from, rule.active_until, now);
   const match = bestFlashSaleMatch(ctx, rules, isLive);
   if (!match) return null;
-  return { unitPrice: match.unitPrice, saleTag: flashSaleClaimTag(match.rule) };
+  return {
+    unitPrice: match.unitPrice,
+    saleTag: flashSaleClaimTagIfLimited(match.rule),
+  };
 }
 
 export function unitPriceWithFlashSale(

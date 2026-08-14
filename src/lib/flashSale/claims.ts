@@ -81,6 +81,7 @@ export async function resolveFlashSaleCartClaim(
       isLive
     );
     if (!match) continue;
+    if (!match.rule.limit_one_per_customer) continue;
     if (line.quantity > 1) {
       return { ok: false, error: FLASH_SALE_QTY_ONE_MESSAGE };
     }

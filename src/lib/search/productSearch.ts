@@ -10,6 +10,8 @@ export type ProductSearchItem = {
   collection: string | null;
   scale: string | null;
   imageUrl?: string | null;
+  /** Present on admin indexes; storefront search omits inactive products. */
+  isActive?: boolean;
 };
 
 /** Lowercase, collapse punctuation to spaces. */

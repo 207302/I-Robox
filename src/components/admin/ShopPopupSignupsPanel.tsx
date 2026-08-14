@@ -85,13 +85,24 @@ type BroadcastResult = {
   failures?: BroadcastFailure[];
   notAttempted?: BroadcastFailure[];
   productCount?: number;
+  offset?: number;
+  nextOffset?: number;
+  remaining?: number;
+  done?: boolean;
 };
+
+const BROADCAST_BATCH_SIZE = 40;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = false }: Props) {
   const [rows, setRows] = useState<NotifySignupRow[]>([]);
   const [loading, setLoading] = useState(loadOnMount);
   const [exporting, setExporting] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [broadcastProgress, setBroadcastProgress] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lastBroadcastFailures, setLastBroadcastFailures] = useState<{
     sent: number;
@@ -209,78 +220,96 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                 );
                 if (!confirmed) return;
 
-                const result = await parseAdminJson<BroadcastResult>(
-                  await fetchAdminWithRetry("/api/admin/marketing/notify-signups/broadcast", {
-                    method: "POST",
-                    credentials: "include",
-                  })
-                );
-                if (result.skipped) {
-                  const failures = result.failures ?? [];
-                  const notAttempted = result.notAttempted ?? [];
-                  if (failures.length > 0 || notAttempted.length > 0) {
+                let offset = 0;
+                let totalSent = 0;
+                const allFailures: BroadcastFailure[] = [];
+                let recipients = rows.length;
+                let lastSmtpError: string | undefined;
+                let stopped = false;
+
+                while (!stopped) {
+                  setBroadcastProgress(
+                    totalSent === 0
+                      ? `Sending batch…`
+                      : `Sent ${totalSent} of ${recipients}…`
+                  );
+                  const result = await parseAdminJson<BroadcastResult>(
+                    await fetch("/api/admin/marketing/notify-signups/broadcast", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ offset, limit: BROADCAST_BATCH_SIZE }),
+                    })
+                  );
+                  if (result.skipped) {
+                    const failures = result.failures ?? [];
+                    const notAttempted = result.notAttempted ?? [];
+                    if (failures.length > 0 || notAttempted.length > 0 || totalSent > 0) {
+                      setLastBroadcastFailures({
+                        sent: totalSent,
+                        recipients,
+                        failures: [...allFailures, ...failures],
+                        notAttempted,
+                        smtpError: result.message,
+                      });
+                    } else {
+                      setLastBroadcastFailures(null);
+                    }
+                    const msg =
+                      result.reason === "smtp_not_configured"
+                        ? "SMTP not configured — set EMAIL_SERVER_* on the server."
+                        : result.reason === "smtp_blocked"
+                          ? result.message ||
+                            "SMTP blocked by your email host. Enable outbound mail in Hostinger hPanel or use Gmail SMTP."
+                          : result.reason === "no_products"
+                            ? "No active products to feature."
+                            : "No signups to email.";
+                    toast.error(msg);
+                    stopped = true;
+                    break;
+                  }
+
+                  recipients = result.recipients ?? recipients;
+                  totalSent += result.sent ?? 0;
+                  allFailures.push(...(result.failures ?? []));
+                  lastSmtpError = result.smtpError;
+                  offset = result.nextOffset ?? offset + BROADCAST_BATCH_SIZE;
+
+                  if (result.done) break;
+                  if ((result.nextOffset ?? offset) <= offset) break;
+                  await sleep(result.smtpError ? 8000 : 2000);
+                }
+
+                if (!stopped) {
+                  if (allFailures.length > 0) {
                     setLastBroadcastFailures({
-                      sent: 0,
-                      recipients: rows.length,
-                      failures,
-                      notAttempted,
-                      smtpError: result.message,
+                      sent: totalSent,
+                      recipients,
+                      failures: allFailures,
+                      notAttempted: [],
+                      smtpError: lastSmtpError,
                     });
                   } else {
                     setLastBroadcastFailures(null);
                   }
-                  const msg =
-                    result.reason === "smtp_not_configured"
-                      ? "SMTP not configured — set EMAIL_SERVER_* on the server."
-                      : result.reason === "smtp_blocked"
-                        ? result.message ||
-                          "SMTP blocked by your email host. Enable outbound mail in Hostinger hPanel or use Gmail SMTP."
-                        : result.reason === "no_products"
-                          ? "No active products to feature."
-                          : "No signups to email.";
-                  toast.error(msg);
-                  return;
-                }
 
-                const failures = result.failures ?? [];
-                const notAttempted = result.notAttempted ?? [];
-                const failed = result.failed ?? failures.length;
-                const sent = result.sent ?? 0;
-                const recipients = result.recipients ?? rows.length;
-
-                if (failures.length > 0 || notAttempted.length > 0) {
-                  setLastBroadcastFailures({
-                    sent,
-                    recipients,
-                    failures,
-                    notAttempted,
-                    smtpError: result.smtpError,
-                  });
-                } else {
-                  setLastBroadcastFailures(null);
+                  if (allFailures.length > 0) {
+                    toast.error(
+                      `Sent to ${totalSent} of ${recipients} (${allFailures.length} failed — see list below)`
+                    );
+                  } else {
+                    toast.success(`Sent to ${totalSent} of ${recipients}`);
+                  }
                 }
-
-                if (result.smtpError) {
-                  toast.error(
-                    `Partial send — ${sent} sent, ${failed} failed. ${result.smtpError}`
-                  );
-                  return;
-                }
-                if (failed > 0) {
-                  toast.error(
-                    `Sent to ${sent} of ${recipients} (${failed} failed — see list below)`
-                  );
-                  return;
-                }
-                toast.success(`Sent to ${sent} of ${recipients}`);
               } catch (err: unknown) {
                 toast.error(err instanceof Error ? err.message : "Bulk email failed");
               } finally {
                 setBroadcasting(false);
+                setBroadcastProgress(null);
               }
             }}
           >
-            {broadcasting ? "Sending…" : "Send bulk email"}
+            {broadcasting ? broadcastProgress || "Sending…" : "Send bulk email"}
           </button>
           <button
             type="button"

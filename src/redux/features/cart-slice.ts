@@ -31,6 +31,8 @@ export type CartItem = {
   maxOrderQuantity?: number;
   /** Claim key when line is priced via an active flash sale. */
   flashSaleTag?: string | null;
+  /** Remaining per-customer units allowed for this sale tag (at add time). */
+  flashSalePurchaseLimit?: number | null;
   color?: string;
   size?: string;
   attribute?: any;
@@ -79,6 +81,9 @@ export const cart = createSlice({
         }
         if (item.flashSaleTag !== undefined) {
           existingItem.flashSaleTag = item.flashSaleTag ?? null;
+        }
+        if (item.flashSalePurchaseLimit !== undefined) {
+          existingItem.flashSalePurchaseLimit = item.flashSalePurchaseLimit ?? null;
         }
       } else {
         state.items.push({

@@ -890,11 +890,8 @@ model marketing_popups {
 model flash_sales {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name           String?   @db.VarChar(120)
-  /// Optional shared claim key. When set, one purchase per customer across all sales with this tag.
-  /// When null, claims use this flash sale's id.
-  sale_tag       String?   @db.VarChar(80)
-  /// When true, each customer may purchase only one item from this sale (see sale_tag for shared limits).
-  limit_one_per_customer Boolean @default(true)
+  /// Max units per customer for this sale. 0 = unlimited.
+  purchase_limit Int       @default(0)
   discount_type  String    @db.VarChar(20)
   discount_value Decimal   @db.Decimal(10, 2)
   is_active      Boolean   @default(true)
@@ -909,22 +906,22 @@ model flash_sales {
 
   @@index([is_active], map: "idx_flash_sales_is_active")
   @@index([active_until], map: "idx_flash_sales_active_until")
-  @@index([sale_tag], map: "idx_flash_sales_sale_tag")
 }
 
-/// One flash-sale purchase claim per customer per sale_tag (or flash sale id).
+/// Units purchased toward a per-customer flash-sale limit (one row per order).
 model flash_sale_claims {
   id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   customer_id   String      @db.Uuid
   sale_tag      String      @db.VarChar(80)
   flash_sale_id String?     @db.Uuid
   order_id      String      @unique @db.Uuid
+  quantity      Int         @default(1)
   created_at    DateTime    @default(now()) @db.Timestamptz(6)
   customers     customers   @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   flash_sales   flash_sales? @relation(fields: [flash_sale_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   orders        orders      @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([customer_id, sale_tag], map: "flash_sale_claims_customer_sale_tag_key")
+  @@index([customer_id, sale_tag], map: "idx_flash_sale_claims_customer_sale_tag")
   @@index([customer_id], map: "idx_flash_sale_claims_customer_id")
   @@index([sale_tag], map: "idx_flash_sale_claims_sale_tag")
 }

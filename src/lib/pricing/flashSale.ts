@@ -16,8 +16,7 @@ const flashSaleInclude = {
 
 function mapFlashSaleRow(row: {
   id: string;
-  sale_tag?: string | null;
-  limit_one_per_customer?: boolean;
+  purchase_limit?: number;
   discount_type: string;
   discount_value: { toString(): string } | number;
   is_active: boolean;
@@ -29,8 +28,7 @@ function mapFlashSaleRow(row: {
 }): FlashSaleRule {
   return {
     id: row.id,
-    sale_tag: row.sale_tag?.trim() ? row.sale_tag.trim() : null,
-    limit_one_per_customer: row.limit_one_per_customer ?? true,
+    purchase_limit: Math.max(0, Math.trunc(row.purchase_limit ?? 0)),
     discount_type: row.discount_type as FlashSaleRule["discount_type"],
     discount_value: Number(row.discount_value),
     is_active: row.is_active,
@@ -55,8 +53,10 @@ export async function loadActiveFlashSaleRules(now = new Date()): Promise<FlashS
 
 export type FlashSaleProductInfo = {
   unitPrice: number;
-  /** Present only when this sale limits one purchase per customer. */
+  /** Present when this sale has a per-customer purchase limit. */
   saleTag: string | null;
+  /** Max units per customer; 0 = unlimited. */
+  purchaseLimit: number;
   flashSaleId: string;
 };
 
@@ -98,6 +98,7 @@ export async function flashSaleInfoMap(
       map.set(product.id, {
         unitPrice: match.unitPrice,
         saleTag: flashSaleClaimTagIfLimited(match.rule),
+        purchaseLimit: match.rule.purchase_limit,
         flashSaleId: match.rule.id,
       });
     }
@@ -123,7 +124,7 @@ export async function flashSaleUnitPriceAndTagForProduct(
     discounted_price: { toString(): string } | number | null;
   },
   now = new Date()
-): Promise<{ unitPrice: number; saleTag: string | null } | null> {
+): Promise<{ unitPrice: number; saleTag: string | null; purchaseLimit: number } | null> {
   const rules = await loadActiveFlashSaleRules(now);
   if (rules.length === 0) return null;
   const catalogUnit = Number(product.discounted_price ?? product.base_price);
@@ -140,6 +141,7 @@ export async function flashSaleUnitPriceAndTagForProduct(
   return {
     unitPrice: match.unitPrice,
     saleTag: flashSaleClaimTagIfLimited(match.rule),
+    purchaseLimit: match.rule.purchase_limit,
   };
 }
 

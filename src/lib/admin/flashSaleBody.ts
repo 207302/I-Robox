@@ -8,10 +8,11 @@ import {
   type FlashDiscountType,
 } from "@/lib/pricing/flashSaleTypes";
 
+export const FLASH_SALE_MAX_PURCHASE_LIMIT = 99;
+
 export type ParsedFlashSaleBody = {
   name: string | null;
-  sale_tag: string | null;
-  limit_one_per_customer: boolean;
+  purchase_limit: number;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -22,11 +23,18 @@ export type ParsedFlashSaleBody = {
   brand_ids: string[];
 };
 
-function parseSaleTag(value: unknown): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const tag = String(value).trim().slice(0, 80);
-  return tag || null;
+function parsePurchaseLimit(body: Record<string, unknown>): number | { error: string } {
+  if (body.purchase_limit !== undefined && body.purchase_limit !== null && body.purchase_limit !== "") {
+    const n = Number(body.purchase_limit);
+    if (!Number.isFinite(n) || n < 0 || n > FLASH_SALE_MAX_PURCHASE_LIMIT) {
+      return { error: `purchase_limit must be between 0 and ${FLASH_SALE_MAX_PURCHASE_LIMIT}` };
+    }
+    return Math.trunc(n);
+  }
+  if (typeof body.limit_one_per_customer === "boolean") {
+    return body.limit_one_per_customer ? 1 : 0;
+  }
+  return 0;
 }
 
 function parseUuidList(value: unknown): string[] | null {
@@ -66,12 +74,12 @@ export function parseFlashSaleBody(
 
   const nameRaw = body.name == null ? null : String(body.name).trim();
   const name = nameRaw ? nameRaw.slice(0, 120) : null;
-  const sale_tag = parseSaleTag(body.sale_tag) ?? null;
   const is_active = body.is_active === undefined ? true : Boolean(body.is_active);
-  const limit_one_per_customer =
-    body.limit_one_per_customer === undefined
-      ? false
-      : Boolean(body.limit_one_per_customer);
+  const purchaseLimitParsed = parsePurchaseLimit(body);
+  if (typeof purchaseLimitParsed === "object") {
+    return { ok: false, error: purchaseLimitParsed.error };
+  }
+  const purchase_limit = purchaseLimitParsed;
 
   const active_from =
     body.active_from === undefined ? null : parseOptionalDate(body.active_from) ?? null;
@@ -99,8 +107,7 @@ export function parseFlashSaleBody(
     ok: true,
     data: {
       name,
-      sale_tag: limit_one_per_customer ? (sale_tag ?? null) : null,
-      limit_one_per_customer,
+      purchase_limit,
       discount_type,
       discount_value,
       is_active,
@@ -152,8 +159,7 @@ export async function replaceFlashSaleScope(
 export function serializeFlashSaleRow(row: {
   id: string;
   name: string | null;
-  sale_tag?: string | null;
-  limit_one_per_customer?: boolean;
+  purchase_limit?: number;
   discount_type: string;
   discount_value: { toString(): string } | number;
   is_active: boolean;
@@ -168,8 +174,7 @@ export function serializeFlashSaleRow(row: {
   return {
     id: row.id,
     name: row.name,
-    sale_tag: row.sale_tag ?? null,
-    limit_one_per_customer: row.limit_one_per_customer ?? true,
+    purchase_limit: Math.max(0, Math.trunc(row.purchase_limit ?? 0)),
     discount_type: row.discount_type,
     discount_value: Number(row.discount_value),
     is_active: row.is_active,

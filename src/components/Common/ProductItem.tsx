@@ -11,8 +11,9 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
-import { useFlashSaleClaimed } from "@/hooks/useFlashSaleClaims";
-import { FLASH_SALE_ALREADY_CLAIMED_MESSAGE } from "@/lib/flashSale/messages";
+import { useFlashSaleClaimUsage } from "@/hooks/useFlashSaleClaims";
+import { flashSaleEffectiveMaxQty } from "@/lib/cart/flashSaleCart";
+import { flashSaleLimitReachedMessage } from "@/lib/flashSale/messages";
 import dynamic from "next/dynamic";
 import WishlistButton from "../Wishlist/AddWishlistButton";
 import { PRODUCT_CARD_GRID_SIZES } from "@/lib/shop/productCardGridSizes";
@@ -97,8 +98,17 @@ function ProductItemInner({
   const dispatch = useDispatch<AppDispatch>();
 
   const { addItem, cartDetails, incrementItem, decrementItem } = useCart();
-  const { claimed: flashClaimed } = useFlashSaleClaimed(item.flashSaleTag);
-  const purchaseBlocked = flashClaimed;
+  const purchaseLimit = item.flashSalePurchaseLimit ?? 0;
+  const { used } = useFlashSaleClaimUsage(item.flashSaleTag);
+  const remainingAfterOrders =
+    purchaseLimit > 0 ? Math.max(0, purchaseLimit - used) : 0;
+  const flashMaxQty = flashSaleEffectiveMaxQty({
+    purchaseLimit,
+    used,
+    catalogMax: item.maxOrderQuantity ?? 99,
+  });
+  const purchaseBlocked = Boolean(item.flashSaleTag) && purchaseLimit > 0 && flashMaxQty < 1;
+  const limitMessage = flashSaleLimitReachedMessage(purchaseLimit);
 
   const isAlradyAdded = Boolean(cartDetails?.[cartLineId]);
   const currentQty = (cartDetails?.[cartLineId]?.quantity ?? 0) as number;
@@ -116,13 +126,22 @@ function ProductItemInner({
       image: cardImage,
       slug: item?.slug,
       availableQuantity: item.quantity,
-      maxOrderQuantity: item.flashSaleTag ? 1 : item.maxOrderQuantity,
+      maxOrderQuantity: purchaseLimit > 0 ? remainingAfterOrders : item.maxOrderQuantity,
       flashSaleTag: item.flashSaleTag ?? null,
+      flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       brandId: item.brandId ?? null,
       color: cartVariant?.color ? cartVariant.color : "",
       size: cartVariant?.size ? cartVariant.size : "",
     }),
-    [item, displayTitle, cardImage, cartLineId, cartVariant]
+    [
+      item,
+      displayTitle,
+      cardImage,
+      cartLineId,
+      cartVariant,
+      purchaseLimit,
+      remainingAfterOrders,
+    ]
   );
 
   const handleQuickViewUpdate = useCallback(() => {
@@ -136,7 +155,7 @@ function ProductItemInner({
 
   const handleAddToCart = useCallback(() => {
     if (purchaseBlocked) {
-      toast.error(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+      toast.error(limitMessage);
       return;
     }
     if (item.quantity > 0) {
@@ -145,7 +164,7 @@ function ProductItemInner({
     } else {
       toast.error("This product is out of stock!");
     }
-  }, [addItem, cartItem, item.quantity, purchaseBlocked]);
+  }, [addItem, cartItem, item.quantity, purchaseBlocked, limitMessage]);
 
   const handleQuickViewOpen = useCallback(() => {
     openModal();

@@ -58,8 +58,7 @@ export async function POST(req: NextRequest) {
       const row = await tx.flash_sales.create({
         data: {
           name: data.name,
-          sale_tag: data.sale_tag,
-          limit_one_per_customer: data.limit_one_per_customer,
+          purchase_limit: data.purchase_limit,
           discount_type: data.discount_type,
           discount_value: data.discount_value,
           is_active: data.is_active,

@@ -21,6 +21,9 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { useCart } from "@/hooks/useCart";
+import { useFlashSaleClaimUsage } from "@/hooks/useFlashSaleClaims";
+import { flashSaleEffectiveMaxQty } from "@/lib/cart/flashSaleCart";
+import { flashSaleLimitReachedMessage } from "@/lib/flashSale/messages";
 import {
   buildCartLineId,
   formatVariantLabel,
@@ -58,6 +61,10 @@ const QuickViewModal = () => {
 
   // get the product data
   const product = useAppSelector((state) => state.quickViewReducer.value);
+  const purchaseLimit = product?.flashSalePurchaseLimit ?? 0;
+  const { used } = useFlashSaleClaimUsage(product?.flashSaleTag);
+  const remainingAfterOrders =
+    purchaseLimit > 0 ? Math.max(0, purchaseLimit - used) : 0;
   const [activePreview, setActivePreview] = useState(0);
   const thumbnailRailDesktopRef = useRef<HTMLDivElement>(null);
   const thumbnailRailMobileRef = useRef<HTMLDivElement>(null);
@@ -77,10 +84,12 @@ const QuickViewModal = () => {
   const maxOrderQty = resolveMaxOrderQuantity(
     (product as { maxOrderQuantity?: number }).maxOrderQuantity
   );
-  const maxSelectableQty = Math.min(
-    product?.quantity ?? 0,
-    maxOrderQty
-  );
+  const catalogMax = Math.min(product?.quantity ?? 0, maxOrderQty);
+  const maxSelectableQty = flashSaleEffectiveMaxQty({
+    purchaseLimit,
+    used,
+    catalogMax,
+  });
 
   // preview modal
   const handlePreviewSlider = () => {
@@ -95,6 +104,10 @@ const QuickViewModal = () => {
 
   // add to cart
   const handleAddToCart = () => {
+    if (purchaseLimit > 0 && maxSelectableQty < 1) {
+      toast.error(flashSaleLimitReachedMessage(purchaseLimit));
+      return;
+    }
     const cartItem: CartItem = {
       id: cartLineId,
       productId: String(product.id),
@@ -108,7 +121,9 @@ const QuickViewModal = () => {
       image: cardImage,
       slug: product?.slug,
       availableQuantity: product.quantity,
-      maxOrderQuantity: maxOrderQty,
+      maxOrderQuantity: purchaseLimit > 0 ? remainingAfterOrders : maxOrderQty,
+      flashSaleTag: product.flashSaleTag ?? null,
+      flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       brandId: (product as { brandId?: string | null }).brandId ?? null,
       color: defaultVariant?.color ? defaultVariant.color : "",
       size: defaultVariant?.size ? defaultVariant.size : "",

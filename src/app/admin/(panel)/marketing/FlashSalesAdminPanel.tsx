@@ -10,8 +10,7 @@ import type { FlashDiscountType } from "@/lib/pricing/flashSaleTypes";
 type FlashSaleRow = {
   id: string;
   name: string | null;
-  sale_tag: string | null;
-  limit_one_per_customer: boolean;
+  purchase_limit: number;
   discount_type: FlashDiscountType;
   discount_value: number;
   is_active: boolean;
@@ -44,8 +43,7 @@ function scopeSummary(row: FlashSaleRow): string {
 
 const emptyForm = {
   name: "",
-  sale_tag: "",
-  limit_one_per_customer: false,
+  purchase_limit: "0",
   discount_type: "FIXED" as FlashDiscountType,
   discount_value: "",
   is_active: true,
@@ -73,8 +71,7 @@ export default function FlashSalesAdminPanel({
     setEditingId(row.id);
     setForm({
       name: row.name ?? "",
-      sale_tag: row.sale_tag ?? "",
-      limit_one_per_customer: row.limit_one_per_customer,
+      purchase_limit: String(row.purchase_limit ?? 0),
       discount_type: row.discount_type,
       discount_value: String(row.discount_value),
       is_active: row.is_active,
@@ -95,6 +92,11 @@ export default function FlashSalesAdminPanel({
       toast.error("Enter a valid discount value");
       return;
     }
+    const purchase_limit = Math.trunc(Number(form.purchase_limit));
+    if (!Number.isFinite(purchase_limit) || purchase_limit < 0 || purchase_limit > 99) {
+      toast.error("Max items per customer must be 0–99 (0 = no limit)");
+      return;
+    }
     if (
       form.product_ids.length === 0 &&
       form.category_ids.length === 0 &&
@@ -108,8 +110,7 @@ export default function FlashSalesAdminPanel({
     try {
       const payload = {
         name: form.name.trim() || null,
-        sale_tag: form.limit_one_per_customer ? form.sale_tag.trim() || null : null,
-        limit_one_per_customer: form.limit_one_per_customer,
+        purchase_limit,
         discount_type: form.discount_type,
         discount_value,
         is_active: form.is_active,
@@ -155,8 +156,8 @@ export default function FlashSalesAdminPanel({
       <h2 className="text-lg font-semibold">Flash sales</h2>
       <p className="text-sm text-meta-3">
         Set a fixed sale price or percentage off for multiple products, categories, or brands.
-        When several rules match, customers get the lowest price. Optionally limit each customer
-        to one purchase per sale (or per shared sale tag).
+        When several rules match, customers get the lowest price. Optionally cap how many items
+        each customer can buy.
       </p>
       {marketingSelectAllBar("flash sale")}
       <ul className="divide-y divide-gray-3 text-sm">
@@ -170,8 +171,7 @@ export default function FlashSalesAdminPanel({
                 </span>
                 <span className="block text-meta-3 truncate">
                   {formatFlashDiscount(row.discount_type, row.discount_value)} — {scopeSummary(row)}
-                  {row.limit_one_per_customer ? " · 1 per customer" : ""}
-                  {row.sale_tag ? ` · tag: ${row.sale_tag}` : ""}
+                  {row.purchase_limit > 0 ? ` · ${row.purchase_limit} per customer` : ""}
                   {!row.is_active ? " · Inactive" : ""}
                 </span>
               </span>
@@ -214,35 +214,21 @@ export default function FlashSalesAdminPanel({
               className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
             />
           </label>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <label className="sm:col-span-2">
+            <span className="text-sm font-medium">Max items per customer</span>
             <input
-              type="checkbox"
-              checked={form.limit_one_per_customer}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  limit_one_per_customer: e.target.checked,
-                  sale_tag: e.target.checked ? f.sale_tag : "",
-                }))
-              }
+              type="number"
+              min="0"
+              max="99"
+              step="1"
+              value={form.purchase_limit}
+              onChange={(e) => setForm((f) => ({ ...f, purchase_limit: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
             />
-            Limit to one purchase per customer
+            <span className="mt-1 block text-xs text-meta-3">
+              0 = no per-customer limit. 1 = one item, 3 = up to three, and so on.
+            </span>
           </label>
-          {form.limit_one_per_customer ? (
-            <label className="sm:col-span-2">
-              <span className="text-sm font-medium">Sale tag (optional)</span>
-              <input
-                value={form.sale_tag}
-                onChange={(e) => setForm((f) => ({ ...f, sale_tag: e.target.value }))}
-                placeholder="e.g. weekend-flash — shared across sales for one claim"
-                className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
-              />
-              <span className="mt-1 block text-xs text-meta-3">
-                Leave blank to limit one purchase per this flash sale only. Same tag = one claim
-                across those sales.
-              </span>
-            </label>
-          ) : null}
           <label>
             <span className="text-sm font-medium">Discount type</span>
             <select

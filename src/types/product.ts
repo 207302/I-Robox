@@ -5,8 +5,10 @@ export type Product = {
   title: string;
   price: number;
   discountedPrice?: number | null;
-  /** Present when price is from an active flash sale (one-purchase claim key). */
+  /** Present when price is from an active flash sale with a per-customer limit. */
   flashSaleTag?: string | null;
+  /** Max units per customer for the matching flash sale; 0/omitted = unlimited. */
+  flashSalePurchaseLimit?: number | null;
   shippingPerUnit?: number;
   slug: string;
   quantity: number;

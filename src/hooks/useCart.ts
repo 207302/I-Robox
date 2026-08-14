@@ -39,9 +39,12 @@ export const useCart = () => {
         const addQty = item.quantity || 1;
         const existingItem = cartItems.find((i) => i.id === item.id);
         const flashSaleTag = item.flashSaleTag ?? existingItem?.flashSaleTag ?? null;
+        const flashSalePurchaseLimit =
+          item.flashSalePurchaseLimit ?? existingItem?.flashSalePurchaseLimit ?? null;
         const flashErr = cartFlashSaleError(cartItems, {
             id: item.id,
             flashSaleTag,
+            flashSalePurchaseLimit,
             quantity: addQty,
         });
         if (flashErr) {
@@ -85,6 +88,7 @@ export const useCart = () => {
         dispatch(addItemToCart({
             ...item,
             flashSaleTag,
+            flashSalePurchaseLimit,
             maxOrderQuantity: item.maxOrderQuantity ?? existingItem?.maxOrderQuantity,
             quantity: addQty,
         }));
@@ -100,12 +104,16 @@ export const useCart = () => {
         if (!existingItem) return;
 
         if (existingItem.flashSaleTag) {
-            toast.error(cartFlashSaleError(cartItems, {
+            const flashErr = cartFlashSaleError(cartItems, {
                 id: existingItem.id,
                 flashSaleTag: existingItem.flashSaleTag,
+                flashSalePurchaseLimit: existingItem.flashSalePurchaseLimit,
                 quantity: 1,
-            }, { replacingQty: existingItem.quantity + 1 }) || "Flash sale items are limited to quantity 1.");
-            return;
+            }, { replacingQty: existingItem.quantity + 1 });
+            if (flashErr) {
+                toast.error(flashErr);
+                return;
+            }
         }
 
         const check = canIncreaseCartQuantity({
@@ -146,6 +154,7 @@ export const useCart = () => {
         // State
         cartCount,
         cartDetails,
+        cartItems,
         totalPrice,
         formattedTotalPrice,
         shouldDisplayCart,

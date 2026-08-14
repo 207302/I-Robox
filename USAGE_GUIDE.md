@@ -617,6 +617,7 @@ You cannot edit the customer’s wording — only approve, reject, or delete.
 
 - Optional label.
 - Fixed price (₹) or percentage off.
+- **Max items per customer:** `0` = no per-customer cap; `1` = one item; `3` = up to three, etc. Each flash sale has its own limit.
 - Active toggle and scope (products / categories / brands).
 - If multiple flash rules match, the **lowest price wins**.
 

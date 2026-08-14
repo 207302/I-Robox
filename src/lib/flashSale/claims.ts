@@ -5,12 +5,14 @@ import { loadActiveFlashSaleRules } from "@/lib/pricing/flashSale";
 import {
   bestFlashSaleMatch,
   flashSaleClaimTag,
+  flashSaleIsLimited,
   type FlashSaleRule,
 } from "@/lib/pricing/flashSaleTypes";
 import {
   FLASH_SALE_ALREADY_CLAIMED_MESSAGE,
   FLASH_SALE_ONE_ITEM_MESSAGE,
-  FLASH_SALE_QTY_ONE_MESSAGE,
+  flashSaleLimitReachedMessage,
+  flashSaleQtyLimitMessage,
 } from "@/lib/flashSale/messages";
 
 export {
@@ -29,7 +31,8 @@ export class FlashSaleClaimError extends Error {
 export type FlashSaleCartClaim = {
   saleTag: string;
   flashSaleId: string;
-  productId: string;
+  quantity: number;
+  purchaseLimit: number;
 };
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -40,7 +43,7 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
-/** Resolve the single flash-sale claim implied by cart lines (or null if none). */
+/** Resolve the flash-sale claim implied by cart lines (or null if none). */
 export async function resolveFlashSaleCartClaim(
   lines: { productId: string; quantity: number }[],
   now = new Date()
@@ -65,7 +68,7 @@ export async function resolveFlashSaleCartClaim(
   const isLive = (rule: FlashSaleRule) =>
     isActiveInWindow(rule.is_active, rule.active_from, rule.active_until, now);
 
-  const flashLines: FlashSaleCartClaim[] = [];
+  let claim: FlashSaleCartClaim | null = null;
   for (const line of lines) {
     const product = productMap.get(line.productId);
     if (!product) continue;
@@ -80,30 +83,44 @@ export async function resolveFlashSaleCartClaim(
       rules,
       isLive
     );
-    if (!match) continue;
-    if (!match.rule.limit_one_per_customer) continue;
-    if (line.quantity > 1) {
-      return { ok: false, error: FLASH_SALE_QTY_ONE_MESSAGE };
+    if (!match || !flashSaleIsLimited(match.rule.purchase_limit)) continue;
+    const qty = Math.max(0, Math.trunc(line.quantity));
+    if (qty < 1) continue;
+    const saleTag = flashSaleClaimTag(match.rule);
+    if (claim && claim.saleTag !== saleTag) {
+      return { ok: false, error: FLASH_SALE_ONE_ITEM_MESSAGE };
     }
-    flashLines.push({
-      saleTag: flashSaleClaimTag(match.rule),
-      flashSaleId: match.rule.id,
-      productId: product.id,
-    });
+    if (!claim) {
+      claim = {
+        saleTag,
+        flashSaleId: match.rule.id,
+        quantity: qty,
+        purchaseLimit: match.rule.purchase_limit,
+      };
+    } else {
+      claim.quantity += qty;
+      claim.purchaseLimit = Math.min(claim.purchaseLimit, match.rule.purchase_limit);
+    }
   }
 
-  if (flashLines.length === 0) return { ok: true, claim: null };
-  if (flashLines.length > 1) {
-    return { ok: false, error: FLASH_SALE_ONE_ITEM_MESSAGE };
-  }
-
-  const claim = flashLines[0]!;
-  const tags = new Set(flashLines.map((l) => l.saleTag));
-  if (tags.size > 1) {
-    return { ok: false, error: FLASH_SALE_ONE_ITEM_MESSAGE };
+  if (!claim) return { ok: true, claim: null };
+  if (claim.quantity > claim.purchaseLimit) {
+    return { ok: false, error: flashSaleQtyLimitMessage(claim.purchaseLimit) };
   }
 
   return { ok: true, claim };
+}
+
+export async function customerFlashSaleClaimedQuantity(
+  customerId: string,
+  saleTag: string,
+  db: DbClient = prisma
+): Promise<number> {
+  const agg = await db.flash_sale_claims.aggregate({
+    where: { customer_id: customerId, sale_tag: saleTag },
+    _sum: { quantity: true },
+  });
+  return agg._sum.quantity ?? 0;
 }
 
 export async function customerHasFlashSaleClaim(
@@ -111,13 +128,7 @@ export async function customerHasFlashSaleClaim(
   saleTag: string,
   db: DbClient = prisma
 ): Promise<boolean> {
-  const existing = await db.flash_sale_claims.findUnique({
-    where: {
-      customer_id_sale_tag: { customer_id: customerId, sale_tag: saleTag },
-    },
-    select: { id: true },
-  });
-  return Boolean(existing);
+  return (await customerFlashSaleClaimedQuantity(customerId, saleTag, db)) > 0;
 }
 
 export async function assertCustomerCanClaimFlashSale(
@@ -126,13 +137,25 @@ export async function assertCustomerCanClaimFlashSale(
   db: DbClient = prisma
 ): Promise<void> {
   if (!claim) return;
-  const taken = await customerHasFlashSaleClaim(customerId, claim.saleTag, db);
-  if (taken) {
-    throw new FlashSaleClaimError(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+  const used = await customerFlashSaleClaimedQuantity(customerId, claim.saleTag, db);
+  if (used + claim.quantity > claim.purchaseLimit) {
+    throw new FlashSaleClaimError(
+      used >= claim.purchaseLimit
+        ? flashSaleLimitReachedMessage(claim.purchaseLimit)
+        : flashSaleQtyLimitMessage(claim.purchaseLimit)
+    );
   }
 }
 
-/** Create claim inside an order transaction. Throws FlashSaleClaimError on duplicate. */
+async function lockCustomerSaleTag(
+  tx: Prisma.TransactionClient,
+  customerId: string,
+  saleTag: string
+): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${customerId}), hashtext(${saleTag}))`;
+}
+
+/** Create claim inside an order transaction. Throws FlashSaleClaimError when the limit is exceeded. */
 export async function createFlashSaleClaimInTx(
   tx: Prisma.TransactionClient,
   input: {
@@ -142,6 +165,8 @@ export async function createFlashSaleClaimInTx(
   }
 ): Promise<void> {
   if (!input.claim) return;
+  await lockCustomerSaleTag(tx, input.customerId, input.claim.saleTag);
+  await assertCustomerCanClaimFlashSale(input.customerId, input.claim, tx);
   try {
     await tx.flash_sale_claims.create({
       data: {
@@ -149,6 +174,7 @@ export async function createFlashSaleClaimInTx(
         sale_tag: input.claim.saleTag,
         flash_sale_id: input.claim.flashSaleId,
         order_id: input.orderId,
+        quantity: input.claim.quantity,
       },
     });
   } catch (error) {
@@ -186,12 +212,23 @@ export async function releaseFlashSaleClaimForOrder(
   await db.flash_sale_claims.deleteMany({ where: { order_id: orderId } });
 }
 
+export async function listCustomerFlashSaleClaimUsage(
+  customerId: string
+): Promise<Record<string, number>> {
+  const rows = await prisma.flash_sale_claims.groupBy({
+    by: ["sale_tag"],
+    where: { customer_id: customerId },
+    _sum: { quantity: true },
+  });
+  const usage: Record<string, number> = {};
+  for (const row of rows) {
+    usage[row.sale_tag] = row._sum.quantity ?? 0;
+  }
+  return usage;
+}
+
 export async function listCustomerFlashSaleClaimTags(
   customerId: string
 ): Promise<string[]> {
-  const rows = await prisma.flash_sale_claims.findMany({
-    where: { customer_id: customerId },
-    select: { sale_tag: true },
-  });
-  return rows.map((r) => r.sale_tag);
+  return Object.keys(await listCustomerFlashSaleClaimUsage(customerId));
 }

@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import toast from "react-hot-toast";
 import { useCart } from "@/hooks/useCart";
-import { useFlashSaleClaimed } from "@/hooks/useFlashSaleClaims";
-import { FLASH_SALE_ALREADY_CLAIMED_MESSAGE } from "@/lib/flashSale/messages";
+import { useFlashSaleClaimUsage } from "@/hooks/useFlashSaleClaims";
+import { flashSaleEffectiveMaxQty } from "@/lib/cart/flashSaleCart";
+import { flashSaleLimitReachedMessage } from "@/lib/flashSale/messages";
 import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import { AppDispatch, useAppSelector } from "@/redux/store";
 
@@ -21,6 +22,7 @@ type ProductActionsProps = {
   price: number;
   discountedPrice?: number | null;
   flashSaleTag?: string | null;
+  flashSalePurchaseLimit?: number | null;
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
@@ -32,16 +34,38 @@ type ProductActionsProps = {
 export default function ProductActions(props: ProductActionsProps) {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { addItem } = useCart();
+  const { addItem, cartItems } = useCart();
   const wishlistItems = useAppSelector((state) => state.wishlistReducer.items);
   const isAlreadyWishlisted = wishlistItems.some((w) => w.id === props.productId);
   const [localQty, setLocalQty] = useState(1);
-  const { claimed: flashClaimed } = useFlashSaleClaimed(props.flashSaleTag);
-  const purchaseBlocked = flashClaimed;
+  const purchaseLimit = props.flashSalePurchaseLimit ?? 0;
+  const { used } = useFlashSaleClaimUsage(props.flashSaleTag);
+  const remainingAfterOrders =
+    purchaseLimit > 0 ? Math.max(0, purchaseLimit - used) : 0;
+  const sameTagOtherCartQty = cartItems.reduce((sum, item) => {
+    if (!props.flashSaleTag || item.flashSaleTag !== props.flashSaleTag) return sum;
+    if (String(item.id) === String(props.lineId)) return sum;
+    return sum + item.quantity;
+  }, 0);
+  const catalogMax = Math.min(
+    props.maxOrderQuantity ?? 99,
+    Math.max(props.quantity, 0) || 1
+  );
+  const maxQty = flashSaleEffectiveMaxQty({
+    purchaseLimit,
+    used,
+    catalogMax,
+    sameTagOtherCartQty: purchaseLimit > 0 ? sameTagOtherCartQty : 0,
+  });
+  const purchaseBlocked = Boolean(props.flashSaleTag) && purchaseLimit > 0 && maxQty < 1;
+  const limitMessage = flashSaleLimitReachedMessage(purchaseLimit);
 
-  const maxQty = props.flashSaleTag
-    ? 1
-    : Math.min(props.maxOrderQuantity ?? 99, Math.max(props.quantity, 0) || 1);
+  useEffect(() => {
+    setLocalQty((q) => {
+      if (maxQty < 1) return 1;
+      return Math.min(q, maxQty);
+    });
+  }, [maxQty]);
 
   function buildCartPayload(qty: number) {
     return {
@@ -55,8 +79,9 @@ export default function ProductActions(props: ProductActionsProps) {
       image: props.image,
       slug: props.slug,
       availableQuantity: props.quantity,
-      maxOrderQuantity: props.flashSaleTag ? 1 : props.maxOrderQuantity,
+      maxOrderQuantity: purchaseLimit > 0 ? remainingAfterOrders : props.maxOrderQuantity,
       flashSaleTag: props.flashSaleTag ?? null,
+      flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       shippingPerUnit: Number(props.shippingPerUnit ?? 0),
       brandId: props.brandId ?? null,
       color: props.color ?? "",
@@ -67,7 +92,7 @@ export default function ProductActions(props: ProductActionsProps) {
 
   function handleAddToCart() {
     if (purchaseBlocked) {
-      toast.error(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+      toast.error(limitMessage);
       return;
     }
     if (props.quantity < 1) {
@@ -81,7 +106,7 @@ export default function ProductActions(props: ProductActionsProps) {
 
   function handleBuyNow() {
     if (purchaseBlocked) {
-      toast.error(FLASH_SALE_ALREADY_CLAIMED_MESSAGE);
+      toast.error(limitMessage);
       return;
     }
     if (props.quantity < 1) {
@@ -175,7 +200,7 @@ export default function ProductActions(props: ProductActionsProps) {
       </div>
 
       {purchaseBlocked ? (
-        <p className="mt-2 text-sm text-meta-3">{FLASH_SALE_ALREADY_CLAIMED_MESSAGE}</p>
+        <p className="mt-2 text-sm text-meta-3">{limitMessage}</p>
       ) : null}
 
       <button

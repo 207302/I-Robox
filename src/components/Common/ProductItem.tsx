@@ -97,15 +97,21 @@ function ProductItemInner({
   const { openModal } = useModalContext();
   const dispatch = useDispatch<AppDispatch>();
 
-  const { addItem, cartDetails, incrementItem, decrementItem } = useCart();
+  const { addItem, cartDetails, cartItems, incrementItem, decrementItem } = useCart();
   const purchaseLimit = item.flashSalePurchaseLimit ?? 0;
   const { used } = useFlashSaleClaimUsage(item.flashSaleTag);
   const remainingAfterOrders =
     purchaseLimit > 0 ? Math.max(0, purchaseLimit - used) : 0;
+  const sameTagOtherCartQty = cartItems.reduce((sum, cartLine) => {
+    if (!cartLine.flashSaleTag || cartLine.flashSaleTag !== item.flashSaleTag) return sum;
+    if (String(cartLine.id) === String(cartLineId)) return sum;
+    return sum + cartLine.quantity;
+  }, 0);
   const flashMaxQty = flashSaleEffectiveMaxQty({
     purchaseLimit,
     used,
     catalogMax: item.maxOrderQuantity ?? 99,
+    sameTagOtherCartQty: purchaseLimit > 0 ? sameTagOtherCartQty : 0,
   });
   const purchaseBlocked = Boolean(item.flashSaleTag) && purchaseLimit > 0 && flashMaxQty < 1;
   const limitMessage = flashSaleLimitReachedMessage(purchaseLimit);

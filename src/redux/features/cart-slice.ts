@@ -1,4 +1,5 @@
 import { normalizeCartItem } from "@/lib/cart/cartLine";
+import { cartFlashSaleError } from "@/lib/cart/flashSaleCart";
 import {
   clampAddToCartQuantity,
   resolveMaxOrderQuantity,
@@ -57,6 +58,16 @@ export const cart = createSlice({
       const item = normalizeCartItem(action.payload);
       const existingItem = state.items.find((i) => i.id === item.id);
       const requestedQty = item.quantity || 1;
+      if (
+        cartFlashSaleError(state.items, {
+          id: item.id,
+          flashSaleTag: item.flashSaleTag,
+          flashSalePurchaseLimit: item.flashSalePurchaseLimit,
+          quantity: requestedQty,
+        })
+      ) {
+        return;
+      }
       const cappedQty = clampAddToCartQuantity({
         items: state.items,
         productId: item.productId,
@@ -105,6 +116,22 @@ export const cart = createSlice({
       const existingItem = state.items.find((item) => item.id === itemId);
 
       if (!existingItem) return;
+
+      if (
+        existingItem.flashSaleTag &&
+        cartFlashSaleError(
+          state.items,
+          {
+            id: existingItem.id,
+            flashSaleTag: existingItem.flashSaleTag,
+            flashSalePurchaseLimit: existingItem.flashSalePurchaseLimit,
+            quantity: 1,
+          },
+          { replacingQty: existingItem.quantity + 1 }
+        )
+      ) {
+        return;
+      }
 
       if (existingItem.maxOrderQuantity != null) {
         const maxOrderQty = resolveMaxOrderQuantity(existingItem.maxOrderQuantity);

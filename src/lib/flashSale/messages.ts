@@ -4,8 +4,10 @@ export const FLASH_SALE_ONE_ITEM_MESSAGE =
   "Items from different flash sales can't be in the cart together.";
 
 export function flashSaleQtyLimitMessage(limit: number): string {
-  if (limit <= 1) return "Flash sale items are limited to quantity 1.";
-  return `You can buy at most ${limit} items from this flash sale.`;
+  if (limit <= 1) {
+    return "This flash sale allows only 1 item total in your cart.";
+  }
+  return `This flash sale allows only ${limit} items total in your cart.`;
 }
 
 export function flashSaleLimitReachedMessage(limit: number): string {

@@ -157,7 +157,7 @@ export default function FlashSalesAdminPanel({
       <p className="text-sm text-meta-3">
         Set a fixed sale price or percentage off for multiple products, categories, or brands.
         When several rules match, customers get the lowest price. Optionally cap how many items
-        each customer can buy.
+        each customer can buy from that entire flash sale (not per product).
       </p>
       {marketingSelectAllBar("flash sale")}
       <ul className="divide-y divide-gray-3 text-sm">
@@ -226,7 +226,8 @@ export default function FlashSalesAdminPanel({
               className="mt-1 w-full rounded-lg border border-gray-3 px-3 py-2 text-sm"
             />
             <span className="mt-1 block text-xs text-meta-3">
-              0 = no per-customer limit. 1 = one item, 3 = up to three, and so on.
+              0 = no per-customer limit. Applies to the whole sale: if set to 1, a customer can
+              buy only 1 item total from any products in this flash sale (not 1 of each).
             </span>
           </label>
           <label>

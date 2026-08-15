@@ -33,9 +33,9 @@ async function main() {
   } else {
     console.log("No order in DB for Razorpay payment:", paymentId);
     console.log(
-      "This usually means POST /api/payment/razorpay/verify failed after payment was captured."
+      "If this payment was captured, the webhook should create the order from razorpay_checkout_sessions."
     );
-    console.log("Check Hostinger runtime logs for [razorpay/verify] order creation failed");
+    console.log("Check Hostinger logs for [razorpay/webhook] and [razorpay/verify].");
   }
 
   await prisma.$disconnect();

@@ -151,7 +151,21 @@ export async function buildCheckoutContext(input: {
   let accountEmail: string | null = null;
   let checkoutLinkedAs: "session" | "existing_customer" | "new_customer";
 
-  const guestCheckout = false;
+  const guestCheckoutRequested = body.guestCheckout === true || body.guestCheckout === "true";
+  let sessionEmailNorm = "";
+  if (session?.sub) {
+    const sessionCustomer = await prisma.customers.findUnique({
+      where: { id: session.sub },
+      select: { email: true },
+    });
+    if (sessionCustomer?.email && !isSyntheticPhoneSignupEmail(sessionCustomer.email)) {
+      sessionEmailNorm = normalizeEmail(sessionCustomer.email);
+    }
+  }
+  const emailMismatch =
+    Boolean(session?.sub) && sessionEmailNorm.length > 0 && sessionEmailNorm !== email;
+  // Logged-out checkout (and signed-in checkout with a different email) attaches to the form email.
+  const guestCheckout = guestCheckoutRequested || emailMismatch || !session?.sub;
 
   if (!guestCheckout && session?.sub) {
     checkoutLinkedAs = "session";

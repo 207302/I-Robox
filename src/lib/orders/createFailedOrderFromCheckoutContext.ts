@@ -15,9 +15,12 @@ export async function createFailedOrderFromCheckoutContext(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.orders.findFirst({
       where: { razorpay_checkout_order_id: razorpayCheckoutOrderId },
-      select: { id: true, order_number: true, customer_id: true },
+      select: { id: true, order_number: true, customer_id: true, payment_status: true },
     });
     if (existing) {
+      if (existing.payment_status === "SUCCEEDED" || existing.payment_status === "REFUNDED") {
+        return existing;
+      }
       await tx.orders.update({
         where: { id: existing.id },
         data: {
@@ -92,7 +95,7 @@ export async function createFailedOrderFromCheckoutContext(
   }, PRISMA_TRANSACTION_OPTIONS);
 }
 
-async function reserveInventoryForLine(
+export async function reserveInventoryForLine(
   tx: Tx,
   orderId: string,
   orderItemId: string,

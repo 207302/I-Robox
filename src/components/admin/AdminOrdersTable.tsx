@@ -40,11 +40,15 @@ export type AdminOrderRow = {
   refundTransactionId: string | null;
   productNames: string;
   products: AdminOrderProductThumb[];
+  shipmozoError: string | null;
+  paymentLinkUrl: string | null;
+  paymentLinkPending: boolean;
 };
 
 type AdminOrdersTableProps = {
   orders: AdminOrderRow[];
   canDelete?: boolean;
+  canCreateOrder?: boolean;
 };
 
 function filterOrders(rows: AdminOrderRow[], query: string): AdminOrderRow[] {
@@ -68,7 +72,7 @@ function filterOrders(rows: AdminOrderRow[], query: string): AdminOrderRow[] {
   });
 }
 
-export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTableProps) {
+export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = false }: AdminOrdersTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -378,8 +382,20 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
                           Not Delivered
                         </span>
                       ) : null}
+                      {o.shipmozoError ? (
+                        <p className="mt-1 max-w-[16rem] text-xs font-medium text-red-700">
+                          ShipMozo: {o.shipmozoError}
+                        </p>
+                      ) : null}
                     </td>
-                    <td className="py-3 px-4 text-dark">{o.paymentStatus}</td>
+                    <td className="py-3 px-4 text-dark">
+                      <div>{o.paymentStatus}</div>
+                      {o.paymentLinkPending ? (
+                        <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                          Pending payment
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="py-3 px-4 text-dark">{formatPrice(o.totalAmount)}</td>
                     <td className="py-3 px-4">
                       <div className="flex flex-col gap-1">
@@ -395,6 +411,21 @@ export function AdminOrdersTable({ orders, canDelete = false }: AdminOrdersTable
                         >
                           Invoice
                         </a>
+                        {o.paymentLinkUrl && o.paymentLinkPending ? (
+                          <button
+                            type="button"
+                            className="text-left text-sm font-medium text-blue hover:underline"
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(o.paymentLinkUrl!);
+                              toast.success("Payment link copied");
+                            }}
+                          >
+                            Copy payment link
+                          </button>
+                        ) : null}
+                        {canCreateOrder && o.paymentLinkPending && !o.paymentLinkUrl ? (
+                          <span className="text-xs text-amber-800">Generate link from order page</span>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

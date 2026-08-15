@@ -48,6 +48,7 @@ model admin_users {
 
   admin_user_roles admin_user_roles[]
   audit_logs       audit_logs[]
+  created_orders   orders[]
 }
 
 model audit_logs {
@@ -370,6 +371,11 @@ model orders {
   payment_provider                                String?                  @db.VarChar(80)
   /// Razorpay Orders API id from checkout (before payment capture).
   razorpay_checkout_order_id                      String?                  @db.VarChar(120)
+  /// Razorpay Payment Link for admin-created orders (optional).
+  razorpay_payment_link_id                        String?                  @db.VarChar(120)
+  razorpay_payment_link_url                       String?                  @db.VarChar(500)
+  razorpay_payment_link_expires_at                DateTime?                @db.Timestamptz(6)
+  created_by_admin_id                             String?                  @db.Uuid
   /// Failed retry payment attempts after order was marked payment failed (max 3).
   payment_retry_attempts                          Int                      @default(0)
   payment_retry_exhausted_notified_at             DateTime?                @db.Timestamptz(6)
@@ -394,13 +400,39 @@ model orders {
   customers                                       customers?                 @relation(fields: [customer_id], references: [id], onUpdate: NoAction)
   returns                                         returns[]
   shipments                                       shipments?
+  razorpay_checkout_sessions                      razorpay_checkout_sessions[]
+  created_by_admin                                admin_users?               @relation(fields: [created_by_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([created_at], map: "idx_orders_created_at")
   @@index([status], map: "idx_orders_status")
   @@index([customer_id], map: "idx_orders_customer_id")
-  @@index([razorpay_checkout_order_id], map: "idx_orders_razorpay_checkout_order_id")
+  @@unique([razorpay_checkout_order_id], map: "orders_razorpay_checkout_order_id_key")
+  @@index([external_payment_id], map: "idx_orders_external_payment_id")
+  @@index([razorpay_payment_link_id], map: "idx_orders_razorpay_payment_link_id")
+  @@index([razorpay_payment_link_expires_at], map: "idx_orders_payment_link_expires_at")
+  @@index([created_by_admin_id], map: "idx_orders_created_by_admin_id")
   @@index([awb_number], map: "idx_orders_awb_number")
   @@index([shipment_status], map: "idx_orders_shipment_status")
+}
+
+/// Snapshot of checkout at Razorpay order create. Used to place the order if the browser
+/// never calls /verify after capture (common with UPI app-switch).
+model razorpay_checkout_sessions {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  razorpay_order_id  String    @unique @db.VarChar(120)
+  customer_id        String?   @db.Uuid
+  checkout_email     String    @db.Citext
+  context            Json
+  expires_at         DateTime  @db.Timestamptz(6)
+  order_id           String?   @db.Uuid
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime  @default(now()) @db.Timestamptz(6)
+  customers          customers? @relation(fields: [customer_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  orders             orders?    @relation(fields: [order_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_razorpay_checkout_sessions_customer_id")
+  @@index([order_id], map: "idx_razorpay_checkout_sessions_order_id")
+  @@index([expires_at], map: "idx_razorpay_checkout_sessions_expires_at")
 }
 
 model product_images {
@@ -607,6 +639,7 @@ model customers {
   customer_password_setup_tokens customer_password_setup_tokens[]
   phone_change_otps              phone_change_otps[]
   email_change_otps              email_change_otps[]
+  razorpay_checkout_sessions     razorpay_checkout_sessions[]
 }
 
 /// One-time link for checkout-created accounts to set a real password (token stored as SHA-256 hex).

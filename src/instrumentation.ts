@@ -78,6 +78,13 @@ export async function register() {
   };
 
   try {
+    const { startPaymentLinkExpireScheduler } = await import("./lib/cron/paymentLinkExpireScheduler");
+    startPaymentLinkExpireScheduler();
+  } catch (err) {
+    console.warn("[instrumentation] Payment link expire scheduler skipped:", err);
+  }
+
+  try {
     const { startAbandonedCartScheduler } = await import("./lib/cron/abandonedCartScheduler");
     startAbandonedCartScheduler();
   } catch (err) {
@@ -107,6 +114,12 @@ export async function register() {
 
   const { registerPrismaSignalHandlers } = await import("./instrumentation.node");
   registerPrismaSignalHandlers(async () => {
+    try {
+      const { stopPaymentLinkExpireScheduler } = await import("./lib/cron/paymentLinkExpireScheduler");
+      stopPaymentLinkExpireScheduler();
+    } catch {
+      /* shutting down */
+    }
     try {
       const { stopAbandonedCartScheduler } = await import("./lib/cron/abandonedCartScheduler");
       stopAbandonedCartScheduler();

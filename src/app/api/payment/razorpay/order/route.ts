@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/security/rateLimit";
 import { readJsonBody } from "@/lib/validation/input";
 import { buildCheckoutContext } from "@/lib/checkout/buildCheckoutContext";
 import { sealCheckoutContext } from "@/lib/checkout/checkoutSeal";
+import { saveRazorpayCheckoutSession } from "@/lib/checkout/razorpayCheckoutSessions";
 import { getRazorpayClient, razorpayPublicConfig } from "@/lib/payments/razorpay";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { StockValidationError } from "@/lib/inventory/cartStock";
@@ -42,7 +43,13 @@ export async function POST(req: NextRequest) {
         notes: {
           customer_email: ctx.address.email.slice(0, 255),
           customer_phone: ctx.address.phone.slice(0, 255),
+          customer_id: (ctx.checkoutUserId ?? "").slice(0, 255),
         },
+      });
+
+      await saveRazorpayCheckoutSession({
+        razorpayOrderId: razorpayOrder.id,
+        ctx,
       });
   
       return NextResponse.json(

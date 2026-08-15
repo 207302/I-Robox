@@ -183,6 +183,7 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
   const [pushingShipmozo, setPushingShipmozo] = useState(false);
   const [refreshingShipmozo, setRefreshingShipmozo] = useState(false);
   const [sendingReviewEmail, setSendingReviewEmail] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("PENDING");
 
   function resolveStatusSelection(order: { status?: string; paymentStatus?: string }): string {
@@ -478,6 +479,59 @@ export function AdminOrderDetailClient({ canDelete = false }: AdminOrderDetailCl
                 <dt className="text-meta-3">Payment status</dt>
                 <dd className="mt-0.5 font-medium text-dark">{data.paymentStatus ?? "—"}</dd>
               </div>
+              {data.paymentLink?.url || data.canGeneratePaymentLink ? (
+                <div>
+                  <dt className="text-meta-3">Payment link</dt>
+                  <dd className="mt-1 space-y-2">
+                    {data.paymentLink?.url ? (
+                      <div className="flex flex-col gap-2">
+                        <input
+                          readOnly
+                          value={data.paymentLink.url}
+                          className="w-full rounded-lg border border-gray-3 px-2 py-1 text-xs"
+                        />
+                        <button
+                          type="button"
+                          className="text-left text-sm font-medium text-blue hover:underline"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(data.paymentLink.url);
+                            toast.success("Copied");
+                          }}
+                        >
+                          Copy link
+                        </button>
+                      </div>
+                    ) : null}
+                    {canDelete && data.canGeneratePaymentLink ? (
+                      <button
+                        type="button"
+                        disabled={generatingLink}
+                        className="text-sm font-medium text-blue hover:underline disabled:opacity-60"
+                        onClick={async () => {
+                          setGeneratingLink(true);
+                          try {
+                            const res = await fetchAdminWithRetry(`/api/admin/orders/${id}/payment-link`, {
+                              method: "POST",
+                            });
+                            const out = await res.json().catch(() => ({}));
+                            if (!res.ok) throw new Error(out?.error || "Could not generate link");
+                            toast.success(out?.paymentLink?.reused ? "Existing link still valid" : "Payment link created");
+                            const refresh = await fetch(`/api/admin/orders/${id}`);
+                            const json = await refresh.json().catch(() => null);
+                            if (refresh.ok && json) setData(json);
+                          } catch (e: unknown) {
+                            toast.error(e instanceof Error ? e.message : "Could not generate link");
+                          } finally {
+                            setGeneratingLink(false);
+                          }
+                        }}
+                      >
+                        {generatingLink ? "Generating…" : data.paymentLink?.url ? "Regenerate / refresh link" : "Generate payment link"}
+                      </button>
+                    ) : null}
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="text-meta-3">Transaction ID</dt>
                 <dd className="mt-0.5 font-medium text-dark">

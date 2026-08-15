@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { buildCheckoutContextFromOrder } from "@/lib/orders/buildCheckoutContextFromOrder";
 import { sealCheckoutContext } from "@/lib/checkout/checkoutSeal";
+import { saveRazorpayCheckoutSession } from "@/lib/checkout/razorpayCheckoutSessions";
 import { orderEligibleForPaymentRetry } from "@/lib/orders/paymentRetry";
 import { getRazorpayClient, razorpayPublicConfig } from "@/lib/payments/razorpay";
 import { prisma } from "@/lib/prisma";
@@ -105,6 +106,11 @@ export async function POST(req: NextRequest) {
       });
 
       const checkoutSeal = sealCheckoutContext(razorpayOrder.id, ctx);
+      await saveRazorpayCheckoutSession({
+        razorpayOrderId: razorpayOrder.id,
+        ctx,
+        orderId,
+      });
 
       return NextResponse.json({
         ok: true,

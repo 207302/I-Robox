@@ -31,6 +31,7 @@ import {
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { compactOrderId, formatOrderReference } from "@/lib/orders/orderNumber";
 import { confirmReservedInventoryAsSold } from "@/lib/orders/createFailedOrderFromCheckoutContext";
+import { cancelUnpaidAdminOrder } from "@/lib/orders/cancelUnpaidAdminOrder";
 import { buildCheckoutContextFromOrder } from "@/lib/orders/buildCheckoutContextFromOrder";
 import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
@@ -47,6 +48,7 @@ function formatPaymentMethod(provider: string | null, paymentStatus: string): st
   const p = (provider ?? "").trim().toLowerCase();
   if (p.includes("razorpay")) return "Razorpay";
   if (p === "cod") return "Cash on Delivery";
+  if (p === "manual") return paymentStatus === "SUCCEEDED" ? "Offline / manual" : "Payment pending";
   if (p === "placeholder") {
     return paymentStatus === "SUCCEEDED" ? "Online payment" : "Payment pending";
   }
@@ -78,6 +80,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         payment_status: true,
         payment_provider: true,
         external_payment_id: true,
+        razorpay_payment_link_id: true,
+        razorpay_payment_link_url: true,
+        razorpay_payment_link_expires_at: true,
         refund_transaction_id: true,
         refunded_amount: true,
         subtotal_amount: true,
@@ -157,6 +162,18 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
           order.external_payment_id?.trim()
             ? order.external_payment_id.trim()
             : null,
+        paymentLink:
+          order.razorpay_payment_link_url && order.payment_status === "PENDING"
+            ? {
+                id: order.razorpay_payment_link_id,
+                url: order.razorpay_payment_link_url,
+                expiresAt: order.razorpay_payment_link_expires_at?.toISOString() ?? null,
+              }
+            : null,
+        canGeneratePaymentLink:
+          order.payment_status === "PENDING" &&
+          order.status !== "CANCELLED" &&
+          String(order.status) !== "PAYMENT_FAILED",
         refundTransactionId: order.refund_transaction_id?.trim() || null,
         refundedAmount:
           typeof order.refunded_amount === "number" ? order.refunded_amount : null,
@@ -414,6 +431,19 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             console.error("[admin orders PUT] COD fulfillment failed", err);
           }
         });
+      } else if (
+        status === "CANCELLED" &&
+        prevStatus !== "CANCELLED" &&
+        prevPaymentStatus === "PENDING"
+      ) {
+        const cancelled = await cancelUnpaidAdminOrder({
+          orderId: id,
+          adminUserId: auth.session.sub,
+          reason: "admin_manual_cancel",
+        });
+        if (!cancelled.ok) {
+          return NextResponse.json({ error: cancelled.error }, { status: cancelled.status });
+        }
       } else {
         await prisma.$transaction(async (tx) => {
           await tx.orders.update({ where: { id }, data: { status: status as any } });

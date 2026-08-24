@@ -1,88 +1,93 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState, Fragment } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, Fragment } from "react";
 import toast from "react-hot-toast";
 import { formatPrice } from "@/utils/formatePrice";
 import { AdminBulkDeleteBar } from "@/components/admin/AdminBulkDeleteBar";
 import { AdminPagination } from "@/components/admin/AdminPagination";
 import { AdminProductThumbnail } from "@/components/admin/AdminProductThumbnail";
 import { fetchAdminWithRetry } from "@/lib/admin/fetchWithRetry";
+import {
+  ADMIN_ORDERS_PAGE_SIZE,
+  type AdminOrderRow,
+} from "@/lib/admin/orderListTypes";
 import { looksLikeTxnId } from "@/lib/admin/orderTxnSearch";
 import { useBulkSelection } from "@/components/admin/useBulkSelection";
-import type { ShipmentStatus } from "@/lib/shipping/shipmozoTrackingConstants";
 
-const PAGE_SIZE = 50;
 const MAX_BULK_DELETE = 50;
 const TABLE_COL_COUNT = 7;
 
-export type AdminOrderProductThumb = {
-  productId: string;
-  slug: string;
-  name: string;
-  imageUrl: string | null;
-  quantity: number;
-};
+export type { AdminOrderRow, AdminOrderProductThumb } from "@/lib/admin/orderListTypes";
 
-export type AdminOrderRow = {
-  id: string;
-  orderNumber: string;
-  orderId: string;
-  status: string;
-  shipmentStatus: ShipmentStatus | null;
-  paymentStatus: string;
-  totalAmount: number;
-  createdAtLabel: string;
-  customerName: string | null;
-  customerEmail: string | null;
-  razorpayPaymentId: string | null;
-  refundTransactionId: string | null;
-  productNames: string;
-  products: AdminOrderProductThumb[];
-  shipmozoError: string | null;
-  paymentLinkUrl: string | null;
-  paymentLinkPending: boolean;
+type ListResponse = {
+  orders: AdminOrderRow[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 };
 
 type AdminOrdersTableProps = {
-  orders: AdminOrderRow[];
   canDelete?: boolean;
   canCreateOrder?: boolean;
 };
 
-function filterOrders(rows: AdminOrderRow[], query: string): AdminOrderRow[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return rows;
-  return rows.filter((o) => {
-    const hay = [
-      o.orderId,
-      o.orderNumber,
-      o.id,
-      o.status,
-      o.paymentStatus,
-      o.customerEmail ?? "guest",
-      o.razorpayPaymentId ?? "",
-      o.refundTransactionId ?? "",
-      o.productNames,
-    ]
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  });
-}
-
-export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = false }: AdminOrdersTableProps) {
-  const router = useRouter();
+export function AdminOrdersTable({ canDelete = false, canCreateOrder = false }: AdminOrdersTableProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const searching = query !== deferredQuery;
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ListResponse>({
+    orders: [],
+    total: 0,
+    page: 1,
+    limit: ADMIN_ORDERS_PAGE_SIZE,
+    totalPages: 1,
+  });
   const bulk = useBulkSelection();
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [txnLookup, setTxnLookup] = useState<{ id: string; orderId: string } | null>(null);
 
-  const loadedOrderIds = useMemo(() => new Set(orders.map((o) => o.id)), [orders]);
+  const load = useCallback(async (q: string, p: number) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(p),
+        limit: String(ADMIN_ORDERS_PAGE_SIZE),
+      });
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetchAdminWithRetry(`/api/admin/orders?${params.toString()}`);
+      const json = (await res.json().catch(() => ({}))) as ListResponse & { error?: string };
+      if (!res.ok) throw new Error(json?.error || "Failed to load orders");
+      const nextPage = Number(json.page ?? p);
+      setData({
+        orders: Array.isArray(json.orders) ? json.orders : [],
+        total: Number(json.total ?? 0),
+        page: nextPage,
+        limit: Number(json.limit ?? ADMIN_ORDERS_PAGE_SIZE),
+        totalPages: Math.max(1, Number(json.totalPages ?? 1)),
+      });
+      if (nextPage !== p) setPage(nextPage);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to load orders");
+      setData((prev) => ({ ...prev, orders: [] }));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(deferredQuery, page);
+  }, [deferredQuery, page, load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [deferredQuery]);
+
+  const loadedOrderIds = useMemo(() => new Set(data.orders.map((o) => o.id)), [data.orders]);
 
   const tableColSpan = TABLE_COL_COUNT + (canDelete ? 1 : 0);
 
@@ -95,82 +100,16 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
     });
   }
 
-  const filtered = useMemo(
-    () => filterOrders(orders, deferredQuery),
-    [orders, deferredQuery]
-  );
-
-  const [page, setPage] = useState(1);
   const q = deferredQuery.trim();
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
-  useEffect(() => {
-    const q = deferredQuery.trim();
-    if (!looksLikeTxnId(q)) {
-      setTxnLookup(null);
-      return;
-    }
-
-    const inFiltered = filtered.some(
-      (o) =>
-        o.razorpayPaymentId === q ||
-        o.refundTransactionId === q ||
-        o.id === q ||
-        o.orderId === q
-    );
-    if (inFiltered) {
-      setTxnLookup(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const res = await fetchAdminWithRetry(
-          `/api/admin/orders/search?txn=${encodeURIComponent(q)}`,
-          { signal: controller.signal }
-        );
-        const data = (await res.json().catch(() => ({}))) as {
-          found?: boolean;
-          id?: string;
-          orderId?: string;
-        };
-        if (controller.signal.aborted) return;
-        if (res.ok && data.found && data.id && data.orderId) {
-          setTxnLookup({ id: data.id, orderId: data.orderId });
-        } else {
-          setTxnLookup(null);
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setTxnLookup(null);
-      }
-    })();
-
-    return () => controller.abort();
-  }, [deferredQuery, filtered]);
-
-  const showTxnBanner =
-    txnLookup !== null &&
-    (!loadedOrderIds.has(txnLookup.id) || !filtered.some((o) => o.id === txnLookup.id));
-
-  const paged = useMemo(() => {
-    const skip = (safePage - 1) * PAGE_SIZE;
-    return filtered.slice(skip, skip + PAGE_SIZE);
-  }, [filtered, safePage]);
-
+  const total = data.total;
+  const totalPages = data.totalPages;
+  const safePage = data.page;
+  const paged = data.orders;
   const pagedIds = useMemo(() => paged.map((o) => o.id), [paged]);
   const { allOnPageSelected, someOnPageSelected } = bulk.selectionForPage(pagedIds);
 
-  const rangeStart = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = (safePage - 1) * PAGE_SIZE + paged.length;
+  const rangeStart = total === 0 ? 0 : (safePage - 1) * ADMIN_ORDERS_PAGE_SIZE + 1;
+  const rangeEnd = (safePage - 1) * ADMIN_ORDERS_PAGE_SIZE + paged.length;
 
   function onQueryChange(value: string) {
     setQuery(value);
@@ -182,6 +121,56 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
     setPage(1);
   }
 
+  useEffect(() => {
+    const txn = deferredQuery.trim();
+    if (!looksLikeTxnId(txn)) {
+      setTxnLookup(null);
+      return;
+    }
+
+    const inFiltered = paged.some(
+      (o) =>
+        o.razorpayPaymentId === txn ||
+        o.refundTransactionId === txn ||
+        o.id === txn ||
+        o.orderId === txn
+    );
+    if (inFiltered) {
+      setTxnLookup(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetchAdminWithRetry(
+          `/api/admin/orders/search?txn=${encodeURIComponent(txn)}`,
+          { signal: controller.signal }
+        );
+        const lookup = (await res.json().catch(() => ({}))) as {
+          found?: boolean;
+          id?: string;
+          orderId?: string;
+        };
+        if (controller.signal.aborted) return;
+        if (res.ok && lookup.found && lookup.id && lookup.orderId) {
+          setTxnLookup({ id: lookup.id, orderId: lookup.orderId });
+        } else {
+          setTxnLookup(null);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setTxnLookup(null);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [deferredQuery, paged]);
+
+  const showTxnBanner =
+    txnLookup !== null &&
+    (!loadedOrderIds.has(txnLookup.id) || !paged.some((o) => o.id === txnLookup.id));
+
   async function handleBulkDelete() {
     const ids = bulk.selectedArray;
     if (ids.length === 0) return;
@@ -190,7 +179,7 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
       return;
     }
 
-    const preview = orders
+    const preview = paged
       .filter((o) => bulk.isSelected(o.id))
       .map((o) => o.orderId)
       .slice(0, 3)
@@ -207,11 +196,11 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ids }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Bulk delete failed");
 
-      const deletedCount = Number(data.deletedCount ?? 0);
-      const failed = (data.failed ?? []) as { id: string; error: string }[];
+      const deletedCount = Number(json.deletedCount ?? 0);
+      const failed = (json.failed ?? []) as { id: string; error: string }[];
 
       if (deletedCount > 0) {
         toast.success(`Deleted ${deletedCount} order${deletedCount === 1 ? "" : "s"}`);
@@ -225,7 +214,7 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
       }
 
       bulk.clearSelection();
-      router.refresh();
+      void load(deferredQuery, page);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Bulk delete failed");
     } finally {
@@ -285,14 +274,16 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
       ) : null}
 
       {total > 0 ? (
-        <p className={`text-sm text-meta-3 ${searching ? "opacity-60" : ""}`}>
+        <p className={`text-sm text-meta-3 ${searching || loading ? "opacity-60" : ""}`}>
           {q
             ? `Found ${total} match${total !== 1 ? "es" : ""}`
             : `Showing ${rangeStart}–${rangeEnd} of ${total}`}
           {totalPages > 1 ? ` · Page ${safePage} of ${totalPages}` : null}
         </p>
-      ) : q ? (
+      ) : q && !loading ? (
         <p className="text-sm text-meta-3">No orders match &quot;{q}&quot;.</p>
+      ) : loading ? (
+        <p className="text-sm text-meta-3">Loading orders…</p>
       ) : null}
 
       <div className="rounded-2xl border border-gray-3 bg-white overflow-x-auto">
@@ -310,7 +301,7 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
                       if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
                     }}
                     onChange={() => bulk.toggleMany(pagedIds, !allOnPageSelected)}
-                    disabled={paged.length === 0 || bulkDeleting}
+                    disabled={paged.length === 0 || bulkDeleting || loading}
                     className="h-4 w-4 rounded border-gray-3"
                   />
                 </th>
@@ -471,7 +462,7 @@ export function AdminOrdersTable({ orders, canDelete = false, canCreateOrder = f
             {paged.length === 0 ? (
               <tr>
                 <td className="py-6 px-4 text-sm text-meta-3" colSpan={tableColSpan}>
-                  {q ? "No matching orders." : "No orders yet."}
+                  {loading ? "Loading orders…" : q ? "No matching orders." : "No orders yet."}
                 </td>
               </tr>
             ) : null}

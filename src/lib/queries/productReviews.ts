@@ -65,15 +65,24 @@ function formatReviewerLabel(
   return "— Customer";
 }
 
+const HOME_FEATURED_REVIEW_POOL_SIZE = 100;
+
 async function loadFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
+  const sampled = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT r.id
+    FROM reviews r
+    INNER JOIN products p ON p.id = r.product_id
+    WHERE r.is_approved = true
+      AND r.comment IS NOT NULL
+      AND length(btrim(r.comment)) > 0
+      AND p.is_active = true
+    ORDER BY RANDOM()
+    LIMIT ${HOME_FEATURED_REVIEW_POOL_SIZE}
+  `;
+  if (sampled.length === 0) return [];
+
   const rows = await prisma.reviews.findMany({
-    where: {
-      is_approved: true,
-      comment: { not: null },
-      products: { is_active: true },
-    },
-    orderBy: { created_at: "desc" },
-    take: 10,
+    where: { id: { in: sampled.map((row) => row.id) } },
     select: {
       id: true,
       rating: true,
@@ -112,9 +121,9 @@ async function loadFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
     .filter((review): review is HomeFeaturedReview => review !== null);
 }
 
-/** Latest approved reviews for homepage testimonial — ISR-safe (no session). */
+/** Approved review pool for homepage testimonials — client picks a random session set. */
 export function getFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
-  return unstable_cache(loadFeaturedHomeReviews, ["home-featured-reviews"], {
+  return unstable_cache(loadFeaturedHomeReviews, ["home-featured-reviews-pool"], {
     revalidate: HOME_PAGE_REVALIDATE_SECONDS,
     tags: [HOME_PAGE_TAG],
   })();

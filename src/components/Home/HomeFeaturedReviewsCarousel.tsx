@@ -14,7 +14,7 @@ type Props = {
 };
 
 export default function HomeFeaturedReviewsCarousel({ reviews }: Props) {
-  const poolKey = useMemo(() => reviews.map((review) => review.id).join(","), [reviews]);
+  const poolKey = useMemo(() => reviews.map((review) => review.id).sort().join(","), [reviews]);
   const [sessionReviews, setSessionReviews] = useState<HomeFeaturedReview[] | null>(null);
 
   useEffect(() => {
@@ -33,13 +33,16 @@ export default function HomeFeaturedReviewsCarousel({ reviews }: Props) {
     return <HomeFeaturedReviewCard review={sessionReviews[0]} />;
   }
 
+  const orderKey = sessionReviews.map((review) => review.id).join(",");
+
   return (
     <div className="home-featured-reviews-carousel -mx-1 px-1">
       <Swiper
+        key={orderKey}
         modules={[Autoplay, Pagination]}
         spaceBetween={16}
         slidesPerView={1}
-        loop
+        loop={sessionReviews.length > 2}
         autoplay={{
           delay: 5000,
           disableOnInteraction: false,

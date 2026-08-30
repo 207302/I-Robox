@@ -1,7 +1,6 @@
 import type { HomeFeaturedReview } from "@/lib/queries/productReviews";
 
-export const HOME_FEATURED_REVIEW_COUNT = 10;
-const STORAGE_KEY = "irobox.homeFeaturedReviewIds";
+const STORAGE_KEY = "irobox.homeFeaturedReviewOrder.v2";
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -43,27 +42,27 @@ function writeStoredIds(ids: string[]) {
   }
 }
 
-/** Unique random reviews for this browser session; a new session gets a new set. */
-export function pickHomeReviewsForSession(
-  pool: HomeFeaturedReview[],
-  count = HOME_FEATURED_REVIEW_COUNT
-): HomeFeaturedReview[] {
+/**
+ * Full unique shuffle for this browser session.
+ * Every eligible review is included; a new session gets a new order.
+ */
+export function pickHomeReviewsForSession(pool: HomeFeaturedReview[]): HomeFeaturedReview[] {
   const unique = uniqueById(pool);
   if (unique.length <= 1) return unique;
 
-  const limit = Math.min(count, unique.length);
   const byId = new Map(unique.map((review) => [review.id, review]));
-  const restored = readStoredIds()
-    .map((id) => byId.get(id))
-    .filter((review): review is HomeFeaturedReview => Boolean(review));
+  const uniqueIds = new Set(unique.map((review) => review.id));
+  const stored = readStoredIds();
+  const storedIsFullShuffle =
+    stored.length === unique.length &&
+    stored.every((id) => uniqueIds.has(id)) &&
+    new Set(stored).size === unique.length;
 
-  if (restored.length >= limit) {
-    return uniqueById(restored).slice(0, limit);
+  if (storedIsFullShuffle) {
+    return stored.map((id) => byId.get(id)!);
   }
 
-  const have = new Set(restored.map((review) => review.id));
-  const fillers = shuffle(unique.filter((review) => !have.has(review.id)));
-  const picked = uniqueById([...restored, ...fillers]).slice(0, limit);
-  writeStoredIds(picked.map((review) => review.id));
-  return picked;
+  const shuffled = shuffle(unique);
+  writeStoredIds(shuffled.map((review) => review.id));
+  return shuffled;
 }

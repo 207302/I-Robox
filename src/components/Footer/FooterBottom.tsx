@@ -65,7 +65,7 @@ export default function FooterBottom({ backgroundColor, textStyle, linkStyle }: 
               className={`text-sm font-normal ${textStyle ? "" : "text-dark"}`}
               style={textStyle}
             >
-              &copy; {year} Robox. All rights reserved.
+              &copy; {year} i-Robox. All rights reserved.
             </p>
             <p
               className={`mt-1 text-sm font-normal ${textStyle ? "" : "text-dark"}`}

@@ -1,6 +1,6 @@
 import type { HomeFeaturedReview } from "@/lib/queries/productReviews";
 
-const STORAGE_KEY = "irobox.homeFeaturedReviewOrder.v2";
+export const HOME_FEATURED_REVIEW_COUNT = 10;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -22,47 +22,13 @@ function uniqueById(reviews: HomeFeaturedReview[]): HomeFeaturedReview[] {
   return out;
 }
 
-function readStoredIds(): string[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === "string" && id.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredIds(ids: string[]) {
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    /* private mode / quota */
-  }
-}
-
 /**
- * Full unique shuffle for this browser session.
- * Every eligible review is included; a new session gets a new order.
+ * Pick a fresh random subset of reviews on every call (page load / refresh).
+ * Selection is client-side so each device and each reload gets a different set.
  */
 export function pickHomeReviewsForSession(pool: HomeFeaturedReview[]): HomeFeaturedReview[] {
   const unique = uniqueById(pool);
   if (unique.length <= 1) return unique;
 
-  const byId = new Map(unique.map((review) => [review.id, review]));
-  const uniqueIds = new Set(unique.map((review) => review.id));
-  const stored = readStoredIds();
-  const storedIsFullShuffle =
-    stored.length === unique.length &&
-    stored.every((id) => uniqueIds.has(id)) &&
-    new Set(stored).size === unique.length;
-
-  if (storedIsFullShuffle) {
-    return stored.map((id) => byId.get(id)!);
-  }
-
-  const shuffled = shuffle(unique);
-  writeStoredIds(shuffled.map((review) => review.id));
-  return shuffled;
+  return shuffle(unique).slice(0, HOME_FEATURED_REVIEW_COUNT);
 }

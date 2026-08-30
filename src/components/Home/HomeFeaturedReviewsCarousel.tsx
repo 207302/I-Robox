@@ -19,7 +19,9 @@ export default function HomeFeaturedReviewsCarousel({ reviews }: Props) {
 
   useEffect(() => {
     setSessionReviews(pickHomeReviewsForSession(reviews));
-  }, [poolKey, reviews]);
+    // poolKey captures the eligible ids; reshuffle on remount (refresh) and when the pool changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid reshuffling on new array identity
+  }, [poolKey]);
 
   if (reviews.length === 0) return null;
 

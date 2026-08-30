@@ -75,6 +75,7 @@ async function loadFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
       products: { is_active: true },
     },
     take: HOME_FEATURED_REVIEW_POOL_SIZE,
+    orderBy: { created_at: "desc" },
     select: {
       id: true,
       rating: true,
@@ -113,7 +114,7 @@ async function loadFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
     .filter((review): review is HomeFeaturedReview => review !== null);
 }
 
-/** Approved review pool for homepage testimonials — client picks a random session set. */
+/** Approved review pool for homepage testimonials — client picks 10 at random on each load. */
 export function getFeaturedHomeReviews(): Promise<HomeFeaturedReview[]> {
   return unstable_cache(loadFeaturedHomeReviews, ["home-featured-reviews-all"], {
     revalidate: HOME_PAGE_REVALIDATE_SECONDS,

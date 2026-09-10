@@ -17,6 +17,7 @@ import {
   HOME_RAIL_OUTER,
   HOME_RAIL_SCROLL,
 } from "./shared/homeRailStyles";
+import { isCloudinaryDeliveryUrl } from "@/lib/images/cloudinaryDeliver";
 
 const RAIL_ID = "home-category-rail";
 
@@ -91,6 +92,7 @@ export default function HomeCategoryTilesRail({ items }: HomeCategoryTilesRailPr
                     sizes={HOME_RAIL_IMAGE_SIZES}
                     className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                     loading="lazy"
+                    unoptimized={isCloudinaryDeliveryUrl(cat.image)}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center bg-gray-100 text-sm font-semibold text-meta-3">

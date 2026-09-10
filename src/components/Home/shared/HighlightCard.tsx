@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 import { HOME_HIGHLIGHTS_IMAGE_SIZES } from "./homeRailStyles";
+import { isCloudinaryDeliveryUrl } from "@/lib/images/cloudinaryDeliver";
 
 export type HighlightCardItem = {
   id: string;
@@ -27,6 +28,7 @@ export default function HighlightCard({ item }: { item: HighlightCardItem }) {
           sizes={HOME_HIGHLIGHTS_IMAGE_SIZES}
           className="object-cover"
           loading="lazy"
+          unoptimized={isCloudinaryDeliveryUrl(item.image)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-4 text-white">

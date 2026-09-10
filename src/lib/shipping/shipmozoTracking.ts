@@ -6,6 +6,7 @@ import {
   fetchShipmozoTrackOrder,
   discoverShipmozoOrdersForRef,
   appendShipmozoMetadata,
+  collectShipmozoLookupIds,
 } from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
@@ -517,30 +518,14 @@ function shipmentSnapshotChanged(
 }
 
 const DEFAULT_SYNC_MIN_AGE_MS = 10 * 60 * 1000;
-const DEFAULT_AWB_DISCOVERY_MIN_AGE_MS = 2 * 60 * 1000;
+/** Avoid re-polling the same unpaid-AWB orders every few minutes under DB load. */
+const DEFAULT_AWB_DISCOVERY_MIN_AGE_MS = 15 * 60 * 1000;
 
 function shipmozoMetaFromShipment(metadata: unknown): Record<string, unknown> {
   if (!metadata || typeof metadata !== "object") return {};
   const root = metadata as Record<string, unknown>;
   const shipmozo = root.shipmozo;
   return typeof shipmozo === "object" && shipmozo ? (shipmozo as Record<string, unknown>) : {};
-}
-
-async function resolveShipmozoLookupIds(orderId: string): Promise<string[]> {
-  const order = await prisma.orders.findUnique({
-    where: { id: orderId },
-    select: {
-      id: true,
-      order_number: true,
-      shipments: { select: { metadata: true } },
-    },
-  });
-  if (!order) return [];
-  const meta = shipmozoMetaFromShipment(order.shipments?.metadata);
-  return collectShipmozoLookupIds({
-    customerRef: shipmozoOrderRef(order),
-    metadata: meta,
-  });
 }
 
 /**
@@ -579,12 +564,11 @@ export async function syncShipmozoAwbForOrder(
       return { ok: true as const, skipped: true as const, reason: "recently_checked" as const };
     }
 
-    const lookupIds = await resolveShipmozoLookupIds(orderId);
+    const customerRef = shipmozoOrderRef(order);
+    const lookupIds = collectShipmozoLookupIds({ customerRef, metadata: meta });
     if (lookupIds.length === 0) {
       return { ok: true as const, skipped: true as const, reason: "no_shipmozo_ref" as const };
     }
-
-    const customerRef = shipmozoOrderRef(order);
     const discovery = await discoverShipmozoOrdersForRef({ lookupIds, customerRef });
     const panelIds = discovery.panelOrders.map((row) => row.shipmozo_order_id);
 
@@ -637,6 +621,18 @@ export async function syncShipmozoAwbForOrder(
       orderId,
       err: formatUnknownError(err),
     });
+    try {
+      await appendShipmozoMetadata(orderId, {
+        lastAwbDiscoveryAt: new Date().toISOString(),
+        lastAwbDiscovery: {
+          ok: false,
+          error: "awb_discovery_failed",
+          refreshedAt: new Date().toISOString(),
+        },
+      });
+    } catch {
+      /* keep the original failure */
+    }
     return { ok: false as const, error: "awb_discovery_failed" };
   }
 }
@@ -648,8 +644,10 @@ export async function runShipmozoAwbDiscoverySync() {
     1,
     Math.min(100, Number(process.env.SHIPMOZO_AWB_DISCOVERY_BATCH_SIZE ?? 30) || 30)
   );
+  const minAgeMs = Number(process.env.SHIPMOZO_AWB_DISCOVERY_MIN_AGE_MS ?? DEFAULT_AWB_DISCOVERY_MIN_AGE_MS);
 
-  const orders = await prisma.orders.findMany({
+  // Over-fetch so we can skip recently-checked orders without N findUnique round-trips.
+  const candidates = await prisma.orders.findMany({
     where: {
       payment_status: "SUCCEEDED",
       awb_number: null,
@@ -657,12 +655,29 @@ export async function runShipmozoAwbDiscoverySync() {
       created_at: { gte: since },
     },
     orderBy: [{ shipment_updated_at: "asc" }, { created_at: "desc" }],
-    take: batchSize,
-    select: { id: true },
+    take: Math.min(100, batchSize * 3),
+    select: {
+      id: true,
+      shipments: { select: { tracking_number: true, metadata: true } },
+    },
   });
 
+  const now = Date.now();
+  const orders = candidates
+    .filter((row) => {
+      const existingAwb = (row.shipments?.tracking_number ?? "").trim();
+      if (existingAwb) return false;
+      const meta = shipmozoMetaFromShipment(row.shipments?.metadata);
+      const lastCheck = meta.lastAwbDiscoveryAt
+        ? new Date(String(meta.lastAwbDiscoveryAt)).getTime()
+        : 0;
+      if (lastCheck && now - lastCheck < minAgeMs) return false;
+      return true;
+    })
+    .slice(0, batchSize);
+
   let discovered = 0;
-  let skipped = 0;
+  let skipped = candidates.length - orders.length;
   let failed = 0;
 
   for (const row of orders) {

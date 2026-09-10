@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { heroSlideImageProps } from "@/lib/images/heroLcpImage";
+import { isCloudinaryDeliveryUrl } from "@/lib/images/cloudinaryDeliver";
 import type { HeroSlide } from "./heroTypes";
 
 type Props = {
@@ -33,6 +34,7 @@ export default function HeroSlideImage({ slide, isLcp }: Props) {
         loading={loading}
         fetchPriority={fetchPriority}
         quality={isLcp ? 90 : 85}
+        unoptimized={isCloudinaryDeliveryUrl(mobileSrc)}
       />
       <Image
         src={desktopSrc}
@@ -44,6 +46,7 @@ export default function HeroSlideImage({ slide, isLcp }: Props) {
         loading={loading}
         fetchPriority={fetchPriority}
         quality={isLcp ? 90 : 85}
+        unoptimized={isCloudinaryDeliveryUrl(desktopSrc)}
       />
     </>
   );

@@ -12,6 +12,7 @@ import {
   HOME_RAIL_IMAGE_SIZES,
   HOME_RAIL_PRODUCT_TEXT_HEIGHT,
 } from "./homeRailStyles";
+import { isCloudinaryDeliveryUrl } from "@/lib/images/cloudinaryDeliver";
 
 export type HomeProductCardItem = {
   id: string;
@@ -83,6 +84,7 @@ export default function HomeProductCard({
             quality={85}
             priority={priority}
             loading={priority ? undefined : "lazy"}
+            unoptimized={isCloudinaryDeliveryUrl(item.image)}
           />
         </div>
         <div className={`flex ${HOME_RAIL_PRODUCT_TEXT_HEIGHT} shrink-0 flex-col justify-center gap-1 px-3`}>

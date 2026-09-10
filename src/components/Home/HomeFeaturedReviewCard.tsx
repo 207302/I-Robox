@@ -7,6 +7,7 @@ import ReviewStar from "@/components/Shop/ReviewStar";
 import { shouldPrefetchHref } from "@/lib/navigation/linkPrefetch";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 import type { HomeFeaturedReview } from "@/lib/queries/productReviews";
+import { isCloudinaryDeliveryUrl } from "@/lib/images/cloudinaryDeliver";
 
 export default function HomeFeaturedReviewCard({ review }: { review: HomeFeaturedReview }) {
   const [expanded, setExpanded] = useState(false);
@@ -36,6 +37,7 @@ export default function HomeFeaturedReviewCard({ review }: { review: HomeFeature
           fill
           sizes="96px"
           className="object-contain p-1"
+          unoptimized={isCloudinaryDeliveryUrl(review.productImageUrl ?? "")}
         />
       </Link>
       <div className="min-w-0 flex-1">

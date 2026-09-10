@@ -73,19 +73,21 @@ export function startShipmozoTrackingScheduler() {
   }
 
   const ms = minutes * 60 * 1000;
-  console.info("[ShipMozo] Running immediate backfill on startup");
-  void runPushWithLock();
-  // Backfill stuck paid orders again after warm-up, then on every tracking interval.
+  // Do not hammer Hostinger on boot — immediate push+tracking caused edge 429s after deploys.
+  const startupDelayMs = Math.max(
+    5 * 60 * 1000,
+    Number(process.env.SHIPMOZO_STARTUP_DELAY_MS ?? 5 * 60 * 1000) || 5 * 60 * 1000
+  );
   startupTimerId = setTimeout(() => {
     void runPushWithLock();
     void runWithLock();
-  }, 90 * 1000);
+  }, startupDelayMs);
   intervalId = setInterval(() => {
     void runPushWithLock();
     void runWithLock();
   }, ms);
   console.info(
-    `[shipmozo-tracking-scheduler] active — immediate push backfill, then push+tracking in 90s, then every ${minutes} min`
+    `[shipmozo-tracking-scheduler] active — first push+tracking in ${Math.round(startupDelayMs / 60000)} min, then every ${minutes} min`
   );
 }
 

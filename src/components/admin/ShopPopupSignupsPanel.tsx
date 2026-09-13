@@ -226,20 +226,27 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                 let recipients = rows.length;
                 let lastSmtpError: string | undefined;
                 let stopped = false;
+                let safety = 0;
+                const maxBatches = Math.ceil(Math.max(recipients, 1) / BROADCAST_BATCH_SIZE) + 5;
 
-                while (!stopped) {
+                while (!stopped && safety < maxBatches) {
+                  safety += 1;
                   setBroadcastProgress(
                     totalSent === 0
-                      ? `Sending batch…`
+                      ? `Sending to all ${recipients}…`
                       : `Sent ${totalSent} of ${recipients}…`
                   );
                   const result = await parseAdminJson<BroadcastResult>(
-                    await fetch("/api/admin/marketing/notify-signups/broadcast", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ offset, limit: BROADCAST_BATCH_SIZE }),
-                    })
+                    await fetchAdminWithRetry(
+                      "/api/admin/marketing/notify-signups/broadcast",
+                      {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ offset, limit: BROADCAST_BATCH_SIZE }),
+                      },
+                      { attempts: 3, delayMs: 3000 }
+                    )
                   );
                   if (result.skipped) {
                     const failures = result.failures ?? [];
@@ -274,14 +281,26 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                   allFailures.push(...(result.failures ?? []));
                   lastSmtpError = result.smtpError;
 
-                  if (result.done) break;
+                  const remaining =
+                    typeof result.remaining === "number"
+                      ? result.remaining
+                      : Math.max(0, recipients - (result.nextOffset ?? offset + BROADCAST_BATCH_SIZE));
 
-                  // Advance only after the progress check — comparing nextOffset to an
-                  // already-updated offset always looked like "no progress" and stopped at 40.
+                  if (result.done || remaining <= 0) break;
+
                   const nextOffset = result.nextOffset ?? offset + BROADCAST_BATCH_SIZE;
-                  if (nextOffset <= offset) break;
+                  if (nextOffset <= offset) {
+                    toast.error("Bulk send stalled — refresh and try again.");
+                    stopped = true;
+                    break;
+                  }
                   offset = nextOffset;
-                  await sleep(result.smtpError ? 8000 : 2000);
+                  await sleep(result.smtpError ? 8000 : 1500);
+                }
+
+                if (!stopped && safety >= maxBatches && totalSent < recipients) {
+                  toast.error(`Stopped early after ${totalSent} of ${recipients}. Try Send again.`);
+                  stopped = true;
                 }
 
                 if (!stopped) {

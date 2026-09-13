@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminWrite } from "@/lib/admin/rbac";
 import { assertSameOrigin } from "@/lib/security/origin";
-import { rateLimit } from "@/lib/security/rateLimit";
+import { rateLimitStorefront } from "@/lib/security/rateLimit";
 import { runAdminApiRoute } from "@/lib/api/runAdminApiRoute";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     async () => {
       try {
         assertSameOrigin(req);
-        await rateLimit(`admin_latest_drop_broadcast:${req.ip ?? "unknown"}`, 1);
+        await rateLimitStorefront(`admin_latest_drop_broadcast:${req.ip ?? "unknown"}`, 1);
       } catch (e: unknown) {
         if (e instanceof Error && e.message === "BAD_ORIGIN") {
           return NextResponse.json({ error: "Bad origin" }, { status: 403 });

@@ -273,10 +273,14 @@ export default function ShopPopupSignupsPanel({ loadOnMount = true, compact = fa
                   totalSent += result.sent ?? 0;
                   allFailures.push(...(result.failures ?? []));
                   lastSmtpError = result.smtpError;
-                  offset = result.nextOffset ?? offset + BROADCAST_BATCH_SIZE;
 
                   if (result.done) break;
-                  if ((result.nextOffset ?? offset) <= offset) break;
+
+                  // Advance only after the progress check — comparing nextOffset to an
+                  // already-updated offset always looked like "no progress" and stopped at 40.
+                  const nextOffset = result.nextOffset ?? offset + BROADCAST_BATCH_SIZE;
+                  if (nextOffset <= offset) break;
+                  offset = nextOffset;
                   await sleep(result.smtpError ? 8000 : 2000);
                 }
 

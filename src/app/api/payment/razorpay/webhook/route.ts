@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { verifyRazorpayWebhookSignature, getRazorpayClient } from "@/lib/payments/razorpay";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { releaseFlashSaleClaimForOrder } from "@/lib/flashSale/claims";
+import { releaseOrderInventoryReservations } from "@/lib/orders/createFailedOrderFromCheckoutContext";
 import { loadRazorpayCheckoutSession } from "@/lib/checkout/razorpayCheckoutSessions";
 import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
 import {
@@ -253,6 +254,7 @@ export async function POST(req: NextRequest) {
             await releaseFlashSaleClaimForOrder(failedOrder.id, tx);
           });
         }
+        await releaseOrderInventoryReservations(failedOrder.id);
         await writeAuditLog({
           entityType: "ORDER",
           entityId: failedOrder.id,

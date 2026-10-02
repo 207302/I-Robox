@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { expireUnpaidPaymentLinkOrders } from "@/lib/orders/expireUnpaidPaymentLinkOrders";
+import { releaseFailedPaymentReservations } from "@/lib/orders/createFailedOrderFromCheckoutContext";
 
 const ADVISORY_LOCK_ID = 82910428;
 
@@ -16,9 +17,10 @@ async function runWithLock() {
     if (!rows[0]?.locked) return;
     try {
       const result = await expireUnpaidPaymentLinkOrders();
-      if (result.cancelled > 0) {
+      const released = await releaseFailedPaymentReservations();
+      if (result.cancelled > 0 || released > 0) {
         console.info(
-          `[payment-link-expire] scanned=${result.scanned} cancelled=${result.cancelled}`
+          `[payment-link-expire] scanned=${result.scanned} cancelled=${result.cancelled} releasedFailedReservations=${released}`
         );
       }
     } finally {

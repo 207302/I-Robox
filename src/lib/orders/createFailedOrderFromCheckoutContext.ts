@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { CheckoutContext } from "@/lib/checkout/buildCheckoutContext";
 import { allocateNextOrderNumber } from "@/lib/orders/orderNumber";
 import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
+import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 
 const OUT_OF_STOCK_PREFIX = "OUT_OF_STOCK:";
 
@@ -29,6 +30,7 @@ export async function createFailedOrderFromCheckoutContext(
           payment_provider: "razorpay",
         },
       });
+      await releaseReservationsInTx(tx, existing.id);
       return existing;
     }
 
@@ -74,7 +76,7 @@ export async function createFailedOrderFromCheckoutContext(
     });
 
     for (const li of ctx.lineItems) {
-      const oi = await tx.order_items.create({
+      await tx.order_items.create({
         data: {
           order_id: order.id,
           product_id: li.productId,
@@ -85,10 +87,7 @@ export async function createFailedOrderFromCheckoutContext(
           quantity: li.quantity,
           subtotal_amount: li.subtotal,
         },
-        select: { id: true },
       });
-
-      await reserveInventoryForLine(tx, order.id, oi.id, li);
     }
 
     return order;
@@ -127,34 +126,68 @@ export async function reserveInventoryForLine(
   });
 }
 
-export async function releaseOrderInventoryReservations(orderId: string): Promise<string[]> {
-  const productIds: string[] = [];
-  await prisma.$transaction(async (tx) => {
-    const reservations = await tx.inventory_reservations.findMany({
-      where: { order_id: orderId, released_at: null },
-      select: { id: true, product_id: true, product_variant_id: true, quantity: true },
-    });
-    productIds.push(...reservations.map((r) => r.product_id));
+async function releaseReservationsInTx(tx: Tx, orderId: string): Promise<string[]> {
+  const reservations = await tx.inventory_reservations.findMany({
+    where: { order_id: orderId, released_at: null },
+    select: { id: true, product_id: true, product_variant_id: true, quantity: true },
+  });
 
-    for (const r of reservations) {
-      await tx.inventory.updateMany({
-        where: {
-          product_id: r.product_id,
-          product_variant_id: r.product_variant_id,
-          reserved_quantity: { gte: r.quantity },
-        },
-        data: {
-          reserved_quantity: { decrement: r.quantity },
-          available_quantity: { increment: r.quantity },
-        },
-      });
-      await tx.inventory_reservations.update({
-        where: { id: r.id },
-        data: { released_at: new Date() },
-      });
+  for (const r of reservations) {
+    await tx.inventory.updateMany({
+      where: {
+        product_id: r.product_id,
+        product_variant_id: r.product_variant_id,
+        reserved_quantity: { gte: r.quantity },
+      },
+      data: {
+        reserved_quantity: { decrement: r.quantity },
+        available_quantity: { increment: r.quantity },
+      },
+    });
+    await tx.inventory_reservations.update({
+      where: { id: r.id },
+      data: { released_at: new Date() },
+    });
+  }
+
+  return [...new Set(reservations.map((r) => r.product_id))];
+}
+
+export async function releaseOrderInventoryReservations(orderId: string): Promise<string[]> {
+  const productIds = await prisma.$transaction(
+    (tx) => releaseReservationsInTx(tx, orderId),
+    PRISMA_TRANSACTION_OPTIONS
+  );
+  return productIds;
+}
+
+/** Return stock held by unpaid failed checkouts. A failed payment must not keep units reserved. */
+export async function releaseFailedPaymentReservations(limit = 40): Promise<number> {
+  const orders = await prisma.orders.findMany({
+    where: {
+      status: "PAYMENT_FAILED",
+      payment_status: "FAILED",
+      inventory_reservations: { some: { released_at: null } },
+    },
+    select: { id: true },
+    take: limit,
+  });
+
+  const touched: string[] = [];
+  let released = 0;
+  for (const order of orders) {
+    const productIds = await releaseOrderInventoryReservations(order.id);
+    if (productIds.length > 0) {
+      released += 1;
+      touched.push(...productIds);
     }
-  }, PRISMA_TRANSACTION_OPTIONS);
-  return [...new Set(productIds)];
+  }
+  if (touched.length > 0) {
+    await syncLowStockAlertsByProductIds(touched).catch((err) => {
+      console.error("[payment-failed] low stock sync failed", err);
+    });
+  }
+  return released;
 }
 
 export async function confirmReservedInventoryAsSold(orderId: string, tx: Tx) {

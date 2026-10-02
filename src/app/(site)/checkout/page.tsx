@@ -429,6 +429,7 @@ export default function CheckoutPage() {
       if (prefillEmail) prefill.email = prefillEmail;
       if (prefillContact) prefill.contact = prefillContact;
 
+      let checkoutSettled = false;
       const rz = new window.Razorpay({
         key: createData.keyId,
         amount: createData.amount,
@@ -438,6 +439,7 @@ export default function CheckoutPage() {
         description: "Order payment",
         ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
         handler: async (response: any) => {
+          checkoutSettled = true;
           try {
             const verifyRes = await fetch("/api/payment/razorpay/verify", {
               method: "POST",
@@ -476,29 +478,18 @@ export default function CheckoutPage() {
           }
         },
         modal: {
-          ondismiss: async () => {
+          ondismiss: () => {
+            if (checkoutSettled) return;
+            checkoutSettled = true;
             setLoading(false);
-            try {
-              const res = await fetch("/api/payment/razorpay/record-failure", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ checkoutSeal, razorpayOrderId }),
-              });
-              const data = await res.json().catch(() => ({}));
-              if (res.ok && typeof data?.orderId === "string") {
-                toast.error("Payment cancelled. You can retry from your orders.");
-                router.replace(`/orders/${data.orderId}`);
-                return;
-              }
-            } catch {
-              /* fall through */
-            }
             toast.error("Payment cancelled");
           },
         },
       });
 
       rz.on("payment.failed", async () => {
+        if (checkoutSettled) return;
+        checkoutSettled = true;
         setLoading(false);
         try {
           const res = await fetch("/api/payment/razorpay/record-failure", {

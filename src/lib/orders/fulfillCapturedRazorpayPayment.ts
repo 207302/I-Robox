@@ -265,7 +265,29 @@ async function upgradeExistingCapturedOrder(input: {
 
   try {
     await prisma.$transaction(async (tx) => {
-      await confirmReservedInventoryAsSold(existing.id, tx);
+      const openReservations = await tx.inventory_reservations.count({
+        where: { order_id: existing.id, released_at: null },
+      });
+      if (openReservations > 0) {
+        await confirmReservedInventoryAsSold(existing.id, tx);
+      } else {
+        for (const li of ctx.lineItems) {
+          const updated = await tx.inventory.updateMany({
+            where: {
+              product_id: li.productId,
+              product_variant_id: null,
+              available_quantity: { gte: li.quantity },
+            },
+            data: {
+              available_quantity: { decrement: li.quantity },
+              sold_quantity: { increment: li.quantity },
+            },
+          });
+          if (updated.count !== 1) {
+            throw new Error(`${OUT_OF_STOCK_PREFIX}${li.productName} (${li.productId})`);
+          }
+        }
+      }
       await tx.orders.update({
         where: { id: existing.id },
         data: {

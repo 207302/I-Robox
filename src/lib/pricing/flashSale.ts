@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { FLASH_SALES_TAG } from "@/lib/cache/tags";
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
   bestFlashSaleMatch,
@@ -41,14 +43,41 @@ function mapFlashSaleRow(row: {
   };
 }
 
-export async function loadActiveFlashSaleRules(now = new Date()): Promise<FlashSaleRule[]> {
+type CachedFlashSaleRule = Omit<FlashSaleRule, "active_from" | "active_until"> & {
+  active_from: string | null;
+  active_until: string | null;
+};
+
+async function queryActiveFlashSaleRuleRows(): Promise<CachedFlashSaleRule[]> {
   const rows = await prisma.flash_sales.findMany({
     where: { is_active: true },
     include: flashSaleInclude,
     orderBy: { updated_at: "desc" },
   });
+  return rows.map((row) => {
+    const mapped = mapFlashSaleRow(row);
+    return {
+      ...mapped,
+      active_from: mapped.active_from ? mapped.active_from.toISOString() : null,
+      active_until: mapped.active_until ? mapped.active_until.toISOString() : null,
+    };
+  });
+}
+
+const getCachedActiveFlashSaleRuleRows = unstable_cache(
+  queryActiveFlashSaleRuleRows,
+  ["active-flash-sale-rules"],
+  { revalidate: 60, tags: [FLASH_SALES_TAG] }
+);
+
+export async function loadActiveFlashSaleRules(now = new Date()): Promise<FlashSaleRule[]> {
+  const rows = await getCachedActiveFlashSaleRuleRows();
   return rows
-    .map(mapFlashSaleRow)
+    .map((rule) => ({
+      ...rule,
+      active_from: rule.active_from ? new Date(rule.active_from) : null,
+      active_until: rule.active_until ? new Date(rule.active_until) : null,
+    }))
     .filter((rule) => isActiveInWindow(rule.is_active, rule.active_from, rule.active_until, now));
 }
 

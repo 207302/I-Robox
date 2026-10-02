@@ -1,8 +1,7 @@
 /**
  * Anonymous shop listing JSON.
  * - `facets=0` skips facet aggregation (pagination-only; client merges prior facets).
- * - Search `q` bypasses server data cache; shorter CDN max-age (10s).
- * - Filter-only URLs: listing `unstable_cache` 30s + facets 600s (separate layers), merged before respond.
+ * - Search `q` is cached for 20s. Filter-only URLs: listing cache 300s + facets 600s, merged before respond.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { runApiRoute } from "@/lib/api/runApiRoute";

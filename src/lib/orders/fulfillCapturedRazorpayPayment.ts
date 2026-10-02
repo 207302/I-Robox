@@ -8,12 +8,34 @@ import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { getRazorpayClient } from "@/lib/payments/razorpay";
 import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
 import {
-  claimFlashSaleForOrderInTx,
+  createFlashSaleClaimInTx,
   FlashSaleClaimError,
+  resolveFlashSaleCartClaim,
 } from "@/lib/flashSale/claims";
+import { isPrismaPoolSaturationError } from "@/lib/prismaRetry";
 
 const REFUND_ERROR_MAX = 2000;
 const OUT_OF_STOCK_PREFIX = "OUT_OF_STOCK:";
+const FULFILL_ATTEMPTS = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isStockFailure(error: unknown): boolean {
+  if (error instanceof StockValidationError) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.startsWith(OUT_OF_STOCK_PREFIX);
+}
+
+function stockFailureMessage(error: unknown): string {
+  if (error instanceof StockValidationError) return error.message;
+  const msg = error instanceof Error ? error.message : "";
+  if (msg.startsWith(OUT_OF_STOCK_PREFIX)) {
+    return `${msg.slice(OUT_OF_STOCK_PREFIX.length)} went out of stock while paying`;
+  }
+  return "One or more items are out of stock";
+}
 
 export class RazorpayFulfillHttpError extends Error {
   constructor(
@@ -234,6 +256,13 @@ async function upgradeExistingCapturedOrder(input: {
   razorpayPaymentId: string;
 }): Promise<FulfilledRazorpayOrder> {
   const { existing, ctx, razorpayOrderId, razorpayPaymentId } = input;
+  const resolvedClaim = await resolveFlashSaleCartClaim(
+    ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
+  );
+  if (!resolvedClaim.ok) {
+    throw new FlashSaleClaimError(resolvedClaim.error);
+  }
+
   try {
     await prisma.$transaction(async (tx) => {
       await confirmReservedInventoryAsSold(existing.id, tx);
@@ -267,13 +296,10 @@ async function upgradeExistingCapturedOrder(input: {
           select: { id: true },
         });
         if (!existingClaim) {
-          await claimFlashSaleForOrderInTx(tx, {
+          await createFlashSaleClaimInTx(tx, {
             customerId: existing.customer_id,
             orderId: existing.id,
-            lines: ctx.lineItems.map((li) => ({
-              productId: li.productId,
-              quantity: li.quantity,
-            })),
+            claim: resolvedClaim.claim,
           });
         }
       }
@@ -310,6 +336,13 @@ async function createNewPaidOrder(input: {
 }): Promise<FulfilledRazorpayOrder> {
   const { ctx, razorpayOrderId, razorpayPaymentId } = input;
   try {
+    const resolvedClaim = await resolveFlashSaleCartClaim(
+      ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
+    );
+    if (!resolvedClaim.ok) {
+      throw new FlashSaleClaimError(resolvedClaim.error);
+    }
+
     const created = await prisma.$transaction(async (tx) => {
       const addr = await tx.addresses.create({
         data: {
@@ -408,13 +441,10 @@ async function createNewPaidOrder(input: {
       if (!ctx.checkoutUserId) {
         throw new FlashSaleClaimError("Customer account is required");
       }
-      await claimFlashSaleForOrderInTx(tx, {
+      await createFlashSaleClaimInTx(tx, {
         customerId: ctx.checkoutUserId,
         orderId: order.id,
-        lines: ctx.lineItems.map((li) => ({
-          productId: li.productId,
-          quantity: li.quantity,
-        })),
+        claim: resolvedClaim.claim,
       });
 
       return order;
@@ -502,60 +532,62 @@ export async function fulfillCapturedRazorpayPayment(input: {
     });
   }
 
-  try {
-    await assertCartItemsInStock(
-      ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
-      new Map(ctx.lineItems.map((li) => [li.productId, li.productName]))
-    );
-  } catch (stockErr) {
-    if (!(stockErr instanceof StockValidationError)) throw stockErr;
-    await refundAndExplain({
-      ctx,
-      razorpayOrderId,
-      razorpayPaymentId,
-      amountPaise: expectedAmountPaise,
-      userMessage: stockErr.message,
-      logLabel: "auto-refund after stock failure",
-    });
-  }
+  return placePaidOrderWithRetry();
 
-  try {
-    return await createNewPaidOrder({ ctx, razorpayOrderId, razorpayPaymentId });
-  } catch (e: unknown) {
-    const msg = String(e instanceof Error ? e.message : "");
-    if (msg.startsWith(OUT_OF_STOCK_PREFIX) || e instanceof StockValidationError) {
-      const stockDetail = msg.startsWith(OUT_OF_STOCK_PREFIX)
-        ? `${msg.slice(OUT_OF_STOCK_PREFIX.length)} went out of stock while paying`
-        : msg;
-      await refundAndExplain({
-        ctx,
-        razorpayOrderId,
-        razorpayPaymentId,
-        amountPaise: expectedAmountPaise,
-        userMessage: e instanceof StockValidationError ? e.message : stockDetail,
-        logLabel: "auto-refund after stock failure",
-      });
+  async function placePaidOrderWithRetry(): Promise<FulfilledRazorpayOrder> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < FULFILL_ATTEMPTS; attempt++) {
+      try {
+        await assertCartItemsInStock(
+          ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
+          new Map(ctx.lineItems.map((li) => [li.productId, li.productName]))
+        );
+        return await createNewPaidOrder({ ctx, razorpayOrderId, razorpayPaymentId });
+      } catch (e: unknown) {
+        lastError = e;
+        const msg = String(e instanceof Error ? e.message : "");
+        if (e instanceof FlashSaleClaimError) {
+          return refundAndExplain({
+            ctx,
+            razorpayOrderId,
+            razorpayPaymentId,
+            amountPaise: paymentAmountPaise,
+            userMessage: e.message,
+            logLabel: "auto-refund after flash claim failure",
+          });
+        }
+        if (msg.startsWith("MAX_ORDER_QTY_EXCEEDED:")) {
+          const [, productName, maxRaw] = msg.split(":");
+          const maxQty = Number(maxRaw);
+          throw new RazorpayFulfillHttpError(
+            Number.isFinite(maxQty)
+              ? `${productName || "This item"} allows max ${maxQty} per order`
+              : "One or more items exceed the per-order quantity limit",
+            400
+          );
+        }
+        const retryable = isPrismaPoolSaturationError(e) || isStockFailure(e);
+        if (!retryable || attempt === FULFILL_ATTEMPTS - 1) {
+          if (isStockFailure(e)) {
+            return refundAndExplain({
+              ctx,
+              razorpayOrderId,
+              razorpayPaymentId,
+              amountPaise: expectedAmountPaise,
+              userMessage: stockFailureMessage(e),
+              logLabel: "auto-refund after stock failure",
+            });
+          }
+          throw e;
+        }
+        console.warn("[razorpay] retrying order fulfill", {
+          attempt: attempt + 1,
+          paymentId: razorpayPaymentId,
+          message: msg.slice(0, 180),
+        });
+        await sleep(300 * (attempt + 1));
+      }
     }
-    if (e instanceof FlashSaleClaimError) {
-      await refundAndExplain({
-        ctx,
-        razorpayOrderId,
-        razorpayPaymentId,
-        amountPaise: paymentAmountPaise,
-        userMessage: e.message,
-        logLabel: "auto-refund after flash claim failure",
-      });
-    }
-    if (msg.startsWith("MAX_ORDER_QTY_EXCEEDED:")) {
-      const [, productName, maxRaw] = msg.split(":");
-      const maxQty = Number(maxRaw);
-      throw new RazorpayFulfillHttpError(
-        Number.isFinite(maxQty)
-          ? `${productName || "This item"} allows max ${maxQty} per order`
-          : "One or more items exceed the per-order quantity limit",
-        400
-      );
-    }
-    throw e;
+    throw lastError;
   }
 }

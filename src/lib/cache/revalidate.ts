@@ -1,6 +1,7 @@
 import "server-only";
 
 import { revalidatePath, revalidateTag } from "next/cache";
+import { clearShopListingMemoryCache } from "@/lib/shop/shopListingMemory";
 import { prisma } from "@/lib/prisma";
 import {
   ANNOUNCEMENTS_TAG,
@@ -27,6 +28,9 @@ export const STORE_PATHS = {
 } as const;
 
 function revalidateTags(...tags: string[]) {
+  if (tags.includes(SHOP_LISTING_TAG) || tags.includes(PRODUCT_CATALOG_TAG)) {
+    clearShopListingMemoryCache();
+  }
   for (const tag of tags) {
     revalidateTag(tag, "max");
   }

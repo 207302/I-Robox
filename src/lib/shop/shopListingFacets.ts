@@ -10,10 +10,12 @@ import {
 } from "@/lib/shop/shopFacets";
 import { slugMatchOrClause, slugVariants } from "@/lib/shop/categoryTree";
 import { profiledQuery, type ShopListingProfile } from "@/lib/shop/shopListingProfile";
+import { createSingleflightCache } from "@/lib/cache/singleflight";
 import { onCacheMiss } from "@/lib/observability/cache";
 
 /** Per-filter facet bundle cache TTL (GET /api/products facet layer). */
 export const SHOP_LISTING_FACETS_REVALIDATE_SECONDS = 600;
+const SHOP_LISTING_SEARCH_FACETS_REVALIDATE_SECONDS = 20;
 
 /** Full catalog options for sidebar filters (counts merged per current listing context). */
 const getCachedCatalogBrands = unstable_cache(
@@ -102,6 +104,11 @@ export type ListingFacetsBundle = {
   productCollections: ListingFacetRow[];
   discountBuckets: { id: string; label: string; count: number }[];
 };
+
+const facetCoalesce = createSingleflightCache<ListingFacetsBundle>({ maxEntries: 1 });
+const brandSlugCoalesce = createSingleflightCache<{ id: string; slug: string }[]>({
+  maxEntries: 1,
+});
 
 export type FacetCacheParams = {
   q: string;
@@ -264,23 +271,33 @@ async function loadListingFacetsInternal(ctx: FacetLoadContext): Promise<Listing
   };
 }
 
+function facetCacheIdentity(p: FacetCacheParams): { key: string; revalidate: number } {
+  const filtered = buildFacetCacheKey({ ...p, q: "" });
+  if (!p.q.trim() && filtered) {
+    return { key: filtered, revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS };
+  }
+  return {
+    key: JSON.stringify({ q: p.q.trim().toLowerCase(), filters: filtered }),
+    revalidate: SHOP_LISTING_SEARCH_FACETS_REVALIDATE_SECONDS,
+  };
+}
+
 export async function loadListingFacets(
   cacheParams: FacetCacheParams,
   ctx: FacetLoadContext
 ): Promise<ListingFacetsBundle> {
-  const key = buildFacetCacheKey(cacheParams);
-  if (!key) {
-    return loadListingFacetsInternal(ctx);
-  }
+  const { key, revalidate } = facetCacheIdentity(cacheParams);
 
-  return unstable_cache(
-    onCacheMiss(`shop-listing-facets:${key}`, () => loadListingFacetsInternal(ctx)),
-    ["shop-listing-facets", key],
-    {
-      revalidate: SHOP_LISTING_FACETS_REVALIDATE_SECONDS,
-      tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG],
-    }
-  )();
+  return facetCoalesce.load(key, 0, () =>
+    unstable_cache(
+      onCacheMiss(`shop-listing-facets:${key}`, () => loadListingFacetsInternal(ctx)),
+      ["shop-listing-facets", key],
+      {
+        revalidate,
+        tags: [PRODUCT_CATALOG_TAG, SHOP_LISTING_TAG],
+      }
+    )()
+  );
 }
 
 /** Batch-resolve brand slugs → ids (one query instead of N findFirst). */
@@ -300,11 +317,13 @@ export async function resolveBrandIdsForSlugs(
   if (brandSlugs.length === 0) return [];
   const slugKey = [...new Set(brandSlugs.map((s) => s.trim()).filter(Boolean))].sort().join("|");
   const rows = await profiledQuery(profile, "brands.resolveSlugs", () =>
-    unstable_cache(
-      onCacheMiss(`brand-slugs-resolve:${slugKey}`, () => fetchBrandsForSlugKey(slugKey)),
-      ["brand-slugs-resolve", slugKey],
-      { revalidate: 300, tags: [BRANDS_TAG, PRODUCT_CATALOG_TAG] }
-    )()
+    brandSlugCoalesce.load(slugKey, 0, () =>
+      unstable_cache(
+        onCacheMiss(`brand-slugs-resolve:${slugKey}`, () => fetchBrandsForSlugKey(slugKey)),
+        ["brand-slugs-resolve", slugKey],
+        { revalidate: 300, tags: [BRANDS_TAG, PRODUCT_CATALOG_TAG] }
+      )()
+    )
   );
   const ids: string[] = [];
   for (const slug of brandSlugs) {

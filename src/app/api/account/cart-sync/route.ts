@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { assertSameOrigin } from "@/lib/security/origin";
 import { rateLimitStorefront } from "@/lib/security/rateLimit";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 
@@ -44,45 +45,40 @@ export async function POST(req: NextRequest) {
       items.push({ productId, quantity });
     }
   
+    const priceById = new Map<string, number>();
+    if (items.length > 0) {
+      const productIds = [...new Set(items.map((i) => i.productId))];
+      const [products, flashMap] = await Promise.all([
+        prisma.products.findMany({
+          where: { id: { in: productIds }, is_active: true },
+          select: { id: true, base_price: true, discounted_price: true },
+        }),
+        flashSalePriceMap(productIds),
+      ]);
+      for (const p of products) {
+        const base = Number(p.base_price);
+        const disc = p.discounted_price != null ? Number(p.discounted_price) : null;
+        const catalog = disc ?? base;
+        priceById.set(p.id, unitPriceWithFlashSale(catalog, p.id, flashMap));
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       let cart = await tx.carts.findFirst({
         where: { customer_id: session.sub, status: "ACTIVE" },
         select: { id: true },
       });
       if (!cart && items.length === 0) return;
-  
+
       if (!cart) {
         cart = await tx.carts.create({
           data: { customer_id: session.sub, status: "ACTIVE" },
           select: { id: true },
         });
       }
-  
+
       await tx.cart_items.deleteMany({ where: { cart_id: cart.id } });
-  
-      if (items.length === 0) {
-        await tx.carts.update({
-          where: { id: cart.id },
-          data: { abandoned_reminder_sent_at: null, updated_at: new Date() },
-        });
-        return;
-      }
-  
-      const productIds = [...new Set(items.map((i) => i.productId))];
-      const products = await tx.products.findMany({
-        where: { id: { in: productIds }, is_active: true },
-        select: { id: true, base_price: true, discounted_price: true },
-      });
-      const flashMap = await flashSalePriceMap(productIds);
-      const priceById = new Map<string, number>();
-      for (const p of products) {
-        const base = Number(p.base_price);
-        const disc = p.discounted_price != null ? Number(p.discounted_price) : null;
-        const catalog = disc ?? base;
-        const unit = unitPriceWithFlashSale(catalog, p.id, flashMap);
-        priceById.set(p.id, unit);
-      }
-  
+
       const rows = items
         .filter((i) => priceById.has(i.productId))
         .map((i) => ({
@@ -92,16 +88,16 @@ export async function POST(req: NextRequest) {
           quantity: i.quantity,
           unit_price: priceById.get(i.productId)!,
         }));
-  
+
       if (rows.length > 0) {
         await tx.cart_items.createMany({ data: rows });
       }
-  
+
       await tx.carts.update({
         where: { id: cart.id },
         data: { abandoned_reminder_sent_at: null, updated_at: new Date() },
       });
-    });
+    }, PRISMA_TRANSACTION_OPTIONS);
   
     return NextResponse.json({ ok: true }, { status: 200 });
   

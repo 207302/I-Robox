@@ -24,7 +24,7 @@ import {
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
   assertCustomerCanClaimFlashSale,
-  claimFlashSaleForOrderInTx,
+  createFlashSaleClaimInTx,
   FlashSaleClaimError,
   resolveFlashSaleCartClaim,
 } from "@/lib/flashSale/claims";
@@ -477,13 +477,10 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await claimFlashSaleForOrderInTx(tx, {
+      await createFlashSaleClaimInTx(tx, {
         customerId: checkoutUserId!,
         orderId: createdOrder.id,
-        lines: lineItems.map((li) => ({
-          productId: li.productId,
-          quantity: li.quantity,
-        })),
+        claim: flashClaimResolved.claim,
       });
   
       return createdOrder;

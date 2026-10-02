@@ -18,7 +18,7 @@ module.exports = {
       max_memory_restart: "450M",
       env_production: {
         NODE_ENV: "production",
-        DATABASE_CONNECTION_LIMIT: "2",
+        DATABASE_CONNECTION_LIMIT: "8",
       },
     },
   ],

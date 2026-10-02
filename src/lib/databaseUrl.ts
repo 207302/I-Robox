@@ -25,7 +25,7 @@ export function normalizeDatabaseUrl(raw: string, opts?: NormalizeUrlOptions): s
 
     if (opts?.pooled) {
       u.searchParams.set("connection_limit", connectionLimitForRuntime());
-      u.searchParams.set("pool_timeout", building ? "60" : "20");
+      u.searchParams.set("pool_timeout", building ? "60" : "10");
       if (u.hostname.includes("-pooler.")) {
         u.searchParams.set("pgbouncer", "true");
       } else {
@@ -43,7 +43,13 @@ export function normalizeDatabaseUrl(raw: string, opts?: NormalizeUrlOptions): s
   }
 }
 
-/** Pooled app runtime. Build: low limit per worker. Prod: 1/process. Dev: 10. */
+/**
+ * One Hostinger Node process serves catalog, cart, and checkout together.
+ * A pool of 1–2 stalls the site as soon as a listing query holds a connection.
+ */
+const PRODUCTION_CONNECTION_LIMIT = 8;
+
+/** Pooled app runtime. Build: low limit per worker. Prod: at least 8/process. Dev: 10. */
 export function connectionLimitForRuntime(): string {
   if (isProductionBuildPhase()) {
     const build = process.env.BUILD_DATABASE_CONNECTION_LIMIT?.trim();
@@ -52,8 +58,11 @@ export function connectionLimitForRuntime(): string {
   }
   if (process.env.NODE_ENV !== "production") return "10";
   const fromEnv = process.env.DATABASE_CONNECTION_LIMIT?.trim();
-  if (fromEnv && /^\d+$/.test(fromEnv)) return fromEnv;
-  return "1";
+  if (fromEnv && /^\d+$/.test(fromEnv)) {
+    const requested = Number(fromEnv);
+    if (requested >= PRODUCTION_CONNECTION_LIMIT) return String(requested);
+  }
+  return String(PRODUCTION_CONNECTION_LIMIT);
 }
 
 export function deriveDirectUrlFromPooled(pooledUrl: string): string {

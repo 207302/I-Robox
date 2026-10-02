@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prismaReady } from "@/lib/prisma";
 
 function isTransientConnectionError(error: unknown) {
+  if (isPrismaPoolSaturationError(error)) return false;
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     return error.code === "P1001" || error.code === "P1002" || error.code === "P1017";
   }
@@ -10,6 +11,17 @@ function isTransientConnectionError(error: unknown) {
     /Can't reach database server|Connection timed out|ECONNREFUSED|ETIMEDOUT|PostgreSQL connection|kind: Closed|Connection closed|Connection terminated|timer has gone away|library already starting|PrismaClientRustPanicError/i.test(
       msg
     )
+  );
+}
+
+/** Pool wait, interactive-transaction start/expiry, or a write conflict. Safe to retry. */
+export function isPrismaPoolSaturationError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2024" || error.code === "P2028" || error.code === "P2034") return true;
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  return /Unable to start a transaction|Transaction already closed|Transaction not found|Timed out fetching a new connection from the connection pool/i.test(
+    msg
   );
 }
 

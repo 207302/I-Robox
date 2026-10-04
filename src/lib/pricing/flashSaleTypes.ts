@@ -3,6 +3,7 @@ export type FlashDiscountType = (typeof FLASH_DISCOUNT_TYPES)[number];
 
 export type FlashSaleRule = {
   id: string;
+  name?: string | null;
   /** Max units per customer for this sale. 0 = unlimited. */
   purchase_limit: number;
   discount_type: FlashDiscountType;
@@ -121,6 +122,23 @@ export function bestLimitedFlashSaleMatch(
     }
   }
   return best;
+}
+
+/**
+ * Every live limited sale whose scope covers the product. Each unit of the product counts
+ * toward all of them, whichever rule supplied the price.
+ */
+export function limitedFlashSalesForProduct(
+  product: Pick<FlashProductContext, "id" | "category_id" | "brand_id">,
+  rules: FlashSaleRule[],
+  isLive: (rule: FlashSaleRule) => boolean
+): FlashSaleRule[] {
+  return rules.filter(
+    (rule) =>
+      isLive(rule) &&
+      flashSaleIsLimited(rule.purchase_limit) &&
+      productMatchesFlashSale(product, rule)
+  );
 }
 
 /** Prefer the price-winning limited rule; otherwise any matching limited sale. */

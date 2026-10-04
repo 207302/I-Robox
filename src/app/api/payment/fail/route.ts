@@ -43,7 +43,13 @@ export async function POST(req: NextRequest) {
       failApplied = await prisma.$transaction(async (tx) => {
         const order = await tx.orders.findUnique({
           where: { id: orderId },
-          select: { id: true, customer_id: true, payment_status: true, status: true },
+          select: {
+            id: true,
+            customer_id: true,
+            payment_status: true,
+            status: true,
+            payment_provider: true,
+          },
         });
         if (!order) throw new Error("NOT_FOUND");
         const isOwner = Boolean(session?.sub && order.customer_id && order.customer_id === session.sub);
@@ -51,6 +57,8 @@ export async function POST(req: NextRequest) {
           Boolean(accessToken) && verifyOrderAccessToken(accessToken, orderId);
         if (!isOwner && !hasCheckoutAccess) throw new Error("FORBIDDEN");
         if (order.payment_status === "FAILED") return false;
+        // COD orders stay payment PENDING until delivery; only staff may cancel them.
+        if (order.payment_provider === "cod") return false;
         // Never move a completed/refunded payment backwards (would also free flash-sale claims).
         if (
           order.payment_status === "SUCCEEDED" ||

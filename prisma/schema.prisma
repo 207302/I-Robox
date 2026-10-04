@@ -393,7 +393,7 @@ model orders {
   coupon_usages                                   coupon_usages[]
   inventory_reservations                          inventory_reservations[]
   order_items                                     order_items[]
-  flash_sale_claims                               flash_sale_claims?
+  flash_sale_claims                               flash_sale_claims[]
   addresses_orders_billing_address_idToaddresses  addresses?               @relation("orders_billing_address_idToaddresses", fields: [billing_address_id], references: [id], onUpdate: NoAction)
   coupons                                         coupons?                 @relation(fields: [coupon_id], references: [id], onUpdate: NoAction)
   addresses_orders_shipping_address_idToaddresses addresses?               @relation("orders_shipping_address_idToaddresses", fields: [shipping_address_id], references: [id], onUpdate: NoAction)
@@ -941,14 +941,16 @@ model flash_sales {
   @@index([active_until], map: "idx_flash_sales_active_until")
 }
 
-/// Units purchased toward a per-customer flash-sale limit (one row per order).
+/// Units purchased toward a per-customer flash-sale limit (one row per order per limited sale).
 model flash_sale_claims {
   id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   customer_id   String      @db.Uuid
   sale_tag      String      @db.VarChar(80)
   flash_sale_id String?     @db.Uuid
-  order_id      String      @unique @db.Uuid
+  order_id      String      @db.Uuid
   quantity      Int         @default(1)
+  /// Last 10 digits of the shipping phone; limits also apply per phone across accounts.
+  phone         String?     @db.VarChar(20)
   created_at    DateTime    @default(now()) @db.Timestamptz(6)
   customers     customers   @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   flash_sales   flash_sales? @relation(fields: [flash_sale_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
@@ -957,6 +959,8 @@ model flash_sale_claims {
   @@index([customer_id, sale_tag], map: "idx_flash_sale_claims_customer_sale_tag")
   @@index([customer_id], map: "idx_flash_sale_claims_customer_id")
   @@index([sale_tag], map: "idx_flash_sale_claims_sale_tag")
+  @@unique([order_id, sale_tag], map: "flash_sale_claims_order_id_sale_tag_key")
+  @@index([sale_tag, phone], map: "idx_flash_sale_claims_sale_tag_phone")
 }
 
 /// Products included in a flash sale rule (many per campaign).

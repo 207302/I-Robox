@@ -21,12 +21,11 @@ import {
   readJsonBody,
   isUuid,
 } from "@/lib/validation/input";
-import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
 import {
-  assertCustomerCanClaimFlashSale,
-  createFlashSaleClaimInTx,
+  assertCustomerCanClaimFlashSales,
+  createFlashSaleClaimsInTx,
   FlashSaleClaimError,
-  resolveFlashSaleCartClaim,
+  resolveFlashSaleCart,
 } from "@/lib/flashSale/claims";
 import {
   couponDiscountFromLines,
@@ -276,12 +275,31 @@ export async function POST(req: NextRequest) {
   
     const coupon = couponCode ? await fetchCouponForCart(couponCode) : null;
   
-    const flashMap = await flashSalePriceMap(productIds);
+    const flashCart = await resolveFlashSaleCart(
+      items.map((i) => ({ productId: i.productId, quantity: i.quantity }))
+    );
+    if (!flashCart.ok) {
+      return NextResponse.json({ error: flashCart.error }, { status: 400 });
+    }
+    if (!checkoutUserId) {
+      return NextResponse.json({ error: "Customer account is required" }, { status: 400 });
+    }
+    try {
+      await assertCustomerCanClaimFlashSales(
+        { customerId: checkoutUserId, phone },
+        flashCart.claims
+      );
+    } catch (e: unknown) {
+      if (e instanceof FlashSaleClaimError) {
+        return NextResponse.json({ error: e.message }, { status: 409 });
+      }
+      throw e;
+    }
   
     const lineItems = items.map((i) => {
       const p = productMap.get(i.productId)!;
-      const catalogUnit = Number(p.discounted_price ?? p.base_price);
-      const unit = unitPriceWithFlashSale(catalogUnit, p.id, flashMap);
+      const unit =
+        flashCart.unitPrices.get(p.id) ?? Number(p.discounted_price ?? p.base_price);
       return {
         productId: p.id,
         productName: p.name,
@@ -372,24 +390,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    const flashClaimResolved = await resolveFlashSaleCartClaim(
-      lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
-    );
-    if (!flashClaimResolved.ok) {
-      return NextResponse.json({ error: flashClaimResolved.error }, { status: 400 });
-    }
-    if (!checkoutUserId) {
-      return NextResponse.json({ error: "Customer account is required" }, { status: 400 });
-    }
-    try {
-      await assertCustomerCanClaimFlashSale(checkoutUserId, flashClaimResolved.claim);
-    } catch (e: unknown) {
-      if (e instanceof FlashSaleClaimError) {
-        return NextResponse.json({ error: e.message }, { status: 409 });
-      }
-      throw e;
-    }
-  
     // Transaction: create address, order, items, reserve inventory.
     let order;
     try {
@@ -477,10 +477,10 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await createFlashSaleClaimInTx(tx, {
-        customerId: checkoutUserId!,
+      await createFlashSaleClaimsInTx(tx, {
+        claimant: { customerId: checkoutUserId!, phone },
         orderId: createdOrder.id,
-        claim: flashClaimResolved.claim,
+        claims: flashCart.claims,
       });
   
       return createdOrder;

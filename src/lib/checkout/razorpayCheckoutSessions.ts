@@ -52,6 +52,29 @@ export function parseCheckoutContext(value: unknown): CheckoutContext | null {
       ? { id: value.coupon.id, code: value.coupon.code }
       : null;
 
+  let flashClaims: CheckoutContext["flashClaims"];
+  if (Array.isArray(value.flashClaims)) {
+    flashClaims = [];
+    for (const claim of value.flashClaims) {
+      if (
+        !isRecord(claim) ||
+        typeof claim.saleTag !== "string" ||
+        typeof claim.flashSaleId !== "string" ||
+        typeof claim.quantity !== "number" ||
+        typeof claim.purchaseLimit !== "number"
+      ) {
+        return null;
+      }
+      flashClaims.push({
+        saleTag: claim.saleTag,
+        flashSaleId: claim.flashSaleId,
+        saleName: typeof claim.saleName === "string" ? claim.saleName : null,
+        quantity: claim.quantity,
+        purchaseLimit: claim.purchaseLimit,
+      });
+    }
+  }
+
   const setup = isRecord(value.newAccountPasswordSetup) ? value.newAccountPasswordSetup : null;
   const linkedAs = value.checkoutLinkedAs;
   const checkoutLinkedAs =
@@ -68,6 +91,7 @@ export function parseCheckoutContext(value: unknown): CheckoutContext | null {
       setup && typeof setup.setupUrl === "string" ? { setupUrl: setup.setupUrl } : null,
     lineItems,
     coupon,
+    flashClaims,
     shipping: value.shipping,
     subtotal: value.subtotal,
     discount: value.discount,

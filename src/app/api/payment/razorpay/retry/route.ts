@@ -12,6 +12,11 @@ import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
 import { cleanText, isUuid, readJsonBody } from "@/lib/validation/input";
 import { runApiRoute } from "@/lib/api/runApiRoute";
 import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
+import {
+  assertCustomerCanClaimFlashSales,
+  FlashSaleClaimError,
+  resolveFlashSaleCart,
+} from "@/lib/flashSale/claims";
 
 export async function POST(req: NextRequest) {
   return runApiRoute(
@@ -85,6 +90,41 @@ export async function POST(req: NextRequest) {
         }
         throw stockErr;
       }
+
+      const flashCart = await resolveFlashSaleCart(
+        ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
+      );
+      if (!flashCart.ok) {
+        return NextResponse.json({ error: flashCart.error }, { status: 409 });
+      }
+      const priceDropped = ctx.lineItems.some((li) => {
+        const current = flashCart.unitPrices.get(li.productId);
+        return current == null || li.unitPrice < current - 0.005;
+      });
+      if (priceDropped) {
+        return NextResponse.json(
+          {
+            error:
+              "Prices on this order have changed since it was placed (the sale may have ended). Please place a new order.",
+          },
+          { status: 409 }
+        );
+      }
+      if (!ctx.checkoutUserId) {
+        return NextResponse.json({ error: "Customer account is required" }, { status: 400 });
+      }
+      try {
+        await assertCustomerCanClaimFlashSales(
+          { customerId: ctx.checkoutUserId, phone: ctx.address.phone },
+          flashCart.claims
+        );
+      } catch (claimErr) {
+        if (claimErr instanceof FlashSaleClaimError) {
+          return NextResponse.json({ error: claimErr.message }, { status: 409 });
+        }
+        throw claimErr;
+      }
+      ctx.flashClaims = flashCart.claims;
 
       const razorpay = getRazorpayClient();
       const publicCfg = razorpayPublicConfig();

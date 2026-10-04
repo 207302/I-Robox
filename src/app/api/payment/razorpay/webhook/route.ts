@@ -7,6 +7,7 @@ import { runApiRoute } from "@/lib/api/runApiRoute";
 import { releaseFlashSaleClaimForOrder } from "@/lib/flashSale/claims";
 import { releaseOrderInventoryReservations } from "@/lib/orders/createFailedOrderFromCheckoutContext";
 import { loadRazorpayCheckoutSession } from "@/lib/checkout/razorpayCheckoutSessions";
+import { buildCheckoutContextFromOrder } from "@/lib/orders/buildCheckoutContextFromOrder";
 import { runPostOrderFulfillment } from "@/lib/orders/runPostOrderFulfillment";
 import {
   fulfillCapturedRazorpayPayment,
@@ -50,7 +51,7 @@ async function createOrderFromCapturedPayment(input: {
     }
   }
 
-  const ctx = await loadRazorpayCheckoutSession(razorpayOrderId);
+  let ctx = await loadRazorpayCheckoutSession(razorpayOrderId);
   if (!ctx) {
     const existing = await prisma.orders.findFirst({
       where: {
@@ -61,7 +62,11 @@ async function createOrderFromCapturedPayment(input: {
       },
       select: { id: true, payment_status: true },
     });
+    // Rebuild from the order so flash-sale limits are still enforced on confirmation.
     if (existing && existing.payment_status !== "SUCCEEDED") {
+      ctx = await buildCheckoutContextFromOrder(existing.id);
+    }
+    if (!ctx && existing && existing.payment_status !== "SUCCEEDED") {
       await prisma.orders.update({
         where: { id: existing.id },
         data: {
@@ -72,9 +77,11 @@ async function createOrderFromCapturedPayment(input: {
       });
       return { created: false as const, reason: "upgraded_without_context", orderId: existing.id };
     }
-    if (existing) {
+    if (!ctx && existing) {
       return { created: false as const, reason: "already_exists", orderId: existing.id };
     }
+  }
+  if (!ctx) {
     console.error("[razorpay/webhook] captured payment has no checkout session; cannot create order", {
       paymentId,
       razorpayOrderId,

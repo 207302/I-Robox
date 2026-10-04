@@ -19,6 +19,7 @@ const flashSaleInclude = {
 
 function mapFlashSaleRow(row: {
   id: string;
+  name?: string | null;
   purchase_limit?: number;
   discount_type: string;
   discount_value: { toString(): string } | number;
@@ -31,6 +32,7 @@ function mapFlashSaleRow(row: {
 }): FlashSaleRule {
   return {
     id: row.id,
+    name: row.name ?? null,
     purchase_limit: Math.max(0, Math.trunc(row.purchase_limit ?? 0)),
     discount_type: row.discount_type as FlashSaleRule["discount_type"],
     discount_value: Number(row.discount_value),
@@ -70,8 +72,18 @@ const getCachedActiveFlashSaleRuleRows = unstable_cache(
   { revalidate: 60, tags: [FLASH_SALES_TAG] }
 );
 
-export async function loadActiveFlashSaleRules(now = new Date()): Promise<FlashSaleRule[]> {
-  const rows = await getCachedActiveFlashSaleRuleRows();
+export type FlashSaleRuleLoadOptions = {
+  /** Read straight from the database. Required wherever money or purchase limits are enforced. */
+  fresh?: boolean;
+};
+
+export async function loadActiveFlashSaleRules(
+  now = new Date(),
+  options: FlashSaleRuleLoadOptions = {}
+): Promise<FlashSaleRule[]> {
+  const rows = options.fresh
+    ? await queryActiveFlashSaleRuleRows()
+    : await getCachedActiveFlashSaleRuleRows();
   return rows
     .map((rule) => ({
       ...rule,
@@ -92,13 +104,14 @@ export type FlashSaleProductInfo = {
 
 /** Product id → winning flash sale price + claim tag. */
 export async function flashSaleInfoMap(
-  productIds: string[]
+  productIds: string[],
+  options: FlashSaleRuleLoadOptions = {}
 ): Promise<Map<string, FlashSaleProductInfo>> {
   const map = new Map<string, FlashSaleProductInfo>();
   if (productIds.length === 0) return map;
 
   const now = new Date();
-  const rules = await loadActiveFlashSaleRules(now);
+  const rules = await loadActiveFlashSaleRules(now, options);
   if (rules.length === 0) return map;
 
   const products = await prisma.products.findMany({
@@ -138,8 +151,11 @@ export async function flashSaleInfoMap(
 }
 
 /** Product id → flash sale unit price (lowest matching active rule). */
-export async function flashSalePriceMap(productIds: string[]): Promise<Map<string, number>> {
-  const info = await flashSaleInfoMap(productIds);
+export async function flashSalePriceMap(
+  productIds: string[],
+  options: FlashSaleRuleLoadOptions = {}
+): Promise<Map<string, number>> {
+  const info = await flashSaleInfoMap(productIds, options);
   const map = new Map<string, number>();
   for (const [id, row] of info) map.set(id, row.unitPrice);
   return map;

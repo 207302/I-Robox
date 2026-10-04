@@ -8,9 +8,10 @@ import { PRISMA_TRANSACTION_OPTIONS } from "@/lib/prismaTransaction";
 import { getRazorpayClient } from "@/lib/payments/razorpay";
 import { assertCartItemsInStock, StockValidationError } from "@/lib/inventory/cartStock";
 import {
-  createFlashSaleClaimInTx,
+  createFlashSaleClaimsInTx,
   FlashSaleClaimError,
-  resolveFlashSaleCartClaim,
+  resolveFlashSaleCartClaims,
+  type FlashSaleCartClaim,
 } from "@/lib/flashSale/claims";
 import { isPrismaPoolSaturationError } from "@/lib/prismaRetry";
 
@@ -55,6 +56,16 @@ export type FulfilledRazorpayOrder = {
   retried: boolean;
   ctx: CheckoutContext;
 };
+
+/** Claims fixed when the cart was priced; contexts without them are resolved against live sales. */
+async function flashClaimsForContext(ctx: CheckoutContext): Promise<FlashSaleCartClaim[]> {
+  if (ctx.flashClaims) return ctx.flashClaims;
+  const resolved = await resolveFlashSaleCartClaims(
+    ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
+  );
+  if (!resolved.ok) throw new FlashSaleClaimError(resolved.error);
+  return resolved.claims;
+}
 
 function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -256,14 +267,9 @@ async function upgradeExistingCapturedOrder(input: {
   razorpayPaymentId: string;
 }): Promise<FulfilledRazorpayOrder> {
   const { existing, ctx, razorpayOrderId, razorpayPaymentId } = input;
-  const resolvedClaim = await resolveFlashSaleCartClaim(
-    ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
-  );
-  if (!resolvedClaim.ok) {
-    throw new FlashSaleClaimError(resolvedClaim.error);
-  }
 
   try {
+    const flashClaims = await flashClaimsForContext(ctx);
     await prisma.$transaction(async (tx) => {
       const openReservations = await tx.inventory_reservations.count({
         where: { order_id: existing.id, released_at: null },
@@ -313,15 +319,14 @@ async function upgradeExistingCapturedOrder(input: {
         }
       }
       if (existing.customer_id) {
-        const existingClaim = await tx.flash_sale_claims.findUnique({
+        const existingClaims = await tx.flash_sale_claims.count({
           where: { order_id: existing.id },
-          select: { id: true },
         });
-        if (!existingClaim) {
-          await createFlashSaleClaimInTx(tx, {
-            customerId: existing.customer_id,
+        if (existingClaims === 0) {
+          await createFlashSaleClaimsInTx(tx, {
+            claimant: { customerId: existing.customer_id, phone: ctx.address.phone },
             orderId: existing.id,
-            claim: resolvedClaim.claim,
+            claims: flashClaims,
           });
         }
       }
@@ -358,12 +363,7 @@ async function createNewPaidOrder(input: {
 }): Promise<FulfilledRazorpayOrder> {
   const { ctx, razorpayOrderId, razorpayPaymentId } = input;
   try {
-    const resolvedClaim = await resolveFlashSaleCartClaim(
-      ctx.lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity }))
-    );
-    if (!resolvedClaim.ok) {
-      throw new FlashSaleClaimError(resolvedClaim.error);
-    }
+    const flashClaims = await flashClaimsForContext(ctx);
 
     const created = await prisma.$transaction(async (tx) => {
       const addr = await tx.addresses.create({
@@ -463,10 +463,10 @@ async function createNewPaidOrder(input: {
       if (!ctx.checkoutUserId) {
         throw new FlashSaleClaimError("Customer account is required");
       }
-      await createFlashSaleClaimInTx(tx, {
-        customerId: ctx.checkoutUserId,
+      await createFlashSaleClaimsInTx(tx, {
+        claimant: { customerId: ctx.checkoutUserId, phone: ctx.address.phone },
         orderId: order.id,
-        claim: resolvedClaim.claim,
+        claims: flashClaims,
       });
 
       return order;

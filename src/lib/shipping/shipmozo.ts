@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { shipmozoOrderRef } from "@/lib/orders/orderNumber";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
@@ -133,6 +134,83 @@ function priorPushSucceeded(metadata: unknown): boolean {
   const pushOrder = (shipmozo as Record<string, unknown>).pushOrder;
   if (!pushOrder || typeof pushOrder !== "object") return false;
   return (pushOrder as Record<string, unknown>).ok === true;
+}
+
+/** Labels stored on `orders.payment_provider` for cash on delivery. */
+const COD_PROVIDER_LABELS = [
+  "cod",
+  "cash_on_delivery",
+  "cash on delivery",
+  "cash-on-delivery",
+  "cashondelivery",
+  "c.o.d",
+  "c.o.d.",
+] as const;
+
+/**
+ * True when the gateway/method is cash on delivery.
+ * Matches case and separator variants ("COD", "cash_on_delivery", "Cash on Delivery").
+ * Payment status is not used — COD orders stay unpaid until delivery.
+ */
+export function isCodPaymentMethod(provider: string | null | undefined): boolean {
+  const raw = String(provider ?? "").trim().toLowerCase();
+  if (!raw) return false;
+  const compact = raw.replace(/[^a-z0-9]/g, "");
+  if (compact === "cod" || compact.includes("cashondelivery")) return true;
+  return /(^|[^a-z0-9])cod([^a-z0-9]|$)/.test(raw);
+}
+
+function moneyAmount(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Courier collect amount: subtotal − discount + shipping + tax.
+ * Discounts are already a separate column; this store does not split a COD order
+ * into a prepaid portion, so the whole payable total is collected.
+ */
+export function codCollectAmountInr(order: {
+  subtotal_amount: unknown;
+  discount_amount: unknown;
+  shipping_amount: unknown;
+  tax_amount: unknown;
+  total_amount: unknown;
+}): number {
+  const fromParts = roundMoney(
+    Math.max(
+      0,
+      moneyAmount(order.subtotal_amount) -
+        moneyAmount(order.discount_amount) +
+        moneyAmount(order.shipping_amount) +
+        moneyAmount(order.tax_amount)
+    )
+  );
+  if (fromParts > 0) return fromParts;
+  return roundMoney(Math.max(0, moneyAmount(order.total_amount)));
+}
+
+/** Paid prepaid orders, plus COD orders that are not cancelled or refunded. */
+export function shipmozoPushPaymentWhere(): Prisma.ordersWhereInput {
+  return {
+    OR: [
+      { payment_status: "SUCCEEDED" },
+      {
+        AND: [
+          { status: { notIn: ["CANCELLED", "REFUNDED", "PAYMENT_FAILED"] } },
+          {
+            OR: COD_PROVIDER_LABELS.map((label) => ({
+              payment_provider: { equals: label, mode: "insensitive" as const },
+            })),
+          },
+        ],
+      },
+    ],
+  };
 }
 
 function normalizeShipmozoOrderIdRef(value: string): string {
@@ -754,9 +832,9 @@ export async function runShipmozoPendingOrderPush() {
 
   const orders = await prisma.orders.findMany({
     where: {
-      payment_status: "SUCCEEDED",
       created_at: { gte: since },
       OR: [{ awb_number: null }, { awb_number: "" }],
+      AND: [shipmozoPushPaymentWhere()],
     },
     orderBy: { created_at: "asc" },
     take: batchSize,
@@ -1058,8 +1136,13 @@ export async function bookShipmozoShipmentForOrder(
     select: {
       id: true,
       order_number: true,
+      subtotal_amount: true,
+      discount_amount: true,
+      shipping_amount: true,
+      tax_amount: true,
       total_amount: true,
       payment_status: true,
+      payment_provider: true,
       customers: { select: { email: true } },
       addresses_orders_shipping_address_idToaddresses: {
         select: {
@@ -1088,9 +1171,16 @@ export async function bookShipmozoShipmentForOrder(
     await appendShipmozoMetadata(orderId, { status: "skipped", reason: "missing_shipping_address" });
     return { ok: false, reason: "missing_shipping_address", error: "Shipping address missing" };
   }
-  if (order.payment_status !== "SUCCEEDED") {
+  const codOrder = isCodPaymentMethod(order.payment_provider);
+  if (!codOrder && order.payment_status !== "SUCCEEDED") {
+    console.info(
+      `[shipmozo-booking] Order ${shipmozoOrderRef(order)} skipped — payment_status=${order.payment_status} and payment method "${order.payment_provider ?? ""}" is not COD`
+    );
     return { ok: false, reason: "not_paid", error: "Order is not paid" };
   }
+
+  const paymentType = codOrder ? "COD" : "PREPAID";
+  const codAmount = codOrder ? codCollectAmountInr(order) : 0;
 
   const phone = normalizeIndiaPhone(addr.phone ?? "");
   const pin = normalizeIndiaPin6(addr.postal_code ?? "");
@@ -1186,8 +1276,8 @@ export async function bookShipmozoShipmentForOrder(
       consignee_city: String(addr.city ?? "").slice(0, 120),
       consignee_state: String(addr.state ?? "").slice(0, 120),
       product_detail: lineItems,
-      payment_type: "PREPAID",
-      cod_amount: "",
+      payment_type: paymentType,
+      cod_amount: codAmount,
       weight: packageDetails.weightG,
       length: SHIPMOZO_DEFAULT_LENGTH_CM,
       width: SHIPMOZO_DEFAULT_WIDTH_CM,
@@ -1197,13 +1287,51 @@ export async function bookShipmozoShipmentForOrder(
       gstin_number: (process.env.SELLER_GSTIN ?? process.env.SHIPMOZO_GSTIN ?? "").trim(),
     };
 
-    const push = await callShipmozo("/push-order", "POST", pushPayload);
+    if (paymentType === "COD") {
+      console.info(
+        `[shipmozo-booking] Order ${customerRef} detected as COD, pushing with cod_amount ${codAmount}`
+      );
+    } else {
+      console.info(
+        `[shipmozo-booking] Order ${customerRef} detected as PREPAID, pushing with cod_amount 0`
+      );
+    }
+
+    let push: Awaited<ReturnType<typeof callShipmozo>>;
+    try {
+      push = await callShipmozo("/push-order", "POST", pushPayload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "ShipMozo push-order request failed";
+      console.error("[shipmozo-booking] push-order failed", {
+        orderId,
+        orderRef: customerRef,
+        paymentType,
+        codAmount,
+        message,
+      });
+      await appendShipmozoMetadata(orderId, {
+        status: "error",
+        reason: "push_order_failed",
+        message,
+        pushOrder: {
+          ok: false,
+          paymentType,
+          codAmount,
+          message,
+          pushedAt: new Date().toISOString(),
+          sentPayload: scrubPushPayloadForMetadata(pushPayload),
+        },
+      });
+      return { ok: false, reason: "push_order_failed", error: message };
+    }
     const pushMessage = shipmozoPushErrorMessage(push.parsed, push.raw);
     const pushedAt = new Date().toISOString();
     await appendShipmozoMetadata(orderId, {
       pushOrder: {
         ok: push.ok,
         status: push.status,
+        paymentType,
+        codAmount,
         response: push.parsed,
         rawResponse: push.raw,
         message: push.ok ? null : pushMessage,
@@ -1234,7 +1362,14 @@ export async function bookShipmozoShipmentForOrder(
         });
         skipPushOrder = true;
       } else {
-        console.error("[shipmozo-booking] push-order failed", { orderId, message: pushMessage, status: push.status });
+        console.error("[shipmozo-booking] push-order failed", {
+          orderId,
+          orderRef: customerRef,
+          paymentType,
+          codAmount,
+          message: pushMessage,
+          status: push.status,
+        });
         await appendShipmozoMetadata(orderId, {
           status: "error",
           reason: "push_order_failed",

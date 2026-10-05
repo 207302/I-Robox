@@ -7,6 +7,8 @@ import {
   discoverShipmozoOrdersForRef,
   appendShipmozoMetadata,
   collectShipmozoLookupIds,
+  isCodPaymentMethod,
+  shipmozoPushPaymentWhere,
 } from "@/lib/shipping/shipmozo";
 import { sendPickupEmail } from "@/lib/email/sendPickupEmail";
 import {
@@ -543,6 +545,7 @@ export async function syncShipmozoAwbForOrder(
         id: true,
         order_number: true,
         payment_status: true,
+        payment_provider: true,
         awb_number: true,
         shipments: { select: { tracking_number: true, metadata: true } },
       },
@@ -553,7 +556,7 @@ export async function syncShipmozoAwbForOrder(
     if (existingAwb) {
       return { ok: true as const, skipped: true as const, reason: "has_awb" as const };
     }
-    if (order.payment_status !== "SUCCEEDED") {
+    if (order.payment_status !== "SUCCEEDED" && !isCodPaymentMethod(order.payment_provider)) {
       return { ok: true as const, skipped: true as const, reason: "not_paid" as const };
     }
 
@@ -649,10 +652,10 @@ export async function runShipmozoAwbDiscoverySync() {
   // Over-fetch so we can skip recently-checked orders without N findUnique round-trips.
   const candidates = await prisma.orders.findMany({
     where: {
-      payment_status: "SUCCEEDED",
       awb_number: null,
       shipment_status: { not: "DELIVERED" },
       created_at: { gte: since },
+      AND: [shipmozoPushPaymentWhere()],
     },
     orderBy: [{ shipment_updated_at: "asc" }, { created_at: "desc" }],
     take: Math.min(100, batchSize * 3),

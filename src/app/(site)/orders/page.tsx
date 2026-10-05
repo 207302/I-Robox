@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
+import { resolveLiveCustomerId } from "@/lib/orders/resolveOrderCustomer";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import {
   CustomerOrdersList,
@@ -38,14 +39,15 @@ function formatShippingLine(
 
 export default async function OrdersPage() {
   const session = await getSession();
-  if (!session) {
+  const customerId = await resolveLiveCustomerId(session);
+  if (!customerId) {
     return (
       <section className="pt-36 pb-16">
         <div className="w-full px-4 mx-auto max-w-3xl sm:px-6">
           <div className="rounded-2xl border border-gray-3 bg-white p-8 text-center">
             <p className="text-sm text-meta-3">Please sign in to view your orders.</p>
             <Link
-              href="/login"
+              href="/login?next=/orders"
               className="mt-4 inline-flex rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition"
             >
               Sign in
@@ -57,7 +59,7 @@ export default async function OrdersPage() {
   }
 
   const orders = await prisma.orders.findMany({
-    where: { customer_id: session.sub },
+    where: { customer_id: customerId },
     orderBy: { created_at: "desc" },
     select: {
       id: true,

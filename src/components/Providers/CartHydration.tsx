@@ -7,7 +7,7 @@ import {
   loadCartFromStorage as loadCartFromStorageAction,
   selectCartItems,
 } from "@/redux/features/cart-slice";
-import { loadCartFromStorage, setStorageScope } from "@/lib/cartStorage";
+import { loadCartForSessionScope } from "@/lib/cartStorage";
 import { getWishlistStorageKey, setWishlistItems } from "@/redux/features/wishlist-slice";
 import { useSession } from "@/hooks/useSession";
 import { isUuid } from "@/lib/validation/input";
@@ -28,9 +28,7 @@ export default function CartHydration() {
     if (isLoading) return;
 
     const scope = user?.id ?? "guest";
-    setStorageScope(scope);
-
-    const savedCart = loadCartFromStorage();
+    const savedCart = loadCartForSessionScope(scope);
     dispatch(loadCartFromStorageAction(savedCart));
 
     try {

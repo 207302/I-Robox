@@ -26,6 +26,7 @@
     "algolia:reindex": "node src/algolia/reindex.ts",
     "import-demo-data": "node scripts/import-demo-data.js",
     "quick-links:markdown-to-html": "tsx scripts/convert-quick-link-markdown-to-html.ts",
+    "test": "tsx --test src/lib/cart/stockCheckClient.test.ts src/lib/checkout/checkoutEntry.test.ts src/lib/orders/orderOwnership.test.ts src/lib/cart/cartScope.test.ts",
     "test:order-email": "node scripts/test-order-email.mjs",
     "test:cloudinary-upload": "node scripts/test-cloudinary-upload.mjs"
   },

@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
+import { isOrderOwnedByCustomer } from "@/lib/orders/orderOwnership";
+import { resolveLiveCustomerId } from "@/lib/orders/resolveOrderCustomer";
 import { formatPrice } from "@/utils/formatePrice";
 import { formatOrderReference } from "@/utils/orderNumber";
 import { loadOrderInvoiceTaxLines, sumOrderInvoiceTax } from "@/lib/invoices/orderInvoiceTax";
@@ -64,7 +66,8 @@ export default async function InvoicePage({ params, searchParams }: Props) {
     },
   });
   if (!order) notFound();
-  const isOwner = Boolean(session?.sub && order.customer_id && order.customer_id === session.sub);
+  const sessionCustomerId = await resolveLiveCustomerId(session);
+  const isOwner = isOrderOwnedByCustomer(order.customer_id, sessionCustomerId);
   const hasCheckoutAccess = Boolean(access && verifyOrderAccessToken(access, order.id));
   if (!isOwner && !hasCheckoutAccess) notFound();
 

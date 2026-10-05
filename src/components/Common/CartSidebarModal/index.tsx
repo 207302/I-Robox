@@ -7,6 +7,8 @@ import EmptyCart from "./EmptyCart";
 import SingleItem from "./SingleItem";
 import { formatPrice } from "@/utils/formatePrice";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/hooks/useSession";
+import { checkoutEntryHref } from "@/lib/checkout/checkoutEntry";
 
 const CartSidebarModal = () => {
   const {
@@ -35,11 +37,12 @@ const CartSidebarModal = () => {
   }, [shouldDisplayCart, handleCartClick]);
 
   const router = useRouter();
-  const canCheckout = cartCount > 0;
+  const { user, isLoading: sessionLoading } = useSession();
+  const canCheckout = cartCount > 0 && !sessionLoading;
 
   const handleCheckout = () => {
     if (!canCheckout) return;
-    router.push("/checkout");
+    router.push(checkoutEntryHref(user?.id));
     handleCartClick();
   };
 

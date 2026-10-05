@@ -9,6 +9,7 @@ import PasswordInput from "@/components/Auth/PasswordInput";
 import RecaptchaWidget, { type RecaptchaWidgetRef } from "@/components/Auth/RecaptchaWidget";
 import { isRecaptchaEnabled } from "@/lib/security/recaptchaPublic";
 import { AUTH_CHANGED_EVENT, markPendingLoginWelcome } from "@/lib/auth/clientSession";
+import { postLoginPath } from "@/lib/checkout/checkoutEntry";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -49,6 +50,7 @@ function GoogleMark() {
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = postLoginPath(searchParams.get("next"));
   const [mode, setMode] = useState<Mode>("login");
 
   const [name, setName] = useState("");
@@ -76,9 +78,12 @@ export default function LoginClient() {
     const message = GOOGLE_ERROR_MESSAGES[err] ?? "Google sign-in failed.";
     setGoogleError(message);
     const toastTimer = window.setTimeout(() => toast.error(message), 150);
-    router.replace("/login", { scroll: false });
+    router.replace(
+      nextPath !== "/" ? `/login?next=${encodeURIComponent(nextPath)}` : "/login",
+      { scroll: false }
+    );
     return () => window.clearTimeout(toastTimer);
-  }, [searchParams, router]);
+  }, [searchParams, router, nextPath]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,7 +139,7 @@ export default function LoginClient() {
         markPendingLoginWelcome();
         window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       }
-      router.push("/");
+      router.push(nextPath);
       router.refresh();
     } catch (err: unknown) {
       recaptchaRef.current?.reset();
@@ -260,7 +265,7 @@ export default function LoginClient() {
       setDevOtpHint(null);
       markPendingLoginWelcome();
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
-      router.push("/");
+      router.push(nextPath);
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -298,7 +303,7 @@ export default function LoginClient() {
     }
   }
 
-  const googleHref = `/api/auth/google?next=${encodeURIComponent("/")}`;
+  const googleHref = `/api/auth/google?next=${encodeURIComponent(nextPath)}`;
 
   return (
     <section className="pt-36 pb-16 bg-gradient-to-b from-blue-50/40 to-white">

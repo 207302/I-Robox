@@ -8,8 +8,8 @@ import { formatPrice } from "@/utils/formatePrice";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import { checkoutItemsFromCart } from "@/lib/checkout/checkoutCartItems";
 import { toRazorpayPrefillContact } from "@/lib/marketing/contactPhoneUtils";
-import { fetchProductStockCheck, lineItemStockError, stockLookupKey } from "@/lib/cart/stockCheckClient";
-import type { ProductStockCheckMap } from "@/lib/cart/stockCheckClient";
+import { useProductStockCheck } from "@/hooks/useProductStockCheck";
+import { checkoutEntryHref } from "@/lib/checkout/checkoutEntry";
 import { useSession } from "@/hooks/useSession";
 import { usePublicMarketing } from "@/hooks/usePublicMarketing";
 import {
@@ -74,9 +74,14 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState("new");
   const [addressesLoading, setAddressesLoading] = useState(false);
   const hasAppliedPrimaryAddress = useRef(false);
-  const [stockByProductId, setStockByProductId] = useState<ProductStockCheckMap>({});
-  const [stockCheckLoading, setStockCheckLoading] = useState(true);
-  const [stockCheckFailed, setStockCheckFailed] = useState(false);
+  const {
+    stockCheckLoading,
+    stockCheckFailed,
+    stockCheckError,
+    stockErrorsByLineId,
+    hasStockShortfall,
+    retryStockCheck,
+  } = useProductStockCheck(items);
 
   const previewSubtotal = Number(totalPrice || 0);
 
@@ -176,60 +181,11 @@ export default function CheckoutPage() {
   }, [items, couponCode]);
 
   useEffect(() => {
-    const stockLines = items
-      .map((item) => ({
-        productId: String(item.productId ?? "").trim(),
-        productVariantId: item.variantId?.trim() || null,
-      }))
-      .filter((line) => line.productId);
-
-    if (stockLines.length === 0) {
-      setStockByProductId({});
-      setStockCheckLoading(false);
-      setStockCheckFailed(false);
-      return;
+    if (sessionLoading) return;
+    if (!user?.id) {
+      router.replace(checkoutEntryHref(null));
     }
-
-    let cancelled = false;
-    setStockCheckLoading(true);
-    setStockCheckFailed(false);
-    void fetchProductStockCheck(stockLines)
-      .then((products) => {
-        if (!cancelled) setStockByProductId(products);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setStockByProductId({});
-          setStockCheckFailed(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setStockCheckLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [items]);
-
-  const stockErrorsByLineId = useMemo(() => {
-    const errors: Record<string, string> = {};
-    for (const item of items) {
-      const productId = String(item.productId ?? "").trim();
-      const message = lineItemStockError({
-        name: item.name,
-        quantity: item.quantity,
-        stock: productId
-          ? stockByProductId[stockLookupKey(productId, item.variantId)]
-          : undefined,
-      });
-      if (message) errors[String(item.id)] = message;
-    }
-    return errors;
-  }, [items, stockByProductId]);
-
-  const hasStockBlocker =
-    stockCheckFailed || Object.keys(stockErrorsByLineId).length > 0;
+  }, [sessionLoading, user?.id, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -350,7 +306,7 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
-    if (hasStockBlocker) return;
+    if (hasStockShortfall) return;
     if (!items.length) {
       toast.error("Your cart is empty");
       return;
@@ -727,10 +683,20 @@ export default function CheckoutPage() {
             {stockCheckLoading ? (
               <p className="mt-3 text-xs text-meta-3">Checking stock availability…</p>
             ) : stockCheckFailed ? (
-              <p className="mt-3 text-xs font-medium text-red-600">
-                Unable to verify stock — please refresh before proceeding.
-              </p>
-            ) : hasStockBlocker ? (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-red-600">
+                  {stockCheckError ??
+                    "Unable to verify stock. You can retry, or continue — stock is confirmed again when the order is placed."}
+                </p>
+                <button
+                  type="button"
+                  onClick={retryStockCheck}
+                  className="mt-2 text-xs font-medium text-blue hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : hasStockShortfall ? (
               <p className="mt-3 text-xs font-medium text-red-600">
                 Remove or update out-of-stock items before paying.
               </p>
@@ -838,7 +804,7 @@ export default function CheckoutPage() {
             </div>
 
             <button
-              disabled={loading || stockCheckLoading || hasStockBlocker || !items.length}
+              disabled={loading || stockCheckLoading || hasStockShortfall || !items.length || sessionLoading || !user?.id}
               onClick={handlePlaceOrder}
               className="mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition disabled:opacity-60"
             >

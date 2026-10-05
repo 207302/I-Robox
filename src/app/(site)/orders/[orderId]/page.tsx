@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
+import { isOrderOwnedByCustomer } from "@/lib/orders/orderOwnership";
+import { resolveLiveCustomerId } from "@/lib/orders/resolveOrderCustomer";
 import { formatPrice } from "@/utils/formatePrice";
 import { formatOrderReference } from "@/utils/orderNumber";
 import OrderTracking from "@/components/OrderTracking";
@@ -66,7 +68,8 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
   });
 
   if (!order) notFound();
-  const isOwner = Boolean(session?.sub && order.customer_id && order.customer_id === session.sub);
+  const sessionCustomerId = await resolveLiveCustomerId(session);
+  const isOwner = isOrderOwnedByCustomer(order.customer_id, sessionCustomerId);
   const hasCheckoutAccess = Boolean(access && verifyOrderAccessToken(access, order.id));
   if (!isOwner && !hasCheckoutAccess) {
     return (
@@ -76,7 +79,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
             <p className="text-sm text-meta-3">
               You do not have access to this order. Please sign in with the account that placed it.
             </p>
-            <Link href="/login" className="mt-4 inline-flex rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition">
+            <Link href={`/login?next=${encodeURIComponent(`/orders/${order.id}`)}`} className="mt-4 inline-flex rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition">
               Sign in
             </Link>
           </div>

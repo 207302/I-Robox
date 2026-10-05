@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
 import { verifyOrderAccessToken } from "@/lib/security/orderAccess";
+import { isOrderOwnedByCustomer } from "@/lib/orders/orderOwnership";
+import { resolveLiveCustomerId } from "@/lib/orders/resolveOrderCustomer";
 import { generateOrderInvoicePdf } from "@/lib/invoices/generateOrderInvoicePdf";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ orderId: string }> }) {
@@ -18,7 +20,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orderId: st
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const isOwner = Boolean(session?.sub && order.customer_id && order.customer_id === session.sub);
+  const sessionCustomerId = await resolveLiveCustomerId(session);
+  const isOwner = isOrderOwnedByCustomer(order.customer_id, sessionCustomerId);
   const hasCheckoutAccess = Boolean(access && verifyOrderAccessToken(access, order.id));
   if (!isOwner && !hasCheckoutAccess) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

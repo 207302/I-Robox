@@ -2,22 +2,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition } from "react";
 import { useCart } from "@/hooks/useCart";
+import { useProductStockCheck } from "@/hooks/useProductStockCheck";
 import { formatPrice } from "@/utils/formatePrice";
 import { useDispatch } from "react-redux";
 import { AppDispatch, useAppSelector } from "@/redux/store";
 import { addItemToWishlist } from "@/redux/features/wishlist-slice";
 import toast from "react-hot-toast";
-import {
-  fetchProductStockCheck,
-  lineItemStockError,
-  stockLookupKey,
-  type ProductStockCheckMap,
-} from "@/lib/cart/stockCheckClient";
+import { useSession } from "@/hooks/useSession";
+import { checkoutEntryHref } from "@/lib/checkout/checkoutEntry";
 
 export default function CartPage() {
+  const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+  const { user, isLoading: sessionLoading } = useSession();
   const wishlistItems = useAppSelector((state) => state.wishlistReducer.items ?? []);
   const { cartCount, cartDetails, totalPrice, incrementItem, decrementItem, removeItem, clearCart } =
     useCart();
@@ -45,66 +45,21 @@ export default function CartPage() {
 
 
   const items = Object.values(cartDetails ?? {});
+  const {
+    stockCheckLoading,
+    stockCheckFailed,
+    stockCheckError,
+    stockErrorsByLineId,
+    hasStockShortfall,
+    retryStockCheck,
+  } = useProductStockCheck(items);
 
-  const [stockByProductId, setStockByProductId] = useState<ProductStockCheckMap>({});
-  const [stockCheckLoading, setStockCheckLoading] = useState(true);
-  const [stockCheckFailed, setStockCheckFailed] = useState(false);
+  const checkoutDisabled = sessionLoading || stockCheckLoading || hasStockShortfall;
 
-  useEffect(() => {
-    const stockLines = items
-      .map((item) => ({
-        productId: String(item.productId ?? "").trim(),
-        productVariantId: item.variantId?.trim() || null,
-      }))
-      .filter((line) => line.productId);
-
-    if (stockLines.length === 0) {
-      setStockByProductId({});
-      setStockCheckLoading(false);
-      setStockCheckFailed(false);
-      return;
-    }
-
-    let cancelled = false;
-    setStockCheckLoading(true);
-    setStockCheckFailed(false);
-    void fetchProductStockCheck(stockLines)
-      .then((products) => {
-        if (!cancelled) setStockByProductId(products);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setStockByProductId({});
-          setStockCheckFailed(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setStockCheckLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [items]);
-
-  const stockErrorsByLineId = useMemo(() => {
-    const errors: Record<string, string> = {};
-    for (const item of items) {
-      const productId = String(item.productId ?? "").trim();
-      const message = lineItemStockError({
-        name: item.name,
-        quantity: item.quantity,
-        stock: productId
-          ? stockByProductId[stockLookupKey(productId, item.variantId)]
-          : undefined,
-      });
-      if (message) errors[String(item.id)] = message;
-    }
-    return errors;
-  }, [items, stockByProductId]);
-
-  const hasStockBlocker =
-    stockCheckFailed || Object.keys(stockErrorsByLineId).length > 0;
+  function handleCheckout() {
+    if (checkoutDisabled) return;
+    router.push(checkoutEntryHref(user?.id));
+  }
 
   return (
     <section className="pt-36 pb-16">
@@ -232,29 +187,34 @@ export default function CartPage() {
               {stockCheckLoading ? (
                 <p className="mt-3 text-xs text-meta-3">Checking stock availability…</p>
               ) : stockCheckFailed ? (
-                <p className="mt-3 text-xs font-medium text-red-600">
-                  Unable to verify stock — please refresh before proceeding.
-                </p>
-              ) : hasStockBlocker ? (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-red-600">
+                    {stockCheckError ??
+                      "Unable to verify stock. You can retry, or continue — stock is confirmed again when the order is placed."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={retryStockCheck}
+                    className="mt-2 text-xs font-medium text-blue hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : hasStockShortfall ? (
                 <p className="mt-3 text-xs font-medium text-red-600">
                   Remove out-of-stock items to continue to checkout.
                 </p>
               ) : null}
-              {hasStockBlocker || stockCheckLoading ? (
-                <span
-                  aria-disabled
-                  className="mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white opacity-60 cursor-not-allowed"
-                >
-                  Checkout
-                </span>
-              ) : (
-                <Link
-                  href="/checkout"
-                  className="mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-dark transition"
-                >
-                  Checkout
-                </Link>
-              )}
+              <button
+                type="button"
+                onClick={handleCheckout}
+                disabled={checkoutDisabled}
+                className={`mt-6 inline-flex w-full justify-center rounded-lg bg-blue px-5 py-2.5 text-sm font-medium text-white transition ${
+                  checkoutDisabled ? "opacity-60 cursor-not-allowed" : "hover:bg-blue-dark"
+                }`}
+              >
+                Checkout
+              </button>
             </aside>
           </div>
         )}

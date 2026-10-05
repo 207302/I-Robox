@@ -43,7 +43,8 @@ const nextConfig = {
   serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
     // browsersListForSwc was removed in Next.js 16; legacy polyfill drop now depends on Turbopack honouring browserslist (see TODO at top of file).
-    workerThreads: false,
+    // Keep worker threads on. `false` makes Turbopack spawn a Node process for PostCSS, and on this
+    // builder that process exits before connect (`style.css` panic, exit status 0).
     /** Fewer SSG workers = less Neon connection churn during `next build`. Override with STATIC_GENERATION_CPUS=2 */
     cpus: Number(process.env.STATIC_GENERATION_CPUS ?? 1),
     optimizeCss: true,

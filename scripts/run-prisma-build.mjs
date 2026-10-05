@@ -89,7 +89,9 @@ if (!process.env.NODE_ENV || !/^(production|development|test)$/.test(process.env
   process.env.NODE_ENV = "production";
 }
 
-run("npx", ["next", "build"]);
+// Next.js 16 defaults to Turbopack. On this builder Turbopack panics while compiling
+// src/app/css/style.css (PostCSS worker exits before connect). Webpack does not.
+run("npx", ["next", "build", "--webpack"]);
 
 const siteBase =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||

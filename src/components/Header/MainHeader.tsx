@@ -40,8 +40,7 @@ export type SiteHeaderData = {
 
 const DEFAULT_HEADER_LOGO = "/images/logo/logo.png";
 
-const MOBILE_UTILITY_BAR_MESSAGE =
-  "Welcome to i-Robox! Your World of Fun Starts Here";
+const MOBILE_UTILITY_BAR_MESSAGE = "I-Robox Toys";
 
 /** Static files in /public — skip `next/image` optimizer (same as favicon; avoids 404/broken on some hosts). */
 function isLocalPublicImage(src: string) {

@@ -43,11 +43,15 @@ async function loadHighlightsForAdmin() {
 
 export const getMarketingAdminWave1 = unstable_cache(
   async () => {
-    const [settings, categories, excludedBrands, codAllowedBrands, codAllowedCategories] = await Promise.all([
+    const [settings, categories, excludedBrands, excludedCategories, codAllowedBrands, codAllowedCategories] =
+      await Promise.all([
       getSiteMarketingSettings(),
       getCategoriesForAdmin(),
       prisma.free_shipping_excluded_brands
         .findMany({ select: { brand_id: true } })
+        .catch(() => []),
+      prisma.free_shipping_excluded_categories
+        .findMany({ select: { category_id: true } })
         .catch(() => []),
       prisma.cod_allowed_brands.findMany({ select: { brand_id: true } }).catch(() => []),
       prisma.cod_allowed_categories.findMany({ select: { category_id: true } }).catch(() => []),
@@ -56,11 +60,12 @@ export const getMarketingAdminWave1 = unstable_cache(
       settings,
       categories,
       freeShippingExcludedBrandIds: excludedBrands.map((row) => row.brand_id),
+      freeShippingExcludedCategoryIds: excludedCategories.map((row) => row.category_id),
       codAllowedBrandIds: codAllowedBrands.map((row) => row.brand_id),
       codAllowedCategoryIds: codAllowedCategories.map((row) => row.category_id),
     };
   },
-  ["marketing-admin-wave1"],
+  ["marketing-admin-wave1-v2"],
   { revalidate: 60, tags: [MARKETING_TAG, HOME_PAGE_TAG] }
 );
 

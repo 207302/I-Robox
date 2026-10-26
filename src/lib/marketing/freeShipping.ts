@@ -31,6 +31,20 @@ export const getFreeShippingExcludedBrandIds = cache(
   }
 );
 
+/** Categories excluded from free-shipping threshold subtotal. */
+export const getFreeShippingExcludedCategoryIds = cache(
+  async function getFreeShippingExcludedCategoryIds(): Promise<string[]> {
+    try {
+      const rows = await prisma.free_shipping_excluded_categories.findMany({
+        select: { category_id: true },
+      });
+      return rows.map((row) => row.category_id);
+    } catch {
+      return [];
+    }
+  }
+);
+
 /** Display value for admin/header (default when DB unset). */
 export function formatFreeShippingThresholdLabel(threshold: number | null): string {
   if (threshold == null) return "disabled";

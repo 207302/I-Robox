@@ -629,8 +629,9 @@ export default function EditProductPage() {
             className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
           />
           <span className="mt-1 block text-xs text-meta-4">
-            Order shipping includes quantity × this amount per SKU. Leave 0 to use the default flat fee when below
-            free shipping.
+            Order shipping is quantity × this amount. Use 0 for the default ₹99 below the free-shipping threshold.
+            Above the threshold this rate is waived unless the product’s brand or category is excluded from free
+            shipping.
           </span>
         </label>
         <label className="block max-w-md">

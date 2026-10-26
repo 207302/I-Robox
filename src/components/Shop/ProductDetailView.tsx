@@ -39,6 +39,7 @@ export type ProductDetailViewProps = {
     quantity: number;
     shippingPerUnit: number;
     brandId: string | null;
+    categoryId?: string | null;
     maxOrderQuantity: number;
     category: { title: string; slug: string } | null;
     brand: { name: string; slug: string } | null;
@@ -50,6 +51,8 @@ export type ProductDetailViewProps = {
   approvedReviews: ApprovedProductReview[];
   averageRating: number | null;
   freeShippingThresholdInr: number | null;
+  /** Brand or category is excluded from free shipping, so this item always pays shipping. */
+  shippingAlwaysCharged?: boolean;
 };
 
 function ProductRatingStars({ rating }: { rating: number }) {
@@ -86,6 +89,7 @@ export default function ProductDetailView({
   approvedReviews,
   averageRating,
   freeShippingThresholdInr,
+  shippingAlwaysCharged = false,
 }: ProductDetailViewProps) {
   const [openSection, setOpenSection] = useState<AccordionKey | null>(null);
 
@@ -254,6 +258,7 @@ export default function ProductDetailView({
             quantity={product.quantity}
             shippingPerUnit={product.shippingPerUnit}
             brandId={product.brandId}
+            categoryId={product.categoryId}
             maxOrderQuantity={product.maxOrderQuantity}
             variants={variantsForSelector}
             fallbackImage={galleryImages[0] ?? ""}
@@ -264,10 +269,14 @@ export default function ProductDetailView({
             <li className="flex items-start gap-2.5 text-sm text-gray-600">
               <Truck size={18} className="mt-0.5 shrink-0 text-dark" aria-hidden />
               <span>
-                <span className="block font-medium text-dark">Free Shipping</span>
-                {freeShippingThresholdInr != null
-                  ? `on orders above ₹${freeShippingThresholdInr.toLocaleString("en-IN")}`
-                  : "not available on this order"}
+                <span className="block font-medium text-dark">
+                  {shippingAlwaysCharged ? "Shipping charged" : "Free Shipping"}
+                </span>
+                {shippingAlwaysCharged
+                  ? "This item is excluded from free shipping"
+                  : freeShippingThresholdInr != null
+                    ? `on orders above ₹${freeShippingThresholdInr.toLocaleString("en-IN")}`
+                    : "not available on this order"}
               </span>
             </li>
             <li className="flex items-start gap-2.5 text-sm text-gray-600">

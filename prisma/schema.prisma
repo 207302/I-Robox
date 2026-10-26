@@ -145,6 +145,7 @@ model categories {
   homepage_highlights homepage_highlights[]
   homepage_category_tiles homepage_category_tiles[]
   cod_allowed_categories cod_allowed_categories?
+  free_shipping_excluded_categories free_shipping_excluded_categories?
   product_types     product_types[]
   /// Sub categories (legacy table product_subtypes).
   product_subtypes  product_subtypes[]
@@ -157,6 +158,12 @@ model categories {
 model free_shipping_excluded_brands {
   brand_id String @id @db.Uuid
   brands   brands @relation(fields: [brand_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// Categories excluded from free-shipping threshold subtotal; lines always pay per-unit shipping.
+model free_shipping_excluded_categories {
+  category_id String     @id @db.Uuid
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 /// Brands eligible for Cash on Delivery. If any COD allow-list exists, cart lines must match brand or category.

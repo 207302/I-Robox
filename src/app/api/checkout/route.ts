@@ -38,6 +38,7 @@ import { syncLowStockAlertsByProductIds } from "@/lib/inventory/lowStockAlerts";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import {
   getFreeShippingExcludedBrandIds,
+  getFreeShippingExcludedCategoryIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { getCodEligibilityForProducts } from "@/lib/checkout/cod";
@@ -309,6 +310,7 @@ export async function POST(req: NextRequest) {
         subtotal: unit * i.quantity,
         shippingPerUnit: Math.max(0, Number(p.shipping_per_unit ?? 0)),
         brandId: p.brand_id,
+        categoryId: p.category_id,
       };
     });
   
@@ -360,9 +362,11 @@ export async function POST(req: NextRequest) {
       discount = scopedDiscount;
     }
     const totalBeforeShip = Math.max(0, subtotal - discount);
-    const [freeShippingThresholdInr, freeShippingExcludedBrandIds] = await Promise.all([
+    const [freeShippingThresholdInr, freeShippingExcludedBrandIds, freeShippingExcludedCategoryIds] =
+      await Promise.all([
       getFreeShippingThresholdInr(),
       getFreeShippingExcludedBrandIds(),
+      getFreeShippingExcludedCategoryIds(),
     ]);
     const shippingAmount = orderShippingInrFromLines({
       subtotalBeforeDiscount: subtotal,
@@ -371,9 +375,11 @@ export async function POST(req: NextRequest) {
         shippingPerUnit: li.shippingPerUnit,
         lineSubtotal: li.subtotal,
         brandId: li.brandId,
+        categoryId: li.categoryId,
       })),
       freeShippingThresholdInr,
       freeShippingExcludedBrandIds,
+      freeShippingExcludedCategoryIds,
     });
     const total = totalBeforeShip + shippingAmount;
 

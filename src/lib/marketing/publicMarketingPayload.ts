@@ -12,6 +12,7 @@ import {
 import { isActiveInWindow } from "@/lib/marketing/isActiveInWindow";
 import {
   getFreeShippingExcludedBrandIds,
+  getFreeShippingExcludedCategoryIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { normalizeCode } from "@/lib/validation/input";
@@ -60,13 +61,19 @@ export async function buildPublicMarketingPayload(
 ): Promise<PublicMarketingPayload> {
   const isLoggedIn = Boolean(session?.sub);
 
-  const [settings, freeShippingThresholdInr, freeShippingExcludedBrandIds, popups] =
-    await Promise.all([
-      getSiteMarketingSettings(),
-      getFreeShippingThresholdInr(),
-      getFreeShippingExcludedBrandIds(),
-      getCachedMarketingPopupsForStorefront(),
-    ]);
+  const [
+    settings,
+    freeShippingThresholdInr,
+    freeShippingExcludedBrandIds,
+    freeShippingExcludedCategoryIds,
+    popups,
+  ] = await Promise.all([
+    getSiteMarketingSettings(),
+    getFreeShippingThresholdInr(),
+    getFreeShippingExcludedBrandIds(),
+    getFreeShippingExcludedCategoryIds(),
+    getCachedMarketingPopupsForStorefront(),
+  ]);
 
   let firstVisitCouponCode: string | null = null;
   const rawFirst = settings?.first_visit_coupon_code?.trim();
@@ -105,6 +112,7 @@ export async function buildPublicMarketingPayload(
     firstVisitCouponCode,
     freeShippingThresholdInr,
     freeShippingExcludedBrandIds,
+    freeShippingExcludedCategoryIds,
   };
 }
 
@@ -117,7 +125,7 @@ export async function getPublicMarketingPayload(
 /** Guest storefront marketing (no cookies) — safe for ISR layouts. */
 export const getGuestPublicMarketingPayload = unstable_cache(
   () => buildPublicMarketingPayload(null),
-  ["guest-public-marketing-payload"],
+  ["guest-public-marketing-payload-v2"],
   {
     revalidate: PUBLIC_MARKETING_DATA_REVALIDATE_SECONDS,
     tags: [MARKETING_TAG, POPUPS_TAG],

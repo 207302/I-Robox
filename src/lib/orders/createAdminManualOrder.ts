@@ -20,6 +20,7 @@ import { validateCommonEmailProvider } from "@/lib/validateEmai";
 import { orderShippingInrFromLines } from "@/lib/checkout/orderShipping";
 import {
   getFreeShippingExcludedBrandIds,
+  getFreeShippingExcludedCategoryIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { writeAuditLog } from "@/lib/audit";
@@ -94,6 +95,7 @@ export async function createAdminManualOrder(input: CreateAdminManualOrderInput)
       discounted_price: true,
       shipping_per_unit: true,
       brand_id: true,
+      category_id: true,
       inventory: {
         where: { product_variant_id: null },
         select: { available_quantity: true },
@@ -113,6 +115,7 @@ export async function createAdminManualOrder(input: CreateAdminManualOrderInput)
     subtotal: number;
     shippingPerUnit: number;
     brandId: string | null;
+    categoryId: string | null;
     overridden: boolean;
   }[] = [];
 
@@ -152,14 +155,17 @@ export async function createAdminManualOrder(input: CreateAdminManualOrderInput)
       subtotal: money(unitPrice * item.quantity),
       shippingPerUnit: Math.max(0, Number(product.shipping_per_unit ?? 0)),
       brandId: product.brand_id,
+      categoryId: product.category_id,
       overridden: unitPrice !== catalogUnit,
     });
   }
 
   const subtotal = money(lines.reduce((s, li) => s + li.subtotal, 0));
-  const [freeShippingThresholdInr, freeShippingExcludedBrandIds] = await Promise.all([
+  const [freeShippingThresholdInr, freeShippingExcludedBrandIds, freeShippingExcludedCategoryIds] =
+    await Promise.all([
     getFreeShippingThresholdInr(),
     getFreeShippingExcludedBrandIds(),
+    getFreeShippingExcludedCategoryIds(),
   ]);
   const shipping = orderShippingInrFromLines({
     subtotalBeforeDiscount: subtotal,
@@ -168,9 +174,11 @@ export async function createAdminManualOrder(input: CreateAdminManualOrderInput)
       shippingPerUnit: li.shippingPerUnit,
       lineSubtotal: li.subtotal,
       brandId: li.brandId,
+      categoryId: li.categoryId,
     })),
     freeShippingThresholdInr,
     freeShippingExcludedBrandIds,
+    freeShippingExcludedCategoryIds,
   });
   const total = money(subtotal + shipping);
   const generatePaymentLink = Boolean(input.generatePaymentLink);

@@ -22,7 +22,14 @@ export default async function MarketingAdminPage({ searchParams }: PageProps) {
   if (!auth.ok) redirect("/admin/login");
 
   const [
-    { settings, categories, freeShippingExcludedBrandIds, codAllowedBrandIds, codAllowedCategoryIds },
+    {
+      settings,
+      categories,
+      freeShippingExcludedBrandIds,
+      freeShippingExcludedCategoryIds,
+      codAllowedBrandIds,
+      codAllowedCategoryIds,
+    },
     wave2,
     { products, brands },
   ] =
@@ -52,6 +59,7 @@ export default async function MarketingAdminPage({ searchParams }: PageProps) {
           settings,
           categories,
           freeShippingExcludedBrandIds,
+          freeShippingExcludedCategoryIds,
           codAllowedBrandIds,
           codAllowedCategoryIds,
           products: productsPlain,

@@ -31,6 +31,7 @@ type Props = {
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
+  categoryId?: string | null;
   maxOrderQuantity?: number;
   variants: VariantRow[];
   fallbackImage: string;
@@ -49,6 +50,7 @@ export default function ProductVariantPurchase({
   quantity,
   shippingPerUnit = 0,
   brandId = null,
+  categoryId = null,
   maxOrderQuantity,
   variants,
   fallbackImage,
@@ -96,6 +98,7 @@ export default function ProductVariantPurchase({
         quantity={quantity}
         shippingPerUnit={shippingPerUnit}
         brandId={brandId}
+        categoryId={categoryId}
         maxOrderQuantity={maxOrderQuantity}
         color={selected?.color ?? ""}
         size={selected?.size ?? ""}

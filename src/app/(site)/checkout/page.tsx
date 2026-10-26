@@ -65,6 +65,7 @@ export default function CheckoutPage() {
   const [signedInLabel, setSignedInLabel] = useState<string | null>(null);
   const [freeShippingThresholdInr, setFreeShippingThresholdInr] = useState<number | null>(2000);
   const [freeShippingExcludedBrandIds, setFreeShippingExcludedBrandIds] = useState<string[]>([]);
+  const [freeShippingExcludedCategoryIds, setFreeShippingExcludedCategoryIds] = useState<string[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "COD">("RAZORPAY");
   const [codAvailable, setCodAvailable] = useState(false);
   const [codReason, setCodReason] = useState<string | null>(null);
@@ -123,6 +124,9 @@ export default function CheckoutPage() {
           if (Array.isArray(data.freeShippingExcludedBrandIds)) {
             setFreeShippingExcludedBrandIds(data.freeShippingExcludedBrandIds);
           }
+          if (Array.isArray(data.freeShippingExcludedCategoryIds)) {
+            setFreeShippingExcludedCategoryIds(data.freeShippingExcludedCategoryIds);
+          }
           setCodAvailable(Boolean(data.codAvailable));
           setCodReason(typeof data.codReason === "string" ? data.codReason : null);
           return;
@@ -136,9 +140,11 @@ export default function CheckoutPage() {
               shippingPerUnit: Math.max(0, Number(item.shippingPerUnit ?? 0)),
               lineSubtotal: Number(item.price || 0) * Number(item.quantity || 0),
               brandId: item.brandId ?? null,
+              categoryId: item.categoryId ?? null,
             })),
             freeShippingThresholdInr,
             freeShippingExcludedBrandIds,
+            freeShippingExcludedCategoryIds,
           })
         );
       } catch {
@@ -174,7 +180,14 @@ export default function CheckoutPage() {
     if (Array.isArray(marketingData?.freeShippingExcludedBrandIds)) {
       setFreeShippingExcludedBrandIds(marketingData.freeShippingExcludedBrandIds);
     }
-  }, [marketingData?.freeShippingThresholdInr, marketingData?.freeShippingExcludedBrandIds]);
+    if (Array.isArray(marketingData?.freeShippingExcludedCategoryIds)) {
+      setFreeShippingExcludedCategoryIds(marketingData.freeShippingExcludedCategoryIds);
+    }
+  }, [
+    marketingData?.freeShippingThresholdInr,
+    marketingData?.freeShippingExcludedBrandIds,
+    marketingData?.freeShippingExcludedCategoryIds,
+  ]);
 
   useEffect(() => {
     setCouponBreakdown(null);

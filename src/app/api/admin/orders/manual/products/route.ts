@@ -6,6 +6,7 @@ import { runApiRoute } from "@/lib/api/runApiRoute";
 import { adminProductImageSelect, firstProductImageUrl } from "@/lib/admin/productThumbnail";
 import {
   getFreeShippingExcludedBrandIds,
+  getFreeShippingExcludedCategoryIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 
@@ -30,7 +31,8 @@ export async function GET(req: NextRequest) {
           }
         : { is_active: true };
 
-    const [products, freeShippingThresholdInr, freeShippingExcludedBrandIds] = await Promise.all([
+    const [products, freeShippingThresholdInr, freeShippingExcludedBrandIds, freeShippingExcludedCategoryIds] =
+      await Promise.all([
       prisma.products.findMany({
         where,
         orderBy: { updated_at: "desc" },
@@ -43,6 +45,7 @@ export async function GET(req: NextRequest) {
           discounted_price: true,
           shipping_per_unit: true,
           brand_id: true,
+          category_id: true,
           product_images: adminProductImageSelect,
           inventory: {
             where: { product_variant_id: null },
@@ -53,11 +56,13 @@ export async function GET(req: NextRequest) {
       }),
       getFreeShippingThresholdInr(),
       getFreeShippingExcludedBrandIds(),
+      getFreeShippingExcludedCategoryIds(),
     ]);
 
     return NextResponse.json({
       freeShippingThresholdInr,
       freeShippingExcludedBrandIds,
+      freeShippingExcludedCategoryIds,
       products: products.map((p) => {
         const catalogUnit = Number(p.discounted_price ?? p.base_price);
         return {
@@ -67,6 +72,7 @@ export async function GET(req: NextRequest) {
           catalogUnit,
           shippingPerUnit: Math.max(0, Number(p.shipping_per_unit ?? 0)),
           brandId: p.brand_id,
+          categoryId: p.category_id,
           available: p.inventory[0]?.available_quantity ?? 0,
           imageUrl: firstProductImageUrl(p),
         };

@@ -9,6 +9,7 @@ export type OrderShippingLine = {
   shippingPerUnit: number;
   lineSubtotal: number;
   brandId?: string | null;
+  categoryId?: string | null;
 };
 
 export type OrderShippingContribution = {
@@ -25,17 +26,30 @@ export type OrderShippingBreakdown = {
   contributions: OrderShippingContribution[];
 };
 
+function isExcludedFromFreeShipping(
+  line: Pick<OrderShippingLine, "brandId" | "categoryId">,
+  excludedBrands: Set<string>,
+  excludedCategories: Set<string>
+): boolean {
+  return Boolean(
+    (line.brandId && excludedBrands.has(line.brandId)) ||
+      (line.categoryId && excludedCategories.has(line.categoryId))
+  );
+}
+
 export function orderShippingBreakdownFromLines(args: {
   subtotalBeforeDiscount: number;
   lines: OrderShippingLine[];
   freeShippingThresholdInr?: number | null;
   freeShippingExcludedBrandIds?: string[];
+  freeShippingExcludedCategoryIds?: string[];
 }): OrderShippingBreakdown {
-  const excluded = new Set(args.freeShippingExcludedBrandIds ?? []);
+  const excludedBrands = new Set(args.freeShippingExcludedBrandIds ?? []);
+  const excludedCategories = new Set(args.freeShippingExcludedCategoryIds ?? []);
   const threshold = args.freeShippingThresholdInr;
 
   const eligibleSubtotal = args.lines.reduce((sum, line) => {
-    if (line.brandId && excluded.has(line.brandId)) return sum;
+    if (isExcludedFromFreeShipping(line, excludedBrands, excludedCategories)) return sum;
     return sum + line.lineSubtotal;
   }, 0);
 
@@ -49,8 +63,8 @@ export function orderShippingBreakdownFromLines(args: {
   for (const line of args.lines) {
     if (line.quantity <= 0) continue;
 
-    const isExcluded = Boolean(line.brandId && excluded.has(line.brandId));
-    /** At/above threshold, only excluded brands pay shipping; others are free (incl. explicit per-unit rates). */
+    const isExcluded = isExcludedFromFreeShipping(line, excludedBrands, excludedCategories);
+    /** At/above threshold, only excluded brands/categories pay shipping; others are free (incl. explicit per-unit rates). */
     if (qualifiesForFreeShipping && !isExcluded) continue;
 
     const rate = Math.max(0, Number(line.shippingPerUnit ?? 0));
@@ -87,14 +101,18 @@ export function shippingInrForLine(
 
 /** Whether this line pays shipping (used when callers evaluate charge per line). */
 export function shouldChargeShippingForLine(
-  line: Pick<OrderShippingLine, "shippingPerUnit" | "brandId">,
+  line: Pick<OrderShippingLine, "shippingPerUnit" | "brandId" | "categoryId">,
   args: {
     qualifiesForFreeShipping: boolean;
     freeShippingExcludedBrandIds?: string[];
+    freeShippingExcludedCategoryIds?: string[];
   }
 ): boolean {
-  const excluded = new Set(args.freeShippingExcludedBrandIds ?? []);
-  const isExcluded = Boolean(line.brandId && excluded.has(line.brandId));
+  const isExcluded = isExcludedFromFreeShipping(
+    line,
+    new Set(args.freeShippingExcludedBrandIds ?? []),
+    new Set(args.freeShippingExcludedCategoryIds ?? [])
+  );
   if (args.qualifiesForFreeShipping && !isExcluded) return false;
   return true;
 }
@@ -125,6 +143,8 @@ export function orderShippingInrFromLines(args: {
   freeShippingThresholdInr?: number | null;
   /** Brand IDs omitted from threshold subtotal; these lines always pay per-unit shipping. */
   freeShippingExcludedBrandIds?: string[];
+  /** Category IDs omitted from threshold subtotal; these lines always pay per-unit shipping. */
+  freeShippingExcludedCategoryIds?: string[];
 }): number {
   return orderShippingBreakdownFromLines(args).totalInr;
 }

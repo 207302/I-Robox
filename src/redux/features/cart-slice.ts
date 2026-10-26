@@ -25,6 +25,7 @@ export type CartItem = {
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
+  categoryId?: string | null;
   currency?: string;
   image?: string;
   slug?: string;
@@ -89,6 +90,9 @@ export const cart = createSlice({
         }
         if (item.brandId !== undefined) {
           existingItem.brandId = item.brandId ?? null;
+        }
+        if (item.categoryId !== undefined) {
+          existingItem.categoryId = item.categoryId ?? null;
         }
         if (item.flashSaleTag !== undefined) {
           existingItem.flashSaleTag = item.flashSaleTag ?? null;
@@ -198,6 +202,7 @@ export const cart = createSlice({
             maxOrderQuantity: number;
             shippingPerUnit: number;
             brandId: string | null;
+            categoryId: string | null;
             availableQuantity: number;
           }
         >
@@ -225,6 +230,7 @@ export const cart = createSlice({
             maxOrderQuantity: meta.maxOrderQuantity,
             shippingPerUnit: meta.shippingPerUnit,
             brandId: meta.brandId,
+            categoryId: meta.categoryId,
             availableQuantity: meta.availableQuantity,
           },
         ];

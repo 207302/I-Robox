@@ -139,6 +139,7 @@ type Initial = {
   settings: SiteSettingsRow | null;
   categories: { id: string; name: string; slug: string }[];
   freeShippingExcludedBrandIds: string[];
+  freeShippingExcludedCategoryIds: string[];
   codAllowedBrandIds: string[];
   codAllowedCategoryIds: string[];
   products: {
@@ -291,8 +292,13 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
   const [freeShippingExcludedBrandIds, setFreeShippingExcludedBrandIds] = useState<string[]>(
     initial.freeShippingExcludedBrandIds ?? []
   );
+  const [freeShippingExcludedCategoryIds, setFreeShippingExcludedCategoryIds] = useState<string[]>(
+    initial.freeShippingExcludedCategoryIds ?? []
+  );
   const [freeShippingExclusionQuery, setFreeShippingExclusionQuery] = useState("");
   const deferredFreeShippingExclusionQuery = useDeferredValue(freeShippingExclusionQuery);
+  const [freeShippingCategoryQuery, setFreeShippingCategoryQuery] = useState("");
+  const deferredFreeShippingCategoryQuery = useDeferredValue(freeShippingCategoryQuery);
   const [freeShippingExclusionsSaving, setFreeShippingExclusionsSaving] = useState(false);
   const [codAllowedBrandIds, setCodAllowedBrandIds] = useState<string[]>(initial.codAllowedBrandIds ?? []);
   const [codAllowedCategoryIds, setCodAllowedCategoryIds] = useState<string[]>(
@@ -460,6 +466,17 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
     for (const b of filtered) merged.set(b.id, b);
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [brands, deferredFreeShippingExclusionQuery, freeShippingExcludedBrandIds]);
+  const visibleFreeShippingExcludedCategories = useMemo(() => {
+    const q = deferredFreeShippingCategoryQuery.trim().toLowerCase();
+    const selected = cats.filter((c) => freeShippingExcludedCategoryIds.includes(c.id));
+    const filtered = q
+      ? cats.filter((c) => c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q))
+      : cats;
+    const merged = new Map<string, (typeof cats)[number]>();
+    for (const c of selected) merged.set(c.id, c);
+    for (const c of filtered) merged.set(c.id, c);
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [cats, deferredFreeShippingCategoryQuery, freeShippingExcludedCategoryIds]);
   const visibleCodBrands = useMemo(() => {
     const q = deferredCodBrandQuery.trim().toLowerCase();
     const selected = brands.filter((b) => codAllowedBrandIds.includes(b.id));
@@ -3009,48 +3026,91 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
             </div>
           </section>
 
-          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-lg">
+          <section className="rounded-2xl border border-gray-3 bg-white p-6 space-y-4 max-w-3xl">
             <h2 className="text-lg font-semibold">Free shipping exclusions</h2>
             <p className="text-sm text-meta-3">
-              Selected brands are excluded from the free-shipping cart value and always charged
-              shipping (e.g. Hot Wheels). Other items can still qualify for free shipping when the
-              rest of the cart meets the threshold.
+              Selected brands and categories are left out of the free-shipping cart value and always
+              pay shipping, including a rate set on the product. Use a category for items with no
+              brand, such as non-branded cars. Other items can still qualify when the rest of the
+              cart meets the threshold. Select the category stored on the product.
             </p>
-            <input
-              type="search"
-              value={freeShippingExclusionQuery}
-              onChange={(e) => setFreeShippingExclusionQuery(e.target.value)}
-              placeholder="Search brands…"
-              className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
-            />
-            {freeShippingExcludedBrandIds.length > 0 ? (
-              <p className="text-xs text-meta-3">
-                {freeShippingExcludedBrandIds.length} brand(s) selected
-              </p>
-            ) : null}
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
-              {brands.length === 0 ? (
-                <p className="text-sm text-meta-3">No brands found.</p>
-              ) : visibleFreeShippingExcludedBrands.length === 0 ? (
-                <p className="text-sm text-meta-3">No brands match your search.</p>
-              ) : (
-                visibleFreeShippingExcludedBrands.map((b) => (
-                  <label key={b.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={freeShippingExcludedBrandIds.includes(b.id)}
-                      onChange={() => {
-                        setFreeShippingExcludedBrandIds((prev) =>
-                          prev.includes(b.id)
-                            ? prev.filter((id) => id !== b.id)
-                            : [...prev, b.id]
-                        );
-                      }}
-                    />
-                    {b.name}
-                  </label>
-                ))
-              )}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-3">
+                <input
+                  type="search"
+                  value={freeShippingExclusionQuery}
+                  onChange={(e) => setFreeShippingExclusionQuery(e.target.value)}
+                  placeholder="Search brands…"
+                  className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                />
+                {freeShippingExcludedBrandIds.length > 0 ? (
+                  <p className="text-xs text-meta-3">
+                    {freeShippingExcludedBrandIds.length} brand(s) selected
+                  </p>
+                ) : null}
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
+                  {brands.length === 0 ? (
+                    <p className="text-sm text-meta-3">No brands found.</p>
+                  ) : visibleFreeShippingExcludedBrands.length === 0 ? (
+                    <p className="text-sm text-meta-3">No brands match your search.</p>
+                  ) : (
+                    visibleFreeShippingExcludedBrands.map((b) => (
+                      <label key={b.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={freeShippingExcludedBrandIds.includes(b.id)}
+                          onChange={() => {
+                            setFreeShippingExcludedBrandIds((prev) =>
+                              prev.includes(b.id)
+                                ? prev.filter((id) => id !== b.id)
+                                : [...prev, b.id]
+                            );
+                          }}
+                        />
+                        {b.name}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <input
+                  type="search"
+                  value={freeShippingCategoryQuery}
+                  onChange={(e) => setFreeShippingCategoryQuery(e.target.value)}
+                  placeholder="Search categories…"
+                  className="w-full rounded-lg border border-gray-3 bg-white px-3 py-2 text-sm outline-none focus:border-blue"
+                />
+                {freeShippingExcludedCategoryIds.length > 0 ? (
+                  <p className="text-xs text-meta-3">
+                    {freeShippingExcludedCategoryIds.length} category(s) selected
+                  </p>
+                ) : null}
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-3 p-3 space-y-2">
+                  {cats.length === 0 ? (
+                    <p className="text-sm text-meta-3">No categories found.</p>
+                  ) : visibleFreeShippingExcludedCategories.length === 0 ? (
+                    <p className="text-sm text-meta-3">No categories match your search.</p>
+                  ) : (
+                    visibleFreeShippingExcludedCategories.map((c) => (
+                      <label key={c.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={freeShippingExcludedCategoryIds.includes(c.id)}
+                          onChange={() => {
+                            setFreeShippingExcludedCategoryIds((prev) =>
+                              prev.includes(c.id)
+                                ? prev.filter((id) => id !== c.id)
+                                : [...prev, c.id]
+                            );
+                          }}
+                        />
+                        {c.name}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
             <button
               type="button"
@@ -3059,18 +3119,27 @@ export default function MarketingAdminClient({ initial }: { initial: Initial }) 
               onClick={async () => {
                 try {
                   setFreeShippingExclusionsSaving(true);
-                  const row = await j<{ free_shipping_excluded_brand_ids?: string[] }>(
+                  const row = await j<{
+                    free_shipping_excluded_brand_ids?: string[];
+                    free_shipping_excluded_category_ids?: string[];
+                  }>(
                     await fetch("/api/admin/marketing/settings", {
                       method: "PATCH",
                       headers: { "content-type": "application/json" },
                       body: JSON.stringify({
                         free_shipping_excluded_brand_ids: freeShippingExcludedBrandIds,
+                        free_shipping_excluded_category_ids: freeShippingExcludedCategoryIds,
                       }),
                     })
                   );
                   setFreeShippingExcludedBrandIds(
                     Array.isArray(row.free_shipping_excluded_brand_ids)
                       ? row.free_shipping_excluded_brand_ids
+                      : []
+                  );
+                  setFreeShippingExcludedCategoryIds(
+                    Array.isArray(row.free_shipping_excluded_category_ids)
+                      ? row.free_shipping_excluded_category_ids
                       : []
                   );
                   toast.success("Free shipping exclusions saved");

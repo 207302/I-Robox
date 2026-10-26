@@ -19,6 +19,7 @@ type CatalogProduct = {
   catalogUnit: number;
   shippingPerUnit: number;
   brandId: string | null;
+  categoryId: string | null;
   available: number;
   imageUrl: string | null;
 };
@@ -87,6 +88,7 @@ export function AdminCreateOrderClient() {
   const [productSearching, setProductSearching] = useState(false);
   const [freeShippingThresholdInr, setFreeShippingThresholdInr] = useState<number | null>(2000);
   const [excludedBrandIds, setExcludedBrandIds] = useState<string[]>([]);
+  const [excludedCategoryIds, setExcludedCategoryIds] = useState<string[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
 
   const [address, setAddress] = useState<AddressForm>(emptyAddress);
@@ -113,11 +115,13 @@ export function AdminCreateOrderClient() {
           shippingPerUnit: l.product.shippingPerUnit,
           lineSubtotal: l.unitPrice * l.quantity,
           brandId: l.product.brandId,
+          categoryId: l.product.categoryId,
         })),
         freeShippingThresholdInr,
         freeShippingExcludedBrandIds: excludedBrandIds,
+        freeShippingExcludedCategoryIds: excludedCategoryIds,
       }),
-    [lines, subtotal, freeShippingThresholdInr, excludedBrandIds]
+    [lines, subtotal, freeShippingThresholdInr, excludedBrandIds, excludedCategoryIds]
   );
   const total = Math.round((subtotal + shipping) * 100) / 100;
 
@@ -161,6 +165,9 @@ export function AdminCreateOrderClient() {
       }
       if (Array.isArray(data.freeShippingExcludedBrandIds)) {
         setExcludedBrandIds(data.freeShippingExcludedBrandIds);
+      }
+      if (Array.isArray(data.freeShippingExcludedCategoryIds)) {
+        setExcludedCategoryIds(data.freeShippingExcludedCategoryIds);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Product search failed");

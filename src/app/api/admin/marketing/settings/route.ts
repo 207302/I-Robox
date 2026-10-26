@@ -36,12 +36,16 @@ export async function GET() {
   return runApiRoute(async () => {
     const auth = await requireAdminWrite();
     if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const [row, excludedBrands, codAllowedBrands, codAllowedCategories] = await Promise.all([
+    const [row, excludedBrands, excludedCategories, codAllowedBrands, codAllowedCategories] =
+      await Promise.all([
       safeSiteMarketingSettingsFindUnique({
         where: { id: SITE_MARKETING_SETTINGS_ID },
       }),
       prisma.free_shipping_excluded_brands
         .findMany({ select: { brand_id: true } })
+        .catch(() => []),
+      prisma.free_shipping_excluded_categories
+        .findMany({ select: { category_id: true } })
         .catch(() => []),
       prisma.cod_allowed_brands.findMany({ select: { brand_id: true } }).catch(() => []),
       prisma.cod_allowed_categories.findMany({ select: { category_id: true } }).catch(() => []),
@@ -49,6 +53,7 @@ export async function GET() {
     return NextResponse.json({
       ...(row ?? { id: SITE_MARKETING_SETTINGS_ID, first_visit_coupon_code: null }),
       free_shipping_excluded_brand_ids: excludedBrands.map((b) => b.brand_id),
+      free_shipping_excluded_category_ids: excludedCategories.map((c) => c.category_id),
       cod_allowed_brand_ids: codAllowedBrands.map((b) => b.brand_id),
       cod_allowed_category_ids: codAllowedCategories.map((c) => c.category_id),
     });
@@ -374,6 +379,29 @@ export async function PATCH(req: NextRequest) {
       excludedBrandIds = [...new Set(ids)];
     }
 
+    let excludedCategoryIds: string[] | undefined;
+    if (body.free_shipping_excluded_category_ids !== undefined) {
+      if (!Array.isArray(body.free_shipping_excluded_category_ids)) {
+        return NextResponse.json(
+          { error: "Invalid free_shipping_excluded_category_ids" },
+          { status: 400 }
+        );
+      }
+      if (body.free_shipping_excluded_category_ids.length > 100) {
+        return NextResponse.json({ error: "Too many excluded categories" }, { status: 400 });
+      }
+      const ids = body.free_shipping_excluded_category_ids.filter(
+        (x: unknown) => typeof x === "string" && isUuid(x)
+      ) as string[];
+      if (ids.length !== body.free_shipping_excluded_category_ids.length) {
+        return NextResponse.json(
+          { error: "Invalid free_shipping_excluded_category_ids" },
+          { status: 400 }
+        );
+      }
+      excludedCategoryIds = [...new Set(ids)];
+    }
+
     let codAllowedBrandIds: string[] | undefined;
     if (body.cod_allowed_brand_ids !== undefined) {
       if (!Array.isArray(body.cod_allowed_brand_ids)) {
@@ -411,6 +439,7 @@ export async function PATCH(req: NextRequest) {
     if (
       Object.keys(data).length === 0 &&
       excludedBrandIds === undefined &&
+      excludedCategoryIds === undefined &&
       codAllowedBrandIds === undefined &&
       codAllowedCategoryIds === undefined
     ) {
@@ -485,6 +514,15 @@ export async function PATCH(req: NextRequest) {
           }
         }
 
+        if (excludedCategoryIds !== undefined) {
+          await tx.free_shipping_excluded_categories.deleteMany({});
+          if (excludedCategoryIds.length > 0) {
+            await tx.free_shipping_excluded_categories.createMany({
+              data: excludedCategoryIds.map((category_id) => ({ category_id })),
+            });
+          }
+        }
+
         if (codAllowedBrandIds !== undefined) {
           await tx.cod_allowed_brands.deleteMany({});
           if (codAllowedBrandIds.length > 0) {
@@ -524,6 +562,12 @@ export async function PATCH(req: NextRequest) {
           .findMany({ select: { brand_id: true } })
           .then((rows) => rows.map((row) => row.brand_id))
           .catch(() => []));
+      const excludedCategoryRows =
+        excludedCategoryIds ??
+        (await prisma.free_shipping_excluded_categories
+          .findMany({ select: { category_id: true } })
+          .then((rows) => rows.map((row) => row.category_id))
+          .catch(() => []));
       const codBrandRows =
         codAllowedBrandIds ??
         (await prisma.cod_allowed_brands
@@ -542,6 +586,7 @@ export async function PATCH(req: NextRequest) {
         {
           ...updated,
           free_shipping_excluded_brand_ids: excludedRows,
+          free_shipping_excluded_category_ids: excludedCategoryRows,
           cod_allowed_brand_ids: codBrandRows,
           cod_allowed_category_ids: codCategoryRows,
         },

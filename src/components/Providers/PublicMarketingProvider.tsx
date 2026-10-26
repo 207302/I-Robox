@@ -27,6 +27,7 @@ const EMPTY: PublicMarketingPayload = {
   firstVisitCouponCode: null,
   freeShippingThresholdInr: null,
   freeShippingExcludedBrandIds: [],
+  freeShippingExcludedCategoryIds: [],
 };
 
 async function fetchPublicMarketing(bustCache: boolean): Promise<PublicMarketingPayload> {

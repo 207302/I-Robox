@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
         max_order_quantity: true,
         shipping_per_unit: true,
         brand_id: true,
+        category_id: true,
         inventory: {
           select: { available_quantity: true },
           take: 1,
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
         maxOrderQuantity: number;
         shippingPerUnit: number;
         brandId: string | null;
+        categoryId: string | null;
         availableQuantity: number;
       }
     > = {};
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
         maxOrderQuantity: resolveMaxOrderQuantity(row.max_order_quantity),
         shippingPerUnit: Math.max(0, Number(row.shipping_per_unit ?? 0)),
         brandId: row.brand_id ?? null,
+        categoryId: row.category_id ?? null,
         availableQuantity:
           stock != null && Number.isFinite(stock) ? Math.max(0, Math.floor(stock)) : 0,
       };

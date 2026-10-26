@@ -5,7 +5,11 @@ import ProductDetailView from "@/components/Shop/ProductDetailView";
 import { cache } from "react";
 import { getProductBySlug } from "@/get-api-data/product";
 import { getApprovedReviewsForProduct } from "@/lib/queries/productReviews";
-import { getFreeShippingThresholdInr } from "@/lib/marketing/freeShipping";
+import {
+  getFreeShippingExcludedBrandIds,
+  getFreeShippingExcludedCategoryIds,
+  getFreeShippingThresholdInr,
+} from "@/lib/marketing/freeShipping";
 import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/shop/productImagePlaceholder";
 import { getProductSlugsForStaticGeneration } from "@/lib/shop/productStaticParams";
 import { JsonLdScript } from "@/lib/seo/jsonLd";
@@ -64,10 +68,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProductBySlugCached(slug);
   if (!product) notFound();
 
-  const [approvedReviews, freeShippingThresholdInr] = await Promise.all([
+  const [approvedReviews, freeShippingThresholdInr, excludedBrandIds, excludedCategoryIds] =
+    await Promise.all([
     getApprovedReviewsForProduct(product.id),
     getFreeShippingThresholdInr(),
+    getFreeShippingExcludedBrandIds(),
+    getFreeShippingExcludedCategoryIds(),
   ]);
+  const shippingAlwaysCharged = Boolean(
+    (product.brandId && excludedBrandIds.includes(product.brandId)) ||
+      (product.categoryId && excludedCategoryIds.includes(product.categoryId))
+  );
   const averageRating =
     approvedReviews.length > 0
       ? approvedReviews.reduce((sum, review) => sum + review.rating, 0) /
@@ -139,6 +150,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               quantity: product.quantity,
               shippingPerUnit: product.shippingPerUnit ?? 0,
               brandId: product.brandId ?? null,
+              categoryId: product.categoryId ?? null,
               maxOrderQuantity: product.maxOrderQuantity,
               category: product.category,
               brand: product.brand
@@ -151,6 +163,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             approvedReviews={approvedReviews}
             averageRating={averageRating}
             freeShippingThresholdInr={freeShippingThresholdInr}
+            shippingAlwaysCharged={shippingAlwaysCharged}
           />
         </div>
       </section>

@@ -4,6 +4,7 @@ import { runApiRoute } from "@/lib/api/runApiRoute";
 import { orderShippingBreakdownFromLines } from "@/lib/checkout/orderShipping";
 import {
   getFreeShippingExcludedBrandIds,
+  getFreeShippingExcludedCategoryIds,
   getFreeShippingThresholdInr,
 } from "@/lib/marketing/freeShipping";
 import { flashSalePriceMap, unitPriceWithFlashSale } from "@/lib/pricing/flashSale";
@@ -104,12 +105,15 @@ export async function POST(req: NextRequest) {
         shippingPerUnit: Math.max(0, Number(p?.shipping_per_unit ?? 0)),
         lineSubtotal: unitPrice * item.quantity,
         brandId: p?.brand_id ?? null,
+        categoryId: p?.category_id ?? null,
       };
     });
 
-    const [freeShippingThresholdInr, freeShippingExcludedBrandIds, cod] = await Promise.all([
+    const [freeShippingThresholdInr, freeShippingExcludedBrandIds, freeShippingExcludedCategoryIds, cod] =
+      await Promise.all([
       getFreeShippingThresholdInr(),
       getFreeShippingExcludedBrandIds(),
+      getFreeShippingExcludedCategoryIds(),
       getCodEligibilityForProducts(
         productIds.map((productId) => {
           const p = productMap.get(productId);
@@ -127,6 +131,7 @@ export async function POST(req: NextRequest) {
       lines,
       freeShippingThresholdInr,
       freeShippingExcludedBrandIds,
+      freeShippingExcludedCategoryIds,
     });
 
     return NextResponse.json({
@@ -134,6 +139,7 @@ export async function POST(req: NextRequest) {
       chargeableUnits: breakdown.chargeableUnits,
       freeShippingThresholdInr,
       freeShippingExcludedBrandIds,
+      freeShippingExcludedCategoryIds,
       codAvailable: cod.available,
       codReason: cod.reason,
       lines: lines.map(({ productId, brandId, shippingPerUnit }) => ({

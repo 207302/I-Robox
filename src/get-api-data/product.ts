@@ -256,6 +256,7 @@ async function loadProductBySlug(slug: string) {
       brand_id: true,
       categories: {
         select: {
+          id: true,
           slug: true,
           name: true,
         },
@@ -320,6 +321,7 @@ async function loadProductBySlug(slug: string) {
     quantity: getInventoryQuantity(product.inventory),
     maxOrderQuantity: product.max_order_quantity ?? 99,
     brandId: product.brand_id ?? null,
+    categoryId: product.categories?.id ?? null,
     sku: product.sku ?? "",
     shippingPerUnit: Number(product.shipping_per_unit ?? 0),
     tags: [],
@@ -367,7 +369,7 @@ export function getProductBySlug(slug: string): Promise<ProductBySlug | null> {
 
   return unstable_cache(
     onCacheMiss(`product-by-slug:${normalized}`, () => loadProductBySlug(normalized)),
-    ["product-by-slug", normalized],
+    ["product-by-slug-v2", normalized],
     {
       revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS,
       tags: [PRODUCT_CATALOG_TAG, productSlugTag(normalized)],

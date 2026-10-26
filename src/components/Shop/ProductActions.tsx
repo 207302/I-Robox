@@ -26,6 +26,7 @@ type ProductActionsProps = {
   quantity: number;
   shippingPerUnit?: number;
   brandId?: string | null;
+  categoryId?: string | null;
   maxOrderQuantity?: number;
   color?: string;
   size?: string;
@@ -84,6 +85,7 @@ export default function ProductActions(props: ProductActionsProps) {
       flashSalePurchaseLimit: purchaseLimit > 0 ? remainingAfterOrders : null,
       shippingPerUnit: Number(props.shippingPerUnit ?? 0),
       brandId: props.brandId ?? null,
+      categoryId: props.categoryId ?? null,
       color: props.color ?? "",
       size: props.size ?? "",
       quantity: qty,

@@ -42,7 +42,7 @@ export async function createRazorpayPaymentLink(input: {
     },
     notify: { sms: false, email: false },
     reminder_enable: false,
-    callback_url: `${getSiteBaseUrl()}/orders/${input.orderId}`,
+    callback_url: `${getSiteBaseUrl()}/orders/${input.orderId}/thank-you`,
     callback_method: "get",
     notes: { order_id: input.orderId },
   })) as PaymentLinkEntity;

@@ -134,7 +134,7 @@ export default function RetryPaymentButton({
                 : accessToken
                   ? `?access=${encodeURIComponent(accessToken)}`
                   : "";
-            router.replace(`/orders/${orderId}${tokenQuery}`);
+            router.replace(`/orders/${orderId}/thank-you${tokenQuery}`);
             router.refresh();
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Payment verification failed";

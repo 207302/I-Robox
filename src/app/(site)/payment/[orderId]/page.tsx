@@ -23,10 +23,13 @@ export default function PaymentPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Request failed");
-      toast.success(path.includes("confirm") ? "Payment confirmed" : "Payment failed");
+      const confirmed = path.includes("confirm");
+      toast.success(confirmed ? "Payment confirmed" : "Payment failed");
       const token = searchParams.get("access");
       const tokenQuery = token ? `?access=${encodeURIComponent(token)}` : "";
-      router.push(`/orders/${orderId}${tokenQuery}`);
+      router.push(
+        confirmed ? `/orders/${orderId}/thank-you${tokenQuery}` : `/orders/${orderId}${tokenQuery}`
+      );
       router.refresh();
     } catch (e: any) {
       toast.error(e?.message || "Something went wrong");

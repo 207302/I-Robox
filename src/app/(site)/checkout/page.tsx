@@ -435,7 +435,7 @@ export default function CheckoutPage() {
               typeof verifyData?.accessToken === "string" && verifyData.accessToken
                 ? `?access=${encodeURIComponent(verifyData.accessToken)}`
                 : "";
-            router.replace(`/orders/${verifyData.orderId}${tokenQuery}`);
+            router.replace(`/orders/${verifyData.orderId}/thank-you${tokenQuery}`);
           } catch (err: any) {
             toast.error(
               err?.message ||
